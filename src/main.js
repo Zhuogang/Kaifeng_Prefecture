@@ -2,6 +2,7 @@ import { createEngine } from './core/engine.js';
 import { getQuality } from './core/quality.js';
 import { Explore } from './core/explore.js';
 import { SHOTS } from './world/shots.js';
+import { installTimePresets, TIME_NAMES } from './world/looks.js';
 
 const P = new URLSearchParams(location.search);
 
@@ -14,6 +15,7 @@ async function boot() {
   if (interactive) document.body.classList.add('interactive');
   const t0 = performance.now();
   const engine = await createEngine({ width, height, quality, params: P });
+  installTimePresets(engine, P.get('time') || 'morning');
   window.engine = engine;
   let testShot;
   if (P.has('test')) {
@@ -59,6 +61,11 @@ async function boot() {
 
 function startInteractive(engine) {
   const controls = new Explore(engine);
+  addEventListener('keydown', (event) => {
+    if (event.code !== 'KeyT' || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+    event.preventDefault();
+    engine.setTimePreset(TIME_NAMES[(TIME_NAMES.indexOf(engine.timePreset) + 1) % TIME_NAMES.length]);
+  });
   window.__explore = {
     step: (dtSeconds, keys) => controls.step(dtSeconds, keys),
     position: () => controls.position(), mode: () => controls.mode(), setMode: (mode) => controls.setMode(mode),
@@ -74,10 +81,10 @@ function startInteractive(engine) {
     if (P.get('animate') === '1') { engine.setTime(engine.time + dt); moving = true; }
     engine.renderInteractive(moving);
     const p = engine.camera.position, info = engine.renderer.info.render;
-    hud.textContent = `${controls.mode()} · ${engine.quality.name} · samples ${engine._accFrames}\n` +
+    hud.textContent = `${controls.mode()} · ${engine.timePreset} · ${engine.quality.name} · samples ${engine._accFrames}\n` +
       `position ${p.x.toFixed(2)} ${p.y.toFixed(2)} ${p.z.toFixed(2)} m\n` +
       `calls ${info.calls} · triangles ${info.triangles.toLocaleString('en-US')}\n` +
-      'click to look · WASD move · F walk/fly · E/Q up/down · Shift 5× · Esc release';
+      'click to look · WASD move · F walk/fly · T time of day · E/Q up/down · Shift 5× · Esc release';
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);

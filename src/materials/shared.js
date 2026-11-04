@@ -36,7 +36,7 @@ vec4 t2Bond(vec2 p, vec2 size, float joint, float variation) {
   vec2 id = floor(q), f = fract(q);
   vec2 d = min(f, 1.0-f) * size;
   float edge = min(d.x, d.y);
-  float visible = t2Visible(max(fwidth(p.x / size.x), fwidth(p.y / size.y)));
+  float visible = 1.0-smoothstep(0.65,2.0,max(fwidth(p.x / size.x),fwidth(p.y / size.y)));
   float meanJoint = clamp(joint * 2.0 * (1.0/size.x + 1.0/size.y), 0.0, 1.0);
   // inferred: irregular dressed edges; analytic waves avoid another noise octave.
   float chip = 0.0025 * (t2Wave(p.x*83.0+p.y*57.0) + t2Wave(p.x*137.0-p.y*61.0));

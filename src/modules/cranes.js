@@ -3,16 +3,18 @@ import * as PLAN from '../world/plan.js';
 import { proceduralMaterial } from '../core/materials.js';
 import { Geometry, V, TAU } from '../flora/geometry.js';
 
-// inferred: 2.1 m spread, 2 m beak-to-trailing-toe length, 1.45 m standing
+// inferred: 2.4 m spread, 2 m beak-to-trailing-toe length, 1.45 m standing
 // height, and feather proportions. Markings follow ruihe_bright.jpg / ref3.png.
 export function buildCrane({perched=false,far=false}={}) {
   const g=new Geometry(),white=new THREE.Color('#eee9db'),black=new THREE.Color('#292d2a'),red=new THREE.Color('#b82520'),beak=new THREE.Color('#838170');
   const bodyY=perched?0.83:0;
-  const sphere=(p,s,c,detail=far?0:3)=>g.ellipsoid(p,s,c,{detail,kind:4});
+  const sphere=(p,s,c,detail=far?0:2,flap=0)=>g.ellipsoid(p,s,c,{detail,kind:4,sway:flap});
   const tube=(p,r,c,sides=far?4:10)=>g.tube(p,r,c,{sides,kind:4,smooth:far?2:4});
-  sphere(V(0,bodyY,0),V(0.155,0.18,0.32),white);
-  const neck=perched?[V(0,0.94,-0.18),V(0,1.05,-0.31),V(0,1.26,-0.22),V(0,1.36,-0.28)]:[V(0,0.04,-0.26),V(0,0.01,-0.48),V(0,0.09,-0.68),V(0,0.10,-0.82)];
+  sphere(V(0,bodyY,0),V(0.17,0.17,0.38),white,far?0:3);
+  const neck=perched?[V(0,0.94,-0.18),V(0,1.05,-0.31),V(0,1.26,-0.22),V(0,1.36,-0.28)]:[V(0,0.04,-0.29),V(0,0.075,-0.51),V(0,0.11,-0.78),V(0,0.13,-1.0)];
   tube(neck,[0.07,0.045,0.036,0.04],black);
+  // Narrow white dorsal stripe leaves the black throat and cheek visible.
+  if(!far) tube(neck.map(p=>p.clone().add(perched?V(0,0,0.04):V(0,0.034,0))),[0.027,0.022,0.02,0.018],white);
   const head=neck[3].clone();sphere(head,V(0.057,0.061,0.095),white);
   sphere(head.clone().add(V(0,0.047,-0.008)),V(0.04,0.022,0.05),red);
   tube([head.clone().add(V(0,0,-0.065)),head.clone().add(V(0,-0.012,-0.25))],[0.026,0.001],beak);
@@ -28,21 +30,42 @@ export function buildCrane({perched=false,far=false}={}) {
       sphere(V(side*0.13,0.84,0.02),V(0.055,0.14,0.24),white);
       for(let i=0;i<(far?3:8);i++) g.feather(V(side*0.15,0.83,0.02+i*0.025),0.32,0.065,V(side*0.07,-0.55,1),i>2?black:white);
     } else {
-      // Shoulder, wrist, fingers: layered feathers leave real gaps at the wing tips.
-      const verts=[V(side*0.12,0.055,-0.15),V(side*0.45,0.06,-0.27),V(side*0.79,0.055,-0.16),V(side*0.96,0.05,0.07),V(side*0.61,0.05,0.27),V(side*0.15,0.05,0.20)];
-      const ids=verts.map(p=>g.vertex(p,V(0,1,0),white,4,1));
-      for(let i=1;i<5;i++) g.tri(ids[0],ids[i],ids[i+1]);
-      const count=far?6:14;
+      // inferred: a thick leading edge and cambered covert layers support the
+      // separated remiges. White coverts overlap the black trailing primaries.
+      const sections=[ [0.13,-0.16,0.18,0.045], [0.38,-0.27,0.20,0.08], [0.72,-0.29,0.14,0.075], [0.98,-0.16,0.05,0.04], [1.10,-0.035,0.015,0.015] ];
+      for(const under of [false,true]) {
+        const rows=sections.map(([x,lead,trail,y])=>[0,0.5,1].map(t=>{
+          const ridge=Math.sin(t*Math.PI)*(under?-0.024:0.028);
+          const p=V(side*x,y+(under?-0.035:0)+ridge,lead+(trail-lead)*t);
+          const n=V(-side*0.15,under?-1:1,Math.cos(t*Math.PI)*0.85).normalize();
+          return g.vertex(p,n,white,4,1,[t,x]);
+        }));
+        for(let i=1;i<rows.length;i++)for(let j=0;j<2;j++) {
+          g.tri(rows[i-1][j],rows[i][j],rows[i-1][j+1]);
+          g.tri(rows[i-1][j+1],rows[i][j],rows[i][j+1]);
+        }
+      }
+      const count=far?9:20;
       for(let i=0;i<count;i++) {
-        const t=i/(count-1),x=0.24+0.62*t;
-        const start=V(side*x,0.015,-0.04+0.11*t);
-        const direction=V(side*(0.13+0.8*t*t),-0.045,1-0.45*t).normalize();
-        g.feather(start,0.36+0.07*Math.sin(t*Math.PI),far?0.13:0.087,direction,i>3?black:white,1);
-        if(!far) g.feather(start.clone().add(V(0,0.018,-0.07)),0.23,0.075,direction,white.clone().multiplyScalar(0.89+0.1*t),1);
+        const t=i/(count-1),x=0.22+0.82*t;
+        const start=V(side*x,0.015,-0.12+0.1*t);
+        const direction=V(side*(0.15+0.7*t*t),-0.06,1-0.58*t).normalize();
+        const length=0.43-0.10*t+0.04*Math.sin(t*Math.PI);
+        const featherColor=t>0.32?black.clone().multiplyScalar(0.83+0.22*t):white;
+        g.feather(start,length,far?0.15:0.085,direction,featherColor,1);
+        if(!far) {
+          g.feather(start.clone().add(V(0,0.027,-0.075)),length*0.54,0.078,direction,white.clone().multiplyScalar(0.87+0.12*t),1);
+          g.feather(start.clone().add(V(0,-0.026,-0.10)),length*0.38,0.073,direction,white.clone().multiplyScalar(0.92),1);
+        }
       }
     }
   }
   for(let i=0;i<(far?2:6);i++) g.feather(V((i-2.5)*0.028,bodyY+0.03,0.22),0.23,0.055,V(0,-0.15,1),white);
+  // inferred: compress the flight mesh across its axis to the specified 2.4 m span.
+  if(!perched)for(let i=0;i<g.p.length;i+=3) {
+    g.p[i]*=0.9;
+    const n=V(g.n[i]/0.9,g.n[i+1],g.n[i+2]).normalize();g.n[i]=n.x;g.n[i+1]=n.y;g.n[i+2]=n.z;
+  }
   return g.build();
 }
 
@@ -50,11 +73,14 @@ const VERT=/* glsl */`
 attribute vec3 aFlora;
 attribute vec4 iCrane;
 uniform float uCraneTime;
+varying vec2 vFeatherUV;
+varying float vFeather;
 `;
 // inferred: 0.75 Hz wing beat with a small raised resting angle.
 const FLAP=/* glsl */`
+vFeatherUV=uv; vFeather=aFlora.z;
 float phase = uCraneTime * 6.28318530718 * 0.75 + iCrane.x;
-float angle = (0.56 * sin(phase) + 0.12) * sign(position.x) * aFlora.y;
+float angle = (0.85*sin(phase)+0.12+0.18*sin(phase-0.7)*smoothstep(0.4,1.1,abs(position.x))) * sign(position.x) * aFlora.y;
 float ca=cos(angle), sa=sin(angle);
 vec2 wing = transformed.xy - vec2(sign(position.x)*0.13,0.04);
 transformed.xy = mat2(ca,sa,-sa,ca)*wing + vec2(sign(position.x)*0.13,0.04);
@@ -62,7 +88,7 @@ transformed.xy = mat2(ca,sa,-sa,ca)*wing + vec2(sign(position.x)*0.13,0.04);
 function craneMaterials(engine) {
   const time={value:engine.time??0};engine.onUpdate(t=>{time.value=t;});
   const material=proceduralMaterial({
-    name:'red-crowned-cranes',params:{vertexColors:true,roughness:0.84,side:THREE.DoubleSide},
+    name:'red-crowned-cranes',head:'varying vec2 vFeatherUV; varying float vFeather;',params:{vertexColors:true,roughness:0.84,side:THREE.DoubleSide},
     uniforms:{uCraneTime:time},vertexHead:VERT,
     vertexPre:FLAP+/* glsl */`
       vec3 birdNormal = objectNormal;
@@ -72,7 +98,17 @@ function craneMaterials(engine) {
       #endif
       vNormal=normalize(normalMatrix*birdNormal);
     `,
-    color:'diffuseColor.rgb *= 0.94 + 0.06 * cgVnoise3(cgO * 70.0);',
+    color:`
+      float grain=cgVnoise3(cgO*90.0);
+      diffuseColor.rgb*=0.94+0.06*grain;
+      if(vFeather>0.5) {
+        float shaft=1.0-smoothstep(0.008,0.035+fwidth(vFeatherUV.x),abs(vFeatherUV.x-0.5));
+        float edge=smoothstep(0.35,0.5,abs(vFeatherUV.x-0.5));
+        diffuseColor.rgb*=1.0-0.16*edge-0.08*shaft;
+      }
+    `,
+    roughness:'roughnessFactor=0.76;',
+    emissive:'totalEmissiveRadiance+=diffuseColor.rgb*0.025;',
   });
   const depth=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking,side:THREE.DoubleSide});
   depth.userData.shaderKey='cranes-flapping-depth-v1';depth.customProgramCacheKey=()=>depth.userData.shaderKey;

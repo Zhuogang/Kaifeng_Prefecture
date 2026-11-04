@@ -9,7 +9,7 @@ at the same time.
 | 1 | T1 | `src/yingzao/`: any Song timber hall from parameters, with LODs | |
 | 1 | T2 | `src/materials/`, 彩画, 鸱尾 and roof ornaments | |
 | 1 | T3 | `src/flora/`: willow, blossom trees, lotus, palace trees, cranes | |
-| 2 | T4 | 宣德楼: masonry platform, reliefs, doors, 朵楼, 阙亭, palace wall | |
+| 2 | T4 | 宣德楼: masonry platform, reliefs, doors, 朵楼, 阙亭, palace wall | Base done, in backlog |
 | 2 | T5 | 御街: paving, 杈子, 御沟, 御廊 at the real 312 m | |
 | 2 | T6 | 州桥, carved walls, 汴河, boats, twin 阙 | |
 | 3 | T7 | 大庆殿 court, galleries, palace halls | |

@@ -151,24 +151,91 @@ export class Pipeline {
     const floatOK = !!gl.getExtension('EXT_color_buffer_float');
     this.accType = floatOK ? THREE.FloatType : THREE.HalfFloatType;
     this.sceneRT = rt(w, h, THREE.HalfFloatType, quality.msaa || 0, true);
+    // Reuse the opaque pass depth: no geometry/normal prepass, including in explore.
+    this.sceneRT.depthTexture = new THREE.DepthTexture(w, h, THREE.UnsignedIntType);
+    this.aoRT = rt(Math.max(1, Math.floor(w / 2)), Math.max(1, Math.floor(h / 2)), THREE.HalfFloatType);
     this.acc = [rt(w, h, this.accType), rt(w, h, this.accType)];
     this.accIndex = 0;
     this.count = 0;
     this.quad = new FullScreenQuad(null);
 
     this.copyMat = new THREE.ShaderMaterial({
-      uniforms: { tNew: { value: null }, tPrev: { value: null }, uW: { value: 1 } },
+      uniforms: { tNew: { value: null }, tPrev: { value: null }, uW: { value: 1 },
+        tAO: { value: this.aoRT.texture }, tDepth: { value: this.sceneRT.depthTexture },
+        uAO: { value: 0 }, uAOTexel: { value: new THREE.Vector2(1 / this.aoRT.width, 1 / this.aoRT.height) },
+        uNearFar: { value: new THREE.Vector2() } },
       vertexShader: FS_VERT,
       fragmentShader: /* glsl */ `
         uniform sampler2D tNew; uniform sampler2D tPrev; uniform float uW; varying vec2 vUv;
+        uniform sampler2D tAO; uniform sampler2D tDepth; uniform float uAO; uniform vec2 uAOTexel; uniform vec2 uNearFar;
+        float viewDepth(float d){ return uNearFar.x * uNearFar.y / (uNearFar.y - d * (uNearFar.y - uNearFar.x)); }
         void main(){
           vec4 n = texture2D(tNew, vUv);
+          if (uAO > 0.0) {
+            float d = texture2D(tDepth, vUv).r;
+            if (d < 1.0) {
+              float z = viewDepth(d), sum = 0.0, ws = 0.0;
+              vec2 p = vUv / uAOTexel - 0.5, f = fract(p), b = (floor(p) + 0.5) * uAOTexel;
+              // Joint bilateral upsample is folded into the existing accumulation pass.
+              for (int y = 0; y < 2; y++) for (int x = 0; x < 2; x++) {
+                vec2 o = vec2(float(x), float(y));
+                vec2 a = texture2D(tAO, b + o * uAOTexel).rg;
+                float w = mix(1.0 - f.x, f.x, o.x) * mix(1.0 - f.y, f.y, o.y);
+                w *= exp(-abs(a.y - z) / max(0.05, z * 0.015));
+                sum += a.x * w; ws += w;
+              }
+              n.rgb *= 1.0 - uAO * (ws > 1e-5 ? sum / ws : 0.0);
+            }
+          }
           n.rgb = min(n.rgb, vec3(6.0e4)); // guard inf
           if (any(isnan(n.rgb))) n.rgb = vec3(0.0);
           vec4 p = texture2D(tPrev, vUv);
           gl_FragColor = mix(p, n, uW);
         }`,
       depthTest: false, depthWrite: false,
+    });
+
+    this.aoMat = new THREE.ShaderMaterial({
+      uniforms: { tDepth: { value: this.sceneRT.depthTexture },
+        uInvProjection: { value: new THREE.Matrix4() }, uProjection: { value: new THREE.Matrix4() },
+        uPixel: { value: new THREE.Vector2(1 / w, 1 / h) }, uFrame: { value: 0 }, uSamples: { value: 12 } },
+      vertexShader: FS_VERT, depthTest: false, depthWrite: false,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D tDepth; uniform mat4 uInvProjection; uniform mat4 uProjection;
+        uniform vec2 uPixel; uniform float uFrame; uniform int uSamples; varying vec2 vUv;
+        vec3 pos(vec2 uv){
+          vec4 p = uInvProjection * vec4(uv * 2.0 - 1.0, texture2D(tDepth, uv).r * 2.0 - 1.0, 1.0);
+          return p.xyz / p.w;
+        }
+        void main(){
+          float d = texture2D(tDepth, vUv).r;
+          if (d >= 1.0) { gl_FragColor = vec4(0.0, 60000.0, 0.0, 1.0); return; }
+          vec3 p = pos(vUv);
+          if (-p.z > 900.0) { gl_FragColor = vec4(0.0, -p.z, 0.0, 1.0); return; }
+          vec3 l = p - pos(vUv - vec2(uPixel.x, 0.0)), r = pos(vUv + vec2(uPixel.x, 0.0)) - p;
+          vec3 b = p - pos(vUv - vec2(0.0, uPixel.y)), t = pos(vUv + vec2(0.0, uPixel.y)) - p;
+          vec3 n = normalize(cross(abs(l.z) < abs(r.z) ? l : r, abs(b.z) < abs(t.z) ? b : t));
+          float phase = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))) + uFrame * 0.618033989);
+          float ao = 0.0;
+          // inferred: two metre-scale radii catch column feet as well as deep eaves.
+          for (int i = 0; i < 32; i++) {
+            if (i >= uSamples) break;
+            float fi = float(i), radius = mod(fi, 2.0) < 1.0 ? 0.55 : 2.4;
+            float a = fi * 2.39996323 + phase * 6.2831853;
+            float radial = sqrt((fi + 0.5) / float(uSamples));
+            vec2 o = vec2(cos(a), sin(a)) * radial * radius * 0.5 * vec2(uProjection[0][0], uProjection[1][1]) / max(-p.z, 0.1);
+            o = clamp(o, -80.0 * uPixel, 80.0 * uPixel);
+            vec2 uv = vUv + o;
+            if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) continue;
+            if (texture2D(tDepth, uv).r >= 1.0) continue;
+            vec3 delta = pos(uv) - p;
+            float len = length(delta);
+            float horizon = max(0.0, dot(n, delta) / max(len, 0.001) - 0.08);
+            ao += horizon * (1.0 - smoothstep(radius * 0.15, radius, len));
+          }
+          ao = clamp(ao * 3.0 / float(uSamples), 0.0, 0.85) * (1.0 - smoothstep(250.0, 900.0, -p.z));
+          gl_FragColor = vec4(ao, -p.z, 0.0, 1.0);
+        }`,
     });
 
     // ---- bloom mip chain
@@ -435,7 +502,18 @@ export class Pipeline {
 
   get target() { return this.sceneRT; }
 
-  begin() { this.count = 0; }
+  begin() { this.count = 0; this._meter = null; this._lv = null; }
+
+  _ao(camera) {
+    const U = this.aoMat.uniforms;
+    U.uInvProjection.value.copy(camera.projectionMatrixInverse);
+    U.uProjection.value.copy(camera.projectionMatrix);
+    U.uFrame.value = this.count;
+    U.uSamples.value = this.count > 0 ? this.quality.aoSettleSamples : this.quality.aoSamples;
+    this.quad.material = this.aoMat;
+    this.renderer.setRenderTarget(this.aoRT);
+    this.quad.render(this.renderer);
+  }
 
   /** render one sub-frame of the scene and fold it into the running average */
   addSample(scene, camera) {
@@ -446,6 +524,9 @@ export class Pipeline {
     r.info.reset();
     r.render(scene, camera);
     this.sceneInfo = { calls: r.info.render.calls, triangles: r.info.render.triangles };
+    if (this.quality.ao) this._ao(camera);
+    this.copyMat.uniforms.uAO.value = this.quality.ao ? this.quality.aoStrength : 0;
+    this.copyMat.uniforms.uNearFar.value.set(camera.near, camera.far);
     const src = this.acc[this.accIndex], dst = this.acc[1 - this.accIndex];
     this.copyMat.uniforms.tNew.value = this.sceneRT.texture;
     this.copyMat.uniforms.tPrev.value = src.texture;
@@ -534,7 +615,8 @@ export class Pipeline {
     this.gradeMat.uniforms.uFrame.value = frame;
     const U = this.gradeMat.uniforms;
     // r5 local tone mapping pyramid (band scales follow the output resolution: 4K uses one level coarser)
-    const ltmOn = GRADE.uLtmFine.value || GRADE.uLtmMid.value || GRADE.uLtmLarge.value || GRADE.uLtmBase.value;
+    const ltmOn = (!this.quality.settleLtm || this.count > 1) &&
+      (GRADE.uLtmFine.value || GRADE.uLtmMid.value || GRADE.uLtmLarge.value || GRADE.uLtmBase.value);
     U.uLtmOn.value = ltmOn ? 1 : 0;
     if (ltmOn) {
       this.ltmLumMat.uniforms.tSrc.value = this.hdr;
@@ -581,6 +663,9 @@ export class Pipeline {
   setSize(w, h) {
     this.w = w; this.h = h;
     this.sceneRT.setSize(w, h);
+    this.aoRT.setSize(Math.max(1, Math.floor(w / 2)), Math.max(1, Math.floor(h / 2)));
+    this.aoMat.uniforms.uPixel.value.set(1 / w, 1 / h);
+    this.copyMat.uniforms.uAOTexel.value.set(1 / this.aoRT.width, 1 / this.aoRT.height);
     this.acc.forEach((a) => a.setSize(w, h));
     let mw = w, mh = h;
     for (const m of this.mips) { mw = Math.max(1, Math.floor(mw / 2)); mh = Math.max(1, Math.floor(mh / 2)); m.setSize(mw, mh); }

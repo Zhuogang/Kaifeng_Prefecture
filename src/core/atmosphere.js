@@ -76,7 +76,10 @@ vec3 atmoMistInscatter(vec3 dir){
 // haze optical depth (exponential layer + far-distance term)
 float atmoHazeOD(float y0, float dy, float dist){
   float f = dist / uHazeFar.y;
-  return atmoOD(y0, dy, dist, uHaze.x, uHaze.y, uHaze.z) + atmoOD(y0, dy, dist, uHazeLow.x, uHazeLow.y, 0.0) + uHazeFar.x * f * f * exp(-max(y0 + dy * dist * 0.5, 0.0) / 2500.0);
+  // inferred: the quadratic distance term is low plain dust, confined to the same
+  // height as the low haze. The mountain engine's 2500 m falloff made 2 km-high
+  // clouds completely opaque with horizon-coloured in-scatter over this plain.
+  return atmoOD(y0, dy, dist, uHaze.x, uHaze.y, uHaze.z) + atmoOD(y0, dy, dist, uHazeLow.x, uHazeLow.y, 0.0) + uHazeFar.x * f * f * exp(-max(y0 + dy * dist * 0.5, 0.0) / max(uHazeLow.y, 1.0));
 }
 vec3 atmoApplyFrom(vec3 col, vec3 camPos, vec3 wp){
   if (uAtmoEnabled < 0.5) return col;

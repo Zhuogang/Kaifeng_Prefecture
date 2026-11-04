@@ -25,18 +25,19 @@ export function paintHook(style = 'wucai') {
       float aa = max(fwidth(edge),0.0005);
       float member = vT2MemberType;
       // inferred: floral spacing / pigment values; stylised lotus and scrolling leaves.
-      float mottle = t2Fbm(cgP*3.0+t2Variation);
-      float flakes = t2Noise(cgP*47.0+t2Variation);
-      float wear = smoothstep(0.44,0.65,mottle*0.55+flakes*0.45)*t2Wear;
-      vec3 red=vec3(0.27,0.065,0.032), blue=vec3(0.035,0.105,0.14), green=vec3(0.045,0.15,0.105);
-      vec3 chalk=vec3(0.59,0.54,0.40), ochre=vec3(0.38,0.245,0.09);
+      float mottle = t2Fbm(cgP*vec3(0.8,0.25,0.8)+t2Variation);
+      float flakes = t2Noise(cgP*vec3(35.0,2.0,35.0)+t2Variation);
+      float wear = smoothstep(0.55,0.76,mottle*0.7+flakes*0.3)*t2Wear;
+      vec3 red=vec3(0.21,0.072,0.041), blue=vec3(0.045,0.085,0.09), green=vec3(0.065,0.12,0.089);
+      vec3 chalk=vec3(0.38,0.35,0.25), ochre=vec3(0.29,0.19,0.075);
       float band = (member < 0.5 ? 0.20 : 0.10) * size.y;
       float gradient = smoothstep(0.0,band,edge);
       vec3 border = mix(blue,chalk,pow(gradient,1.8)*0.75);
       float inner = smoothstep(band-aa,band+aa,edge);
-      float pigment = mod(floor(uv.x*3.0),2.0);
+      // inferred: entire members carry one ground colour; fine edge gradients avoid patchwork bands.
+      float pigment = step(1.5,member)*(1.0-step(2.5,member));
       vec3 field = ${style === 'wucai' ? 'mix(red,green,pigment*0.7)' : style === 'nianyu' ? 'mix(blue,green,smoothstep(0.0,0.5,uv.y))' : 'red'};
-      t2Albedo = mix(border,field,inner);
+      t2Albedo = mix(field,border,(1.0-inner)*0.48);
       ${style === 'danfen' ? `
         // 卷十四: 1/8 member height, bounded by 五分..一寸 (0.0156..0.0312 m).
         float whiteWidth = clamp(size.y/8.0,0.0156,0.0312);
@@ -64,7 +65,9 @@ export function paintHook(style = 'wucai') {
         float paleLine=t2Line(edge-band,0.0025);
         t2Albedo=mix(t2Albedo,chalk,paleLine*0.6);
       `}
-      t2Albedo *= 0.82+mottle*0.32;
+      float underside = max(-cgN.y,0.0);
+      t2Albedo *= (0.70+mottle*0.48)*(1.0-underside*0.20);
+      t2Occlusion = 0.83-underside*0.23;
       t2Albedo = mix(t2Albedo,vec3(0.17,0.105,0.055)*(0.7+flakes*0.6),wear);
       t2Rough=0.75+wear*0.17;
       t2Height=(flakes-0.5)*0.0007-wear*0.0012;

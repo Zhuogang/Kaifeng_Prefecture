@@ -50,51 +50,54 @@ export function juquezi({height=0.24}={}) {
   ]).scale(height/0.24,height/0.24,height/0.24));
 }
 
-/** Upright concave fin, relief on BOTH faces, integral 拒鹊子. No head or open jaw. */
+/** Chunky upright ridge-biting body with an inward curl, two relief faces and fork-shaped 拒鹊子. */
 export function chiwei({height=1.8}={}) {
   return pair(detail=>{
-    const s=new THREE.Shape();s.moveTo(-0.40,0.0);s.lineTo(0.62,0.0);
-    s.bezierCurveTo(0.59,0.17,0.22,0.24,0.12,0.47);
-    s.bezierCurveTo(-0.08,0.85,0.03,1.26,0.47,1.48);
-    s.bezierCurveTo(0.58,1.53,0.58,1.61,0.48,1.62);
-    s.bezierCurveTo(-0.15,1.62,-0.38,1.38,-0.40,0.85);
-    s.bezierCurveTo(-0.43,0.52,-0.47,0.24,-0.40,0.0);s.closePath();
-    const parts=[extrude(s,0.25,detail,0.025)];
-    const outline=s.getPoints(detail ? 18 : 5);
+    // inferred: fuller body, broad saddle and inward-curling fin reconstructed from 瑞鹤图.
+    const s=new THREE.Shape();s.moveTo(-0.54,0);s.lineTo(0.72,0);
+    s.lineTo(0.72,0.19);s.bezierCurveTo(0.38,0.18,0.22,0.30,0.22,0.53);
+    s.bezierCurveTo(0.19,0.95,0.25,1.27,0.60,1.50);
+    s.bezierCurveTo(0.75,1.59,0.74,1.68,0.58,1.68);
+    s.bezierCurveTo(0.05,1.68,-0.40,1.53,-0.46,1.14);
+    s.bezierCurveTo(-0.54,0.78,-0.58,0.36,-0.54,0);s.closePath();
+    const parts=[new THREE.ExtrudeGeometry(s,{depth:0.42,steps:1,curveSegments:detail?16:6,
+      bevelEnabled:true,bevelSegments:1,bevelSize:0.025,bevelThickness:0.025}).translate(0,0,-0.21)];
+    const outline=s.getPoints(detail?9:4);
+    const line=(pts,r,closed=false)=>{
+      const curve=new THREE.CatmullRomCurve3(pts.map(v3),closed,'centripetal');
+      return new THREE.TubeGeometry(curve,Math.max(6,pts.length),r,detail?4:3,closed);
+    };
     for(const side of [-1,1]) {
-      parts.push(tube(outline.map(p=>[p.x,p.y,side*0.145]),0.024,detail,true));
+      parts.push(line(outline.map(p=>[p.x,p.y,side*0.24]),0.035,true));
       if(detail) {
-        for(let row=0;row<12;row++) for(let col=0;col<8;col++) {
-          const x=-0.32+col*0.12+(row%2)*0.06, y=0.12+row*0.115;
-          const pts=[];
-          for(let k=0;k<=8;k++) {const a=Math.PI*k/8;pts.push([x+0.052*Math.cos(a),y-0.065*Math.sin(a),side*0.145]);}
-          if(pts.every(p=>inside(p,outline))) parts.push(tube(pts,0.009,true));
+        for(let row=0;row<9;row++)for(let col=0;col<6;col++) {
+          const x=-0.42+col*0.15+(row%2)*0.075,y=0.13+row*0.16,pts=[];
+          for(let k=0;k<=5;k++){const a=Math.PI*k/5;pts.push([x+0.063*Math.cos(a),y-0.08*Math.sin(a),side*0.24]);}
+          if(pts.every(p=>inside(p,outline)))parts.push(line(pts,0.014));
         }
-        // Raised curling stems crossing the scale field, as in 瑞鹤图's incised scrolls.
-        for(const [cx,cy,r] of [[-0.16,0.44,0.13],[-0.18,0.84,0.12],[-0.1,1.23,0.13]]) {
-          const pts=[];for(let i=0;i<35;i++){const t=i/34,a=t*Math.PI*3.3,rad=r*(1-t*0.83);
-            pts.push([cx+Math.cos(a)*rad,cy+Math.sin(a)*rad,side*0.16]);}
-          parts.push(tube(pts,0.018,true));
+        for(const [cx,cy,r]of [[-0.16,0.43,0.19],[-0.17,0.86,0.17],[-0.02,1.32,0.18]]) {
+          const pts=[];for(let i=0;i<20;i++){const t=i/19,a=t*Math.PI*3.3,rad=r*(1-t*0.83);pts.push([cx+Math.cos(a)*rad,cy+Math.sin(a)*rad,side*0.255]);}
+          parts.push(line(pts,0.025));
         }
       }
     }
-    const fork=juquezi();parts.push((detail ? fork.lod0 : fork.lod1).translate(0.43,1.61,0));
-    (detail ? fork.lod1 : fork.lod0).dispose();
-    parts.push(box(1.08,0.10,0.38,detail).translate(0.08,0.04,0));
-    return merge(parts).scale(height/1.85,height/1.85,height/1.85);
+    const fork=juquezi({height:0.28});parts.push((detail?fork.lod0:fork.lod1).translate(0.59,1.67,0));
+    (detail?fork.lod1:fork.lod0).dispose();
+    parts.push(box(1.36,0.15,0.58,detail).translate(0.07,0.045,0));
+    return merge(parts).scale(height/1.95,height/1.95,height/1.95);
   });
 }
 
 /** Small crouching ridge guardian. Modelled as a modest animal, not a Qing ridge-end dragon. */
 function guardian(detail,scale=1) {
-  const parts=[ball(0,0.18,0,0.18,0.16,0.10,detail),ball(0.13,0.32,0,0.09,0.10,0.085,detail),
-    ball(0.20,0.30,0,0.05,0.035,0.065,detail),box(0.42,0.06,0.24,detail).translate(0,0.03,0)];
+  const parts=[ball(0,0.18,0,0.18,0.16,0.10,false),ball(0.13,0.32,0,0.09,0.10,0.085,false),
+    ball(0.20,0.30,0,0.05,0.035,0.065,false),box(0.42,0.06,0.24,false).translate(0,0.03,0)];
   for(const z of [-0.065,0.065]) {
-    parts.push(ball(0.10,0.11,z,0.045,0.095,0.038,detail),ball(-0.11,0.09,z,0.06,0.06,0.04,detail));
-    parts.push(ball(0.10,0.41,z*0.7,0.028,0.05,0.024,detail));
-    if(detail)parts.push(ball(0.19,0.34,z,0.015,0.012,0.009,true));
+    parts.push(ball(0.10,0.11,z,0.045,0.095,0.038,false),ball(-0.11,0.09,z,0.06,0.06,0.04,false));
+    parts.push(ball(0.10,0.41,z*0.7,0.028,0.05,0.024,false));
+    if(detail)parts.push(ball(0.19,0.34,z,0.015,0.012,0.009,false));
   }
-  parts.push(tube([[-0.15,0.16,0],[-0.24,0.19,0],[-0.24,0.29,0],[-0.18,0.31,0]],0.025,detail));
+  parts.push(tube([[-0.15,0.16,0],[-0.24,0.19,0],[-0.24,0.29,0],[-0.18,0.31,0]],0.025,false));
   return merge(parts).scale(scale,scale,scale);
 }
 export function chuishou({height=0.62}={}) { return pair(detail=>guardian(detail,height/0.46)); }
@@ -222,15 +225,16 @@ export function goulan(engine,{path=[[0,0,0],[4.368,0,0]],height=4*CHI,variation
 
 /** Line/path-following low vermilion or black 杈子. Joined rails and forked uprights. */
 export function chazi(engine,{path=[[0,0,0],[6,0,0]],height=1.05,variant='vermilion',variation=0}={}) {
+  const fenceBox=(w,h,d)=>new THREE.BoxGeometry(w,h,d);
   const mat=timberMaterial(engine,{variant,variation});
   const {spans,posts}=pathSpans(path,2.0);
   return pair(detail=>{
     const group=new THREE.Group();group.name='chazi-'+variant;
-    const spanParts=[box(2,0.095,0.095,detail).translate(1,height*0.3,0),box(2,0.095,0.095,detail).translate(1,height*0.8,0)];
-    for(let i=1;i<8;i++)spanParts.push(box(0.047,height*0.7,0.047,detail).translate(i*0.25,height*0.48,0));
+    const spanParts=[fenceBox(2,0.095,0.095,detail).translate(1,height*0.3,0),fenceBox(2,0.095,0.095,detail).translate(1,height*0.8,0)];
+    for(let i=1;i<8;i++)spanParts.push(fenceBox(0.047,height*0.7,0.047,detail).translate(i*0.25,height*0.48,0));
     group.add(instances(merge(spanParts),mat,spans.map(s=>s.matrix.clone().multiply(new THREE.Matrix4().makeScale(s.horizontal/2,1,1))),'fence-bays'));
-    const post=[box(0.12,height,0.12,detail).translate(0,height/2,0),box(0.17,0.06,0.17,detail).translate(0,height*0.85,0)];
-    for(const sign of [-1,1])post.push(box(0.05,0.23,0.055,detail).rotateZ(sign*0.42).translate(sign*0.045,height-0.02,0));
+    const post=[fenceBox(0.12,height,0.12,detail).translate(0,height/2,0),fenceBox(0.17,0.06,0.17,detail).translate(0,height*0.85,0)];
+    for(const sign of [-1,1])post.push(fenceBox(0.05,0.23,0.055,detail).rotateZ(sign*0.42).translate(sign*0.045,height-0.02,0));
     group.add(instances(merge(post),mat,posts.map(p=>transform(p.toArray())),'forked-posts'));
     return group;
   });

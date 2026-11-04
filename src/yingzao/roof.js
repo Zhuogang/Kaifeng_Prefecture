@@ -34,15 +34,16 @@ export function roofModel(layout, ring = null) {
     const fly = Math.max(0, d - layout.eave.out);
     return -slope * d + slope * fly * fly / (2 * layout.eave.feizi);
   };
-  // inferred: smooth wing rise is twice its horizontal growth; 生起 influences the whole eave.
-  const wingRise = layout.eave.wing * 2;
+  // inferred: painted elevations suggest vertical wing rise six times the specified horizontal growth.
+  // Spread that rise continuously across the elevation, as in jinci_side and 瑞鹤图.
+  const wingRise = layout.eave.wing * 6;
   const rise = shengqi(s.frontBays.length);
   const wingStart = Math.max(0, 1 - (s.frontBays[0] * 1.5 + layout.projection) / (a + layout.eave.out));
   const point = (side, u, t, offset = 0) => {
     const growth = layout.eave.wing * smooth(wingStart, 1, Math.abs(u)) * smooth(0.65, tEnd, t);
     const q = b * t + growth;
     const width = kind === 'xuanshan' ? a : r + Math.max(0, b * (t - hipStart)) + growth;
-    const y = baseY + sectionY(t) + (rise * u * u + wingRise * smooth(wingStart, 1, Math.abs(u))) * (t / tEnd) ** 2 + offset;
+    const y = baseY + sectionY(t) + (rise * u * u + wingRise * Math.pow(Math.abs(u), 2.4)) * (t / tEnd) ** 2 + offset;
     if (side === 'south') return [u * width, y, q];
     if (side === 'north') return [-u * width, y, -q];
     if (side === 'east') return [width, y, -u * q];
@@ -124,7 +125,12 @@ export function buildRoof(model, lod, batches, anchors) {
     // inferred: tile bed +0.10 m, soffit -0.12 m and rafter centres -0.23 m relative to the roof datum.
     const top = surface(model, side, lod, 0.10); tile.add(top); top.dispose();
     if (lod < 2) {
-      const underside = surface(model, side, lod, -0.12); timber.add(underside); underside.dispose();
+      const underside = surface(model, side, lod, -0.12);
+      // The soffit faces down. It closes the roof from below and supplies its solid back-face shadow.
+      const index=underside.index.array,normals=underside.attributes.normal;
+      for(let i=0;i<index.length;i+=3){const b=index[i+1];index[i+1]=index[i+2];index[i+2]=b;}
+      for(let i=0;i<normals.count;i++)normals.setXYZ(i,-normals.getX(i),-normals.getY(i),-normals.getZ(i));
+      timber.add(underside); underside.dispose();
       const ts = model.rows(side, lod), n = lod === 0 ? 28 : 12;
       for (let j = 0; j < n; j++) {
         const u0 = j / n * 2 - 1, u1 = (j + 1) / n * 2 - 1;
@@ -140,8 +146,11 @@ export function buildRoof(model, lod, batches, anchors) {
         const count = Math.ceil(span / spacing);
         for (let j = 0; j <= count; j++) {
           const u = j / count * 2 - 1;
-          const breaks = [...ts.filter((t) => t < tRafter), tRafter];
-          for (let i = 0; i < breaks.length - 1; i++) timber.beam(point(side, u, breaks[i], -0.23), point(side, u, breaks[i + 1], -0.23), diameter, diameter, 7, false);
+          // Closed halls hide the inward rafters behind their walls. Open halls retain the whole slope.
+          const breaks = layout.spec.enclosedBrackets
+            ? [0.75, ...ts.filter((t) => t > 0.75 && t < tRafter), tRafter]
+            : [...ts.filter((t) => t < tRafter), tRafter];
+          for (let i = 0; i < breaks.length - 1; i++) timber.beam(point(side, u, breaks[i], -0.23), point(side, u, breaks[i + 1], -0.23), diameter, diameter, 5, false);
           // 飞子: 8/10 × 7/10 of the rafter diameter; overlaps the common rafter at the heel.
           timber.beam(point(side, u, 1 + layout.eave.out * 0.6 / b, -0.13), point(side, u, tEnd, -0.09), diameter * 0.8, diameter * 0.7);
         }
@@ -163,11 +172,11 @@ export function buildRoof(model, lod, batches, anchors) {
             }
             const breaks = [lo, ...ts.filter((t) => t > lo)];
             for (let k = 0; k < breaks.length - 1; k++) {
-              for (const t of [breaks[k], (breaks[k] + breaks[k + 1]) / 2])
-                points.push(point(side, coordinate / Math.max(0.0001, halfWidth(t)), t, 0.13));
+              const t=breaks[k];
+              points.push(point(side,coordinate/Math.max(0.0001,halfWidth(t)),t,0.13));
             }
             points.push(point(side, u, tEnd, 0.13));
-            if (points.length > 1) strip(tile, points, 0.065, 5, true, j);
+            if (points.length > 1) strip(tile, points, 0.085, 4, true, j);
           }
           const p = point(side, u, tEnd, 0.09), inside = point(side, u, tEnd - 0.012, 0.09);
           const out = new THREE.Vector3(...p).sub(new THREE.Vector3(...inside)).normalize();

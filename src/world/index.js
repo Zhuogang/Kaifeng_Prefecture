@@ -1,4 +1,4 @@
-export const MODULE_ORDER = ['ground'];
+export const MODULE_ORDER = ['ground', 'bianhe', 'zhouqiao'];
 
 export async function buildWorld(engine) {
   for (const name of MODULE_ORDER) {
@@ -12,3 +12,5 @@ export async function buildWorld(engine) {
     }
   }
 }
+
+MODULE_ORDER.push('xuande');

@@ -53,7 +53,8 @@ export class Lighting {
     });
     this.csm.fade = true;
     for (const l of this.csm.lights) {
-      l.shadow.normalBias = 0.06;
+      // inferred: 2 cm bias preserves timber/stone contact without self-shadow striping.
+      l.shadow.normalBias = 0.02;
       l.color.copy(SUN.color);
     }
     // shared CSM uniforms injected into every lit material by engine.patchMaterial()
@@ -141,6 +142,9 @@ export class Lighting {
   /** (re)build the environment map from the sky (call after sun/sky changes) */
   buildEnvironment() {
     const { renderer, scene } = this.engine;
+    // applyShot restores shared defaults after setting the light. Resynchronise its
+    // radiance before generating IBL, including sunset and the unlit blue-hour sun.
+    this._syncSkyUniforms();
     try { ensureCloudTextures(renderer); } catch (e) { /* already warned */ }
     if (!this.pmrem) this.pmrem = new THREE.PMREMGenerator(renderer);
     if (!this.envScene) {

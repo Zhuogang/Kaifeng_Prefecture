@@ -1,49 +1,22 @@
 import * as THREE from 'three';
-import { proceduralMaterial } from '../core/materials.js';
 import { hallLayout } from './layout.js';
 import { fen, columnDiameterFen, laneFen } from './rules.js';
 import { GeometryBatch, meshStats, profilePrism } from './geometry.js';
 import { addBrackets, bracketHeight } from './brackets.js';
+import { timberMaterial } from '../materials/timber.js';
+import { paintMaterial } from './paint.js';
+import { tileMaterial } from '../materials/tile.js';
+import { masonryMaterial } from '../materials/masonry.js';
+import { plasterMaterial } from '../materials/plaster.js';
 import { roofModel, buildRoof } from './roof.js';
 
-/** Simple procedural stand-ins. T2 can supply {timber, bracket, stone, plaster, tile, ridge} materials. */
-export function defaultHallMaterials(spec = {}) {
-  // inferred: fallback albedos and filtered wear are provisional; the shared T2 families replace them.
-  const timber = proceduralMaterial({ name: 'hall-vermilion', params: { color: 0x87412e, roughness: 0.78, side: THREE.DoubleSide },
-    color: `float wear = cgVnoise3(cgP * vec3(3.0, 0.38, 3.0));
-      float grain = cgVnoise3(cgP * vec3(38.0, 1.1, 38.0));
-      grain = mix(grain, 0.5, smoothstep(0.025, 0.16, length(fwidth(cgP))));
-      diffuseColor.rgb *= 0.68 + 0.4 * wear + 0.2 * grain;
-      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.105, 0.055), smoothstep(0.68, 0.84, wear) * 0.5);` });
-  const bracket = proceduralMaterial({ name: 'hall-bracket-green', params: { color: 0x576858, roughness: 0.8 },
-    color: `float wear = cgVnoise3(cgP * 7.0); diffuseColor.rgb *= 0.72 + 0.5 * wear;
-      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.23, 0.14, 0.07), smoothstep(0.6, 0.82, wear) * 0.65);` });
-  const stone = proceduralMaterial({ name: 'hall-bluestone', params: { color: 0x777e7b, roughness: 0.9 },
-    color: `float grain = cgVnoise3(cgP * 8.0); diffuseColor.rgb *= 0.82 + 0.27 * grain;
-      vec2 p = abs(cgN.y) > 0.6 ? cgP.xz : vec2(cgP.x + cgP.z, cgP.y);
-      p.x += mod(floor(p.y / 0.38), 2.0) * 0.42;
-      vec2 d = min(mod(p, vec2(0.84, 0.38)), vec2(0.84, 0.38) - mod(p, vec2(0.84, 0.38)));
-      float seam = 1.0 - smoothstep(0.008, 0.013 + length(fwidth(p)), min(d.x, d.y));
-      diffuseColor.rgb *= 1.0 - seam * 0.25;` });
-  const plaster = proceduralMaterial({ name: 'hall-lime', params: { color: 0xd8cbbb, roughness: 0.95 },
-    color: 'diffuseColor.rgb *= 0.86 + 0.18 * cgVnoise3(cgP * vec3(2.0, 0.3, 2.0));' });
-  const tile = proceduralMaterial({ name: spec.tile === 'banwa' ? 'hall-grey-tile' : 'hall-green-tile',
-    params: { color: spec.tile === 'banwa' ? 0x656964 : 0x315c50, roughness: spec.tile === 'banwa' ? 0.75 : 0.33, side: THREE.DoubleSide },
-    vertexHead: 'varying vec2 vHallTile;', vertexPre: 'vHallTile = uv;', head: 'varying vec2 vHallTile;',
-    color: `vec2 p = vHallTile / vec2(0.26, 0.35);
-      float id = fract(sin(dot(floor(p), vec2(23.17, 76.31))) * 4321.17);
-      float edge = min(fract(p.y), 1.0 - fract(p.y));
-      float aa = max(fwidth(p.y), 0.005);
-      float joint = (1.0 - smoothstep(0.015, 0.035 + aa, edge)) * (1.0 - smoothstep(0.4, 1.1, aa));
-      float rib = (0.5 + 0.5 * cos(p.x * 6.2831853)) * (1.0 - smoothstep(0.35, 1.0, fwidth(p.x)));
-      diffuseColor.rgb *= (0.82 + id * 0.27) * (1.0 - joint * 0.42) * (0.86 + 0.14 * rib);`,
-    normal: `vec2 uvDx = dFdx(vHallTile), uvDy = dFdy(vHallTile);
-      vec3 tangent = dFdx(cgP) * uvDy.y - dFdy(cgP) * uvDx.y;
-      float fade = 1.0 - smoothstep(0.35, 1.0, fwidth(vHallTile.x / 0.26));
-      cgBump = tangent / max(length(tangent), 0.00001) * sin(vHallTile.x * 24.166097) * 0.22 * fade;` });
-  const ridge = proceduralMaterial({ name: 'hall-ridge-glaze', params: { color: spec.tile === 'banwa' ? 0x656964 : 0x416a59,
-    roughness: spec.tile === 'banwa' ? 0.75 : 0.35 } });
-  return { timber, bracket, stone, plaster, tile, ridge };
+/** Shared procedural families keep hall inspection and assembled buildings on the same surfaces. */
+export function defaultHallMaterials(spec = {}, engine = {quality:{detail:0.5}}) {
+  engine = engine?.quality ? engine : {quality:{detail:0.5}};
+  const tile = spec.tile === 'banwa' ? 'grey' : 'green';
+  return {timber:timberMaterial(engine), bracket:paintMaterial(engine,{style:'wucai'}),
+    stone:masonryMaterial(engine), plaster:plasterMaterial(engine),
+    tile:tileMaterial(engine,{variant:tile}), ridge:tileMaterial(engine,{variant:tile,ribbed:false})};
 }
 
 function columnGeometry(column, radius, f, segments) {
@@ -84,6 +57,10 @@ function frame(layout, lod, batches, collision, { fill = true, lowOuter = false 
     // inferred: 普拍方 occupies the top 15 分 below the bracket datum, width 32 分.
     timber.beam([a.headX, a.topY - 7.5 * f, a.headZ], [b.headX, b.topY - 7.5 * f, b.headZ], 32 * f, 15 * f);
     const dx = side === 'east' ? 1 : side === 'west' ? -1 : 0, dz = side === 'south' ? 1 : side === 'north' ? -1 : 0;
+    // inferred: 栱眼壁 closes the bearing band behind the exposed brackets; no daylight gap through the hall.
+    const bh = bracketHeight(s);
+    timber.beam([a.headX-dx*0.14,a.topY+bh*0.5,a.headZ-dz*0.14],
+      [b.headX-dx*0.14,b.topY+bh*0.5,b.headZ-dz*0.14],0.16,bh);
     const ly = bracketHeight(s) + 7.5 * f;
     timber.beam([a.headX + dx * layout.projection, a.topY + ly, a.headZ + dz * layout.projection],
       [b.headX + dx * layout.projection, b.topY + ly, b.headZ + dz * layout.projection], 10 * f, 15 * f);
@@ -126,14 +103,19 @@ function frame(layout, lod, batches, collision, { fill = true, lowOuter = false 
     else {
       // inferred: six leaves per doorway, a solid lower panel and open rectangular lattice above.
       const bottom = type === 'door' ? 1.05 : 1.4;
+      // inferred: plaster jambs frame lattice windows behind the colonnade on hero elevations.
+      const opening = type === 'lattice' && s.windowJambs ? span * 0.58 : span;
+      if (opening < span) for (const sign of [-1,1])
+        rect(plaster,sign*(span+opening)/4,(h+bottom)/2,(span-opening)/2,h-bottom,0.22);
+
       rect(type === 'door' ? timber : plaster, 0, bottom / 2, span, bottom, 0.20);
       rect(timber, 0, h - 0.09, span, 0.18, 0.22);
       if (lod < 2) {
-        for (let i = 0; i <= 6; i++) rect(timber, -span / 2 + i * span / 6, h / 2, 0.075, h, 0.20);
+        for (let i = 0; i <= 6; i++) rect(timber, -opening / 2 + i * opening / 6, h / 2, 0.075, h, 0.20);
         rect(timber, 0, bottom, span, 0.13, 0.20);
         if (lod === 0) {
-          for (let i = 0; i <= Math.ceil(span / 0.18); i++) rect(timber, -span / 2 + i * span / Math.ceil(span / 0.18), (h + bottom) / 2, 0.028, h - bottom);
-          for (let y = bottom + 0.26; y < h; y += 0.26) rect(timber, 0, y, span, 0.025);
+          for (let i = 0; i <= Math.ceil(opening / 0.18); i++) rect(timber, -opening / 2 + i * opening / Math.ceil(opening / 0.18), (h + bottom) / 2, 0.028, h - bottom);
+          for (let y = bottom + 0.26; y < h; y += 0.26) rect(timber, 0, y, opening, 0.025);
         }
       } else rect(timber, 0, (h + bottom) / 2, span, h - bottom, 0.12);
     }
@@ -166,7 +148,7 @@ function surroundLayout(layout) {
  */
 export function buildHall(spec, engine, materials = spec.materials) {
   const layout = hallLayout(spec), s = layout.spec, lower = s.eaves === 2 ? surroundLayout(layout) : null;
-  const mats = { ...defaultHallMaterials(s), ...materials }, outer = lower || layout;
+  const mats = { ...defaultHallMaterials(s, engine), ...materials }, outer = lower || layout;
   const margin = s.platform.margin, width = outer.width + 2 * margin, depth = outer.depth + 2 * margin;
   const footprint = { type: 'rect', x: 0, z: 0, hw: width / 2, hd: depth / 2, rotation: 0,
     platformHeight: s.platform.height, obstacles: [] };

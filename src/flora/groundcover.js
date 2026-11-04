@@ -1,27 +1,27 @@
 import * as THREE from 'three';
 import { RNG } from '../core/rng.js';
 import { Geometry, V, TAU } from './geometry.js';
-import { floraMaterials } from './materials.js';
+import { floraMaterials, lotusContactMaterial } from './materials.js';
 import { BLOSSOMS } from './trees.js';
 
 // inferred: lotus diameter 0.45–1.0 m, upturned rim and a narrow radial notch.
 // All three LODs keep real geometry, so the underside and water-level silhouette work.
 export function buildLotus({seed='lotus',radius=0.42,rng=new RNG(seed)}={}) {
-  const hue=new THREE.Color('#617f34').multiplyScalar(rng.range(0.9,1.1));
-  const levels=[48,24,12].map(segments=>{
+  const hue=new THREE.Color('#6b8568').multiplyScalar(rng.range(0.9,1.1));
+  const levels=[64,40,16].map(segments=>{
     const g=new Geometry(), center=g.vertex(V(0,0.012,0),V(0,1,0),hue,3,0,[0,0]),rings=[];
-    for(let j=1;j<=3;j++) {
-      const ring=[],r=j/3;
+    for(let j=1;j<=5;j++) {
+      const ring=[],r=j/5;
       for(let i=0;i<=segments;i++) {
         const a=0.075+i/segments*(TAU-0.15), edge=1+0.018*Math.sin(a*9)+0.012*Math.cos(a*13);
-        const y=0.012+radius*(0.075*r**4+0.018*Math.sin(a*7)*r*r);
-        ring.push(g.vertex(V(Math.cos(a)*radius*r*edge,y,Math.sin(a)*radius*r*edge),V(-Math.cos(a)*0.24*r**3,1,-Math.sin(a)*0.24*r**3).normalize(),hue,3,0,[Math.cos(a)*r,Math.sin(a)*r]));
+        const y=0.012+radius*(0.06*r**6+0.018*Math.sin(a*7)*r*r);
+        ring.push(g.vertex(V(Math.cos(a)*radius*r*edge,y,Math.sin(a)*radius*r*edge),V(-Math.cos(a)*0.36*r**5,1,-Math.sin(a)*0.36*r**5).normalize(),hue,3,0,[Math.cos(a)*r,Math.sin(a)*r]));
       }
       rings.push(ring);
     }
     for(let i=0;i<segments;i++) {
       g.tri(center,rings[0][i+1],rings[0][i]);
-      for(let j=1;j<3;j++) {
+      for(let j=1;j<5;j++) {
         g.tri(rings[j-1][i],rings[j-1][i+1],rings[j][i]);
         g.tri(rings[j-1][i+1],rings[j][i+1],rings[j][i]);
       }
@@ -63,8 +63,17 @@ function scatter(engine,geometry,positions,{seed,materials=floraMaterials(engine
 }
 export function instanceLotus(engine,positions,options={}) {
   const model=buildLotus({...options,rng:engine.rng('lotus-model:'+ (options.seed??'lotus'))});
-  const mesh=scatter(engine,engine.quality.detail>=1?model.lod0:model.lod1,positions,{seed:'lotus',tilt:0.035,...options});
-  return {mesh,model};
+  const materials=options.materials??floraMaterials(engine);
+  const mesh=scatter(engine,model.lod0,positions,{seed:'lotus',tilt:0.035,...options,materials});
+  // inferred: a low-opacity penumbra directly beneath each floating leaf supplies
+  // centimetre-scale contact that the district shadow map cannot resolve.
+  const radius=options.radius??0.42,plane=new THREE.PlaneGeometry(radius*2.18,radius*2.18).rotateX(-Math.PI/2);
+  const shadow=new THREE.InstancedMesh(plane,materials.lotusContact??lotusContactMaterial(),positions.length),matrix=new THREE.Matrix4();
+  for(let i=0;i<positions.length;i++) {
+    mesh.getMatrixAt(i,matrix);matrix.elements[13]-=0.004;shadow.setMatrixAt(i,matrix);
+  }
+  shadow.name='lotus-water-contact';shadow.computeBoundingSphere();engine.add(shadow,{castShadow:false,receiveShadow:false});
+  return {mesh,model,shadow};
 }
 export function instanceGrass(engine,positions,options={}) {
   const model=buildGrass({...options,rng:engine.rng('grass-model:'+(options.seed??'grass'))});

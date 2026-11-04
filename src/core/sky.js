@@ -18,6 +18,8 @@ export const SKY = {
   uZenith: { value: new THREE.Color(0.11, 0.24, 0.68) },  // zenith radiance (linear; refs at ~30° elevation ≈ #739fd4 … #88acd9, paler overhead)
   uSkyFalloff: { value: 6.0 },        // exponent of the zenith→horizon blend (higher = deep blue lower down)
   uSkyAureole: { value: new THREE.Vector3(0.3, 0.7, 4.0) }, // broad glow, mid glow, tight glow around the sun
+  // inferred: twilight afterglow, confined to the horizon around the actual setting sun.
+  uTwilight: { value: new THREE.Vector3(0, 0, 0) },
   uGround: { value: new THREE.Color(0.36, 0.30, 0.22) },  // radiance below the horizon (env map bounce: warm sunlit ground → warm shadows)
   uSunDisk: { value: 1600.0 },     // radiance multiplier of the solar disk
   uSunSize: { value: 0.0048 },     // angular radius (rad), real sun ≈ 0.0046
@@ -42,7 +44,9 @@ export const SKY = {
   uCloudPowder: { value: 0.6 },
   uCloudErode: { value: 0.45 },    // inferred: soft edges; keep density-remap thresholds below one
   // ---- high cirrus / altocumulus streaks (refs 1, 3, 7): x amount, y altitude (m), z streak direction (rad)
-  uCirrus: { value: new THREE.Vector3(0.25, 7500, 0.6) },
+  // inferred: fair-weather cumulus carries the cloud structure; anisotropic cirrus
+  // reads as combed stripes over a flat horizon and is disabled world-wide.
+  uCirrus: { value: new THREE.Vector3(0, 7500, 0.6) },
   uEnvPass: { value: 0 },
   uEnvScale: { value: 0.21 },       // IBL fill relative to the visible sky (art-directed contrast: deep shadows)
   uEnvBlue: { value: 0.1 },         // IBL bias toward the zenith blue (0 = neutral sky fill, higher = cooler shadows)
@@ -100,6 +104,7 @@ export const SKY_GLSL = /* glsl */ `
 #define CG_SKY_INCLUDED
 uniform float uSkyFalloff;
 uniform vec3 uSkyAureole;
+uniform vec3 uTwilight;
 uniform vec3 uGround;
 uniform float uSunDiskMode;
 uniform vec3 uSunDiskDir;
@@ -120,6 +125,7 @@ vec3 cgSkyGradient(vec3 d){
   // Mie aureole (warm) around the sun, strongest near the horizon where the light path is long
   float m = max(mu, 0.0);
   col += uSunColor * (uSkyAureole.x * pow(m, 6.0) * (0.35 + 0.65 * t) + uSkyAureole.y * pow(m, 40.0) + uSkyAureole.z * pow(m, 600.0));
+  col += uTwilight * exp(-pow((h - 0.015) / 0.085, 2.0)) * pow(m, 4.0);
   return col;
 }
 #endif
@@ -188,7 +194,7 @@ float skyDensity(vec3 p, float hf, bool detail){
   vec2 w = skyWeather(q);
   if (w.x <= 0.0) return 0.0;
   // cumulus height gradient: crisp-ish flat base, rounded top whose height varies per clump
-  float grad = smoothstep(0.0, 0.07, hf) * smoothstep(w.y, w.y * 0.35, hf);
+  float grad = smoothstep(0.0, 0.07, hf) * (1.0 - smoothstep(w.y * 0.35, w.y, hf));
   if (grad <= 0.0) return 0.0;
   vec3 sp = vec3(q.x, p.y * 1.3, q.y) * (1.0 / 2600.0);
   vec4 n = textureLod(tCloudShape, sp, 0.0);
@@ -197,7 +203,7 @@ float skyDensity(vec3 p, float hf, bool detail){
   float shape = pw * 0.6 + fbm * 0.4;
   float base = cgRemapU(shape * grad, 1.0 - w.x, 1.0, 0.0, 1.0) * w.x;
   if (base <= 0.0) return 0.0;
-  if (detail) {
+  if (detail && uCloudErode > 0.0) {
     vec3 dn = textureLod(tCloudDetail, vec3(q.x, p.y, q.y) * (1.0 / 430.0) + vec3(0.0, uSkyTime * 0.002, 0.0), 0.0).rgb;
     float dfbm = clamp((dn.r * 0.625 + dn.g * 0.25 + dn.b * 0.125 - 0.6) / 0.3, 0.0, 1.0);
     float mod_ = mix(dfbm, 1.0 - dfbm, clamp(hf * 5.0, 0.0, 1.0)); // wispy bases, billowy tops
@@ -263,7 +269,10 @@ vec4 skyClouds(vec3 cam, vec3 rd, float steps, float jit, out float dist){
       vec3 sun = cgCloudSun(od, mu, dens, uCloudPowder);
       float ao = mix(0.5, 1.0, smoothstep(0.0, 0.7, hf));
       vec3 amb = mix(ambBot, ambTop, pow(clamp(hf, 0.0, 1.0), 0.6)) * ao * uCloudAmbient;
-      vec3 Ls = sun * uCloudBright + amb;
+      // inferred: reduce the multiple-scattering lift in optically deep cloud bases.
+      // Without this, shaded bases converge to the same white as the sunlit rim.
+      float access = exp(-od * 0.35);
+      vec3 Ls = sun * uCloudBright * mix(0.3, 1.0, access) + amb * mix(0.55, 1.0, access);
       float Ts = exp(-sigma * st);
       float w = T * (1.0 - Ts);
       scat += Ls * w;
