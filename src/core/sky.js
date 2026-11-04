@@ -17,6 +17,10 @@ export const SKY = {
   // ---- clear sky
   uZenith: { value: new THREE.Color(0.11, 0.24, 0.68) },  // zenith radiance (linear; refs at ~30° elevation ≈ #739fd4 … #88acd9, paler overhead)
   uSkyFalloff: { value: 6.0 },        // exponent of the zenith→horizon blend (higher = deep blue lower down)
+  // inferred: an optional pale lower Rayleigh sky above a narrow warm aerosol
+  // horizon. Black disables the extra band, preserving the other clock looks.
+  uSkyLower: { value: new THREE.Color(0, 0, 0) },
+  uSkyHorizonWidth: { value: 0.06 },
   uSkyAureole: { value: new THREE.Vector3(0.3, 0.7, 4.0) }, // broad glow, mid glow, tight glow around the sun
   // inferred: twilight afterglow, confined to the horizon around the actual setting sun.
   uTwilight: { value: new THREE.Vector3(0, 0, 0) },
@@ -31,6 +35,9 @@ export const SKY = {
   // inferred: sparse, thin fair-weather clouds for the shared morning atmosphere.
   uCloudCover: { value: 0.35 },    // 0..1 sky fraction
   uCloudScale: { value: 1.2 },     // horizontal feature scale multiplier
+  // inferred: a broad clearing in the world weather field, centred on Kaifeng.
+  // Zero preserves the unrestricted layer used by the other clock presets.
+  uCloudClearRadius: { value: 0 }, // m, independent of the camera
   uCloudOffset: { value: new THREE.Vector2(0, 0) }, // km, shifts the weather pattern (composition per shot)
   // r5: softer, shaded, higher cumulus (bright 4.2 / sigma 0.09 / base 1900 read as flat white paper cut-outs
   // from below, shots 2/6/7): thinner extinction → gradual edges, less multiple-scattering lift → grey bases
@@ -44,8 +51,7 @@ export const SKY = {
   uCloudPowder: { value: 0.6 },
   uCloudErode: { value: 0.45 },    // inferred: soft edges; keep density-remap thresholds below one
   // ---- high cirrus / altocumulus streaks (refs 1, 3, 7): x amount, y altitude (m), z streak direction (rad)
-  // inferred: fair-weather cumulus carries the cloud structure; anisotropic cirrus
-  // reads as combed stripes over a flat horizon and is disabled world-wide.
+  // Thin high ice-cloud veils are optional, independently of the cumulus layer.
   uCirrus: { value: new THREE.Vector3(0, 7500, 0.6) },
   uEnvPass: { value: 0 },
   uEnvScale: { value: 0.21 },       // IBL fill relative to the visible sky (art-directed contrast: deep shadows)
@@ -103,6 +109,8 @@ export const SKY_GLSL = /* glsl */ `
 #ifndef CG_SKY_INCLUDED
 #define CG_SKY_INCLUDED
 uniform float uSkyFalloff;
+uniform vec3 uSkyLower;
+uniform float uSkyHorizonWidth;
 uniform vec3 uSkyAureole;
 uniform vec3 uTwilight;
 uniform vec3 uGround;
@@ -119,6 +127,10 @@ vec3 cgSkyGradient(vec3 d){
   // the clear sky brightens a little from the zenith down to mid elevations before it pales
   vec3 zen = uZenith * (1.0 + 0.38 * (1.0 - hh));
   vec3 col = mix(zen, hor, t);
+  if (uSkyLower.r > 0.0) {
+    col = mix(zen, uSkyLower, t);
+    col = mix(col, hor, exp(-hh / max(uSkyHorizonWidth, 0.001)));
+  }
   // Rayleigh angular structure: sky is darkest/deepest ~90° from the sun, brighter on the sun side
   float ray = 0.75 * (1.0 + mu * mu);
   col *= mix(1.0, 0.9 + 0.12 * ray, 1.0 - t);
@@ -146,6 +158,7 @@ uniform float uSunDisk;
 uniform float uSunSize;
 uniform float uCloudCover;
 uniform float uCloudScale;
+uniform float uCloudClearRadius;
 uniform vec2 uCloudOffset;
 uniform float uCloudBright;
 uniform float uCloudBase;
@@ -169,10 +182,14 @@ ${CLOUD_GLSL}
 ${SKY_GLSL}
 
 const float RE = 6360000.0;
-float raySphereFar(vec3 ro, vec3 rd, float R){
-  float b = dot(ro, rd), c = dot(ro, ro) - R * R, disc = b * b - c;
+float rayCloudLayer(float cameraY, vec3 rd, float layerY){
+  // Factor the difference of squared radii before evaluating in float32. At
+  // Earth radius, subtracting R² quantises the thin cloud layer into slabs.
+  float b = (RE + cameraY) * rd.y;
+  float c = (cameraY - layerY) * (2.0 * RE + cameraY + layerY);
+  float disc = b * b - c;
   if (disc < 0.0) return -1.0;
-  return -b + sqrt(disc);
+  return b >= 0.0 ? -c / max(b + sqrt(disc), 1e-6) : -b + sqrt(disc);
 }
 
 // weather: coverage + cloud top (fraction of layer) from very low frequency slices of the shape noise
@@ -192,6 +209,10 @@ float skyDensity(vec3 p, float hf, bool detail){
   if (hf <= 0.0 || hf >= 1.0) return 0.0;
   vec2 q = (p.xz + uCloudOffset * 1000.0 + uCloudWind * uSkyTime) / uCloudScale;
   vec2 w = skyWeather(q);
+  if (uCloudClearRadius > 0.0) {
+    float distanceFromCity = length(p.xz + uCloudWind * uSkyTime);
+    w.x *= smoothstep(uCloudClearRadius * 0.8, uCloudClearRadius * 1.2, distanceFromCity);
+  }
   if (w.x <= 0.0) return 0.0;
   // cumulus height gradient: crisp-ish flat base, rounded top whose height varies per clump
   float grad = smoothstep(0.0, 0.07, hf) * (1.0 - smoothstep(w.y * 0.35, w.y, hf));
@@ -207,7 +228,10 @@ float skyDensity(vec3 p, float hf, bool detail){
     vec3 dn = textureLod(tCloudDetail, vec3(q.x, p.y, q.y) * (1.0 / 430.0) + vec3(0.0, uSkyTime * 0.002, 0.0), 0.0).rgb;
     float dfbm = clamp((dn.r * 0.625 + dn.g * 0.25 + dn.b * 0.125 - 0.6) / 0.3, 0.0, 1.0);
     float mod_ = mix(dfbm, 1.0 - dfbm, clamp(hf * 5.0, 0.0, 1.0)); // wispy bases, billowy tops
-    base = cgRemapU(base, mod_ * uCloudErode, 1.0, 0.0, 1.0);
+    // inferred: erode a soft density margin rather than cutting the entire low-
+    // density cloud into disconnected flecks at the detail-noise threshold.
+    float erosion = mod_ * min(uCloudErode, 0.95) * 0.25;
+    base = (base - erosion) / (1.0 - erosion);
   }
   return clamp(base, 0.0, 1.0);
 }
@@ -228,14 +252,24 @@ float skyLightOD(vec3 p, float alt){
 // returns scattered radiance (rgb) and transmittance (a); dist = transmittance-weighted cloud distance
 vec4 skyClouds(vec3 cam, vec3 rd, float steps, float jit, out float dist){
   dist = 0.0;
-  vec3 ro = vec3(0.0, RE + cam.y, 0.0);
-  float tIn = raySphereFar(ro, rd, RE + uCloudBase);
-  float tOut = raySphereFar(ro, rd, RE + uCloudBase + uCloudThick);
+  float tIn = rayCloudLayer(cam.y, rd, uCloudBase);
+  float tOut = rayCloudLayer(cam.y, rd, uCloudBase + uCloudThick);
   if (tIn < 0.0) return vec4(0.0, 0.0, 0.0, 1.0);
   tOut = min(tOut, uCloudMaxDist);
   if (tOut <= tIn) return vec4(0.0, 0.0, 0.0, 1.0);
+  if (uCloudClearRadius > 0.0) {
+    // The clearing is a convex world-space cylinder: if both endpoints of this
+    // layer interval are inside it, no density sample along the ray can be nonzero.
+    vec2 origin = cam.xz + uCloudWind * uSkyTime;
+    float clearR = uCloudClearRadius * 0.8;
+    if (max(length(origin + rd.xz * tIn), length(origin + rd.xz * tOut)) < clearR)
+      return vec4(0.0, 0.0, 0.0, 1.0);
+  }
   float len = tOut - tIn;
-  float dt = len / steps;
+  // inferred: regular integration avoids overlap when the old adaptive march
+  // stepped backwards into a cloud. Those repeated intervals made striped slabs.
+  // Two samples per quality step stay below the old three-step iteration ceiling.
+  float dt = len / (steps * 2.0);
   float t = tIn + dt * jit;
   float mu = dot(rd, uSunDir);
   // ambient: sky dome above (blue), ground + lower sky below (warm grey)
@@ -243,26 +277,20 @@ vec4 skyClouds(vec3 cam, vec3 rd, float steps, float jit, out float dist){
   vec3 ambBot = cgCloudAmbBot();
   vec3 scat = vec3(0.0);
   float T = 1.0, wsum = 0.0, dsum = 0.0;
-  // adaptive march: coarse steps through clear air, 1/4 steps inside cloud
-  bool fine = false;
-  float zeros = 0.0, st = dt;
-  float iters = steps * 3.0;
+  float st = dt;
+  float iters = steps * 2.0;
   for (int i = 0; i < 200; i++) {
     if (float(i) >= iters || T < 0.012 || t > tOut) break;
-    vec3 rp = ro + rd * t;
-    float alt = length(rp) - RE;
+    // Rationalised length(ro + rd*t) - RE: keep metre-scale altitude precision.
+    float vertical = cam.y + rd.y * t;
+    float offset = 2.0 * RE * vertical + cam.y * cam.y + 2.0 * cam.y * rd.y * t + t * t;
+    float alt = offset / (sqrt(RE * RE + offset) + RE);
     float hf = (alt - uCloudBase) / uCloudThick;
     vec3 p = vec3(cam.x + rd.x * t, alt, cam.z + rd.z * t);
-    bool lod = fine && t < 16000.0;
+    bool lod = t < 22000.0;
     // thin out the far field so the horizon is not a carpet of identical puffs
     float dens = skyDensity(p, hf, lod) * mix(1.0, 0.35, smoothstep(9000.0, 38000.0, t));
-    if (!fine) {
-      if (dens > 0.0) { fine = true; zeros = 0.0; t = max(tIn, t - dt * 0.75); continue; }
-      t += dt; continue;
-    }
-    st = dt * 0.25;
-    if (dens <= 0.003) { zeros += 1.0; if (zeros > 8.0) fine = false; t += st; continue; }
-    zeros = 0.0;
+    if (dens <= 0.0005) { t += st; continue; }
     {
       float sigma = dens * uCloudSigma;
       float od = skyLightOD(p, alt);
@@ -294,13 +322,14 @@ void main() {
     vec2 q = cameraPosition.xz + d.xz * tc + uCloudOffset * 1000.0 + uCloudWind * uSkyTime * 2.0;
     float ca = cos(uCirrus.z), sa = sin(uCirrus.z);
     q = vec2(ca * q.x - sa * q.y, sa * q.x + ca * q.y);
-    vec4 n1 = textureLod(tCloudShape, vec3(q.x / 42000.0, q.y / 9500.0, 0.21), 0.0);
-    vec4 n2 = textureLod(tCloudShape, vec3(q.x / 15000.0 + 0.3, q.y / 3200.0, 0.63), 0.0);
-    vec4 n3 = textureLod(tCloudShape, vec3(q / 30000.0, 0.47), 0.0);
-    float field = smoothstep(0.78, 0.92, n3.r);                       // patches of cirrus, clear elsewhere
-    float wisp = clamp((n1.g * 0.6 + n2.b * 0.4 - 0.66) / 0.2, 0.0, 1.0);
-    float a = wisp * wisp * field * uCirrus.x;
-    a *= smoothstep(0.035, 0.18, d.y) * (1.0 - smoothstep(0.3, 0.65, d.y)) * (1.0 - smoothstep(30000.0, 90000.0, tc)); // streaks toward the horizon only
+    // inferred: domain-warped, low-frequency ice-cloud veils. Parallel high-
+    // frequency Worley slices produced the old comb marks and telephoto moire.
+    vec2 ice = q / vec2(24000.0, 9000.0);
+    vec2 warp = vec2(cgVfbm2(ice * 0.7, 3), cgVfbm2(ice * 0.7 + 7.3, 3)) - 0.5;
+    float field = cgVfbm2(ice + warp * 1.8, 4);
+    float wisp = cgVfbm2(ice * 3.1 + warp, 4);
+    float a = smoothstep(0.42, 0.7, field) * smoothstep(0.3, 0.7, wisp) * uCirrus.x;
+    a *= smoothstep(0.01, 0.06, d.y) * (1.0 - smoothstep(90000.0, 180000.0, tc));
     float muC = max(dot(d, cgVisibleSunDir()), 0.0);
     vec3 cir = atmoHazeInscatter(d) * 0.85 + uSunColor * (0.5 + 3.0 * pow(muC, 10.0));
     col = mix(col, cir, clamp(a, 0.0, 0.85));

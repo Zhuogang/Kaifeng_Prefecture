@@ -14,3 +14,8 @@ export async function buildWorld(engine) {
 }
 
 MODULE_ORDER.push('xuande');
+
+MODULE_ORDER.push('palace');
+MODULE_ORDER.push('yujie');
+
+MODULE_ORDER.push('city', 'walls', 'tieta');

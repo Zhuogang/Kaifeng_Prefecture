@@ -29,8 +29,23 @@ const MORNING_GRADE = {
 
 export const TIME_PRESETS = {
   morning: {
-    sun: { azimuth: SUN.azimuth, elevation: SUN.elevation, color: [1.0, 0.82, 0.61], intensity: 12 },
-    sky: MORNING_SKY, atmo: MORNING_ATMO, grade: MORNING_GRADE,
+    // inferred: TL2 direct/fill separation and weather, starting from athenaion's
+    // original zenith, cloud extinction and ambient light; the clearing opens
+    // the sky above the city without selecting or reading a validation camera.
+    sun: { azimuth: SUN.azimuth, elevation: SUN.elevation, color: [1.0, 0.62, 0.34], intensity: 18 },
+    sky: { ...MORNING_SKY,
+      uZenith: [0.015, 0.105, 0.2], uSkyFalloff: 5.0,
+      uSkyLower: [1.4, 1.8, 2.6], uSkyHorizonWidth: 0.06,
+      uGround: [0.5, 0.46, 0.42], uEnvScale: 0.45, uEnvBlue: 0.1,
+      uCloudCover: 0.22, uCloudScale: 4.0, uCloudBase: 2300, uCloudThick: 1000,
+      uCloudSigma: 0.016, uCloudBright: 2.2, uCloudAmbient: 0.85, uCloudErode: 0.6,
+      uCloudClearRadius: 12500,
+      uCirrus: [0.06, 7500, 0.6],
+    },
+    atmo: { ...MORNING_ATMO, uHazeColor: [1.2, 0.95, 0.75] },
+    grade: { ...MORNING_GRADE, uExposure: 0.5, uContrast: 2.0, uPivot: 0.55, uToe: 0.8,
+      uHighlights: 0.25, uAgxPunch: 1.0, uLift: [0.045, 0.045, 0.05], uShadowTint: [0, 0, 0.006],
+      uSaturation: 0.96, uVibrance: 0.05, uLtmFine: 0.2, uLtmMid: 0.3, uLtmLarge: 0.18, uSharpen: 0.2 },
   },
   sunset: {
     sun: { azimuth: 255, elevation: 8, color: [1.0, 0.67, 0.4], intensity: 7.5 },

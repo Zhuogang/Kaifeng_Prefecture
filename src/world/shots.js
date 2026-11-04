@@ -13,3 +13,13 @@ import { XUANDE_VIEWS } from './plan.js';
 // T4 replaces the T0 calibration framing, retaining the aerial inspection camera.
 Object.assign(SHOTS.find(shot => shot.id === 1), XUANDE_VIEWS.front);
 SHOTS.push({ id: 3, ...XUANDE_VIEWS.roof });
+
+import { PALACE_VIEWS } from './plan.js';
+SHOTS.push({ id: 8, ...PALACE_VIEWS.front });
+
+import { YUJIE_VIEWS } from './plan.js';
+Object.assign(SHOTS.find(shot => shot.id === 2), YUJIE_VIEWS.avenue);
+SHOTS.push({ id: 7, ...YUJIE_VIEWS.corridor });
+
+import { CITY_VIEWS } from './plan.js';
+SHOTS.push({ id: 4, ...CITY_VIEWS.aerial }, { id: 9, ...CITY_VIEWS.gallery });

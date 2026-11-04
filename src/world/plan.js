@@ -108,3 +108,149 @@ for (const entry of [XUANDE.platform, XUANDE.hall, ...XUANDE.wings, ...XUANDE.el
   ...XUANDE.towers, ...XUANDE.wingPlatforms, ...XUANDE.stairs]) {
   entry.evidence = 'inferred'; entry.source = XUANDE.source;
 }
+
+export const YUJIE_WIDTH = 312; // text: 二百余步, at five 尺 per 步; one width constant.
+export const YUJIE = {
+  width: YUJIE_WIDTH, start: 0, end: 1300,
+  evidence: 'text', source: '东京梦华录 卷一 御街; ART_BIBLE cross-section',
+  section: { road: 30, canal: 42, bank: 52, blackFence: YUJIE_WIDTH / 2 - 8, edge: YUJIE_WIDTH / 2,
+    evidence: 'inferred', source: 'ART_BIBLE: inferred allocation within the textual 312 m avenue' },
+  // inferred: pavement and water clear T4's solid forecourt apron; canal water is below the coping.
+  surfaceY: 0.85, waterY: 0.70, copingHeight: 0.24, crossingWidth: 6, fenceGap: 8,
+  crossStreets: [170, 360, 560, 760, 960, 1160],
+  crossings: [170, 560, 760, 960, 1160],
+  approachLength: 40,
+  paving: { roadTracks: [8.4, 21.6], laneTrack: 91, axleHalf: 0.72, roadDrainInset: 0.8, laneDrainOffset: 1.4,
+    evidence: 'inferred', source: 'T5: traffic wear, axle spacing and covered drainage locations reconstructed for ground detail' },
+  bridge: ZHOUQIAO.deckEnds, bridgeHalfWidth: ZHOUQIAO.dimensions.width / 2,
+  corridor: { centerX: YUJIE_WIDTH / 2 - 4, bay: 3.2, bays: 10, columnHeight: 3.1,
+    evidence: 'inferred', source: 'T1 corridor model; outer wall and occasional lattice bays inferred' },
+  planting: { centerX: 46.8, spacing: 8.8, jitter: 1.7, height: 6,
+    species: ['peach', 'plum', 'pear', 'apricot'],
+    evidence: 'text', source: '御街: 近岸植桃李梨杏，杂花相间; exact spacing and dimensions inferred' },
+  nanxun: { position: [0, 0, 4200], evidence: 'inferred', source: 'ART_BIBLE: 七八里 full avenue, later slices' },
+};
+
+// inferred: T5 inspection cameras; all placements above exist independently of these views.
+export const YUJIE_VIEWS = {
+  avenue: { pos: [-146, 8, 225], target: [30, -12, 310], fov: 30, near: 0.05 },
+  corridor: { pos: [-151.2, 2.75, 218], target: [-151.2, 3.0, 340], fov: 72, near: 0.05 },
+  road: { pos: [12, 2.45, 260], target: [6, 2.45, 50], fov: 65, near: 0.05 },
+  aerial: { pos: [225, 200, 700], target: [0, 0.85, 575], fov: 66, near: 0.1 },
+  canal: { pos: [28.3, 2.45, 242], target: [42, 0.8, 210], fov: 66, near: 0.05 },
+  funnel: { pos: [70, 35, 332], target: [0, 0.4, 400], fov: 66, near: 0.05 },
+  evidence: 'inferred', source: 'T5: ref2/ref7 framings plus road, 200 m aerial, canal and bridge inspection',
+};
+
+// T7. The text names buildings and relationships; no measured palace plan survives here.
+const palaceSource = 'T7 reconstruction; 东京梦华录卷一 大内: 大庆殿、庭设两楼、左右长庆门 and named inner halls';
+const palaceEntry = entry => ({ evidence: 'inferred', source: palaceSource, ...entry });
+export const PALACE = palaceEntry({
+  extent: { west: -350, east: 350, north: -650, south: -24 },
+  groundY: 0.68,
+  innerCenter: palaceEntry({ position: [0, 0, -470] }),
+  court: palaceEntry({ center: [0, 0.68, -219], width: 272, depth: 262 }),
+  rearApron: palaceEntry({ center: [0, 0.68, -56], width: 272, depth: 64 }),
+  hall: palaceEntry({ name: '大庆殿', position: [0, 3.8, -320],
+    frontBays: [7.2, 7.8, 8.4, 9, 9.6, 9, 8.4, 7.8, 7.2], sideBays: [6, 6, 6, 6],
+    columnHeight: 10.2, caiGrade: 1, tiao: 4, eaves: 2 }),
+  // inferred: two stacked five-尺 stages; each stage's courses and stairs follow 卷三.
+  terraces: [
+    palaceEntry({ center: [0, 0.68, -320], width: 108, depth: 64, height: 1.56, stairs: [-24, 0, 24], stairWidth: 9.6 }),
+    palaceEntry({ center: [0, 2.24, -320], width: 98, depth: 52, height: 1.56, stairs: [-24, 0, 24], stairWidth: 9.6 }),
+  ],
+  gate: palaceEntry({ name: '大庆门', position: [0, 0.68, -90], frontBays: [5.4, 6, 7.2, 6, 5.4],
+    sideBays: [4, 4], columnHeight: 5.8, caiGrade: 3, tiao: 2, eaves: 1 }),
+  towers: [-1, 1].map(sign => palaceEntry({ name: '刻漏楼', position: [sign * 66, 2.24, -310],
+    frontBays: [3.2, 3.8, 3.2], sideBays: [3.6, 3.6], columnHeight: 6.1, caiGrade: 4, tiao: 2, eaves: 1 })),
+  towerBases: [-1, 1].map(sign => palaceEntry({ center: [sign * 66, 0.68, -310],
+    width: 16, depth: 14, height: 1.56, stairs: [sign * 66], stairWidth: 3.8 })),
+  sideGates: [-1, 1].map(sign => palaceEntry({ name: sign < 0 ? '右长庆门' : '左长庆门',
+    position: [sign * 134, 0.68, -218], rotation: Math.PI / 2,
+    frontBays: [4.2, 5.6, 4.2], sideBays: [3.2], columnHeight: 4.8, caiGrade: 5, tiao: 1, eaves: 1 })),
+  // inferred: segmented gallery placement preserves a 14 m opening at each transverse gate.
+  galleries: [
+    ...[-1, 1].flatMap(sign => [-121, -159, -195, -240, -276, -314, -350].map(z =>
+      palaceEntry({ position: [sign * 134, 0.68, z], rotation: -sign * Math.PI / 2, bays: z === -195 || z === -240 ? 5 : 6 }))),
+    ...[-1, 1].flatMap(sign => [38, 74, 110].map(x => palaceEntry({ position: [sign * x, 0.68, -90], rotation: Math.PI, bays: 6 }))),
+    ...[-1, 1].flatMap(sign => [70, 106].map(x => palaceEntry({ position: [sign * x, 0.68, -358], bays: 6 }))),
+  ],
+  innerHalls: [
+    palaceEntry({ name: '文德殿', position: [-106, 0.68, -426], bays: 7, bayWidth: 6.2, depth: 18, columnHeight: 6.6, eaves: 1 }),
+    palaceEntry({ name: '紫宸殿', position: [72, 0.68, -476], bays: 9, bayWidth: 6.4, depth: 23, columnHeight: 7.8, eaves: 2 }),
+    palaceEntry({ name: '垂拱殿', position: [-116, 0.68, -552], bays: 7, bayWidth: 5.6, depth: 16, columnHeight: 5.8, eaves: 1 }),
+    palaceEntry({ name: '皇仪殿', position: [128, 0.68, -593], bays: 7, bayWidth: 6, depth: 20, columnHeight: 6.4, eaves: 1 }),
+    ...[-1, 1].flatMap(sign => [145, 235, 325, 415, 505, 595].map((z, i) =>
+      palaceEntry({ name: '宫署', position: [sign * (i % 2 ? 256 : 234), 0.68, -z],
+        bays: 5, bayWidth: 5.2, depth: 12, columnHeight: 4.6, eaves: 1 }))),
+  ],
+  innerCourts: [
+    ...[-1, 1].flatMap(sign => [175, 265, 355, 445, 535, 625].map(z =>
+      palaceEntry({ center: [sign * 243, 0.68, -z], width: 190, depth: z === 625 ? 50 : 86 }))),
+    palaceEntry({ center: [-86, 0.68, -436], width: 150, depth: 140 }),
+    palaceEntry({ center: [86, 0.68, -486], width: 160, depth: 150 }),
+    palaceEntry({ center: [-86, 0.68, -574], width: 150, depth: 128 }),
+    palaceEntry({ center: [86, 0.68, -616], width: 160, depth: 60 }),
+  ],
+  trees: {
+    huai: [-1, 1].flatMap(sign => [-126, -334, -395, -459, -529, -603].map(z => [sign * 113, 0.71, z]))
+      .concat([-1, 1].flatMap(sign => [-170, -270, -370, -470, -570].map(z => [sign * 300, 0.71, z]))),
+    bai: [-1, 1].flatMap(sign => [-302, -345, -433, -565].map(z => [sign * 62, 0.71, z])),
+    evidence: 'inferred', source: 'ART_BIBLE: 槐 and 柏 in palace courts; exact planting inferred',
+  },
+});
+
+export const PALACE_VIEWS = {
+  // inferred: ref8-like frontal inspection inside the vast court, plus an eye-height long view.
+  front: { pos: [0, 2.31, -222], target: [0, 12.8, -320], fov: 50, near: 0.1 },
+  court: { pos: [8, 2.31, -115], target: [0, 9, -320], fov: 65, near: 0.1 },
+  aerial: { pos: [85, 130, 90], target: [0, 12, -250], fov: 46, near: 0.1 },
+  terrace: { pos: [32, 5.43, -291], target: [0, 10, -307], fov: 66, near: 0.05 },
+  rear: { pos: [-70, 22, -382], target: [0, 12, -320], fov: 64, near: 0.1 },
+  gate: { pos: [0, 2.31, -46], target: [0, 3, -146], fov: 66, near: 0.1 },
+  evidence: 'inferred', source: 'T7 validation framings; generators never consume these',
+};
+
+// inferred: T8 city reconstruction. Bounds, streets, lot patterns and the named
+// offices' exact offsets are not surveyed; names and relative placement are text.
+export const CITY = {
+  east: 1400, north: -1300, south: 1300, outerExtent: 4000, farmlandExtent: 14000,
+  avenueHalfWidth: YUJIE_WIDTH / 2, surfaceY: .56, palaceReservation: {halfWidth: 370, north: -710, south: 90},
+  crossStreets: [180, 400, 610, 810, 1010, 1210], templeRadius: 64,
+  evidence: 'inferred', source: 'T8: inner city approximately x ±1400, z ±1300, outer city to 4 km; ART_BIBLE avenue/palace reservations',
+  offices: [
+    {name:'明堂颁朔布政府',position:[-228,0,112],halfWidth:48,halfDepth:46},
+    {name:'秘书省',position:[228,0,112],halfWidth:48,halfDepth:46},
+    {name:'景灵西宫',position:[-235,0,272],halfWidth:55,halfDepth:55},
+    {name:'景灵东宫',position:[235,0,272],halfWidth:55,halfDepth:55},
+  ].map(o=>({...o,evidence:'inferred',source:'ART_BIBLE: named offices opposite 掖门 and along avenue; exact compound footprints inferred'})),
+  houseSpec: {frontBays:[2.8,2.8,2.8],sideBays:[3.4],caiGrade:8,klass:'yuwu',tiao:1,
+    columnHeight:2.9,roof:'xuanshan',tile:'banwa',jiaPerSlope:2,platform:{height:.18,margin:.3},
+    bayFill:{south:'lattice',north:'wall',east:'wall',west:'wall'}},
+  officeSpec: {frontBays:[4.2,4.6,5,4.6,4.2],sideBays:[3.5,3.5],caiGrade:5,klass:'tingtang',tiao:2,
+    columnHeight:5.2,roof:'wudian',tile:'banwa',platform:{height:.8,margin:1.1},
+    bayFill:{south:'lattice',north:'wall',east:'wall',west:'wall'}},
+};
+export const CITY_WALLS = {
+  evidence:'inferred',source:'东京梦华录 卷一 旧京城: named gates; T8: reconstructed inner-city enclosure and flat-lintel 朱雀门',
+  halfWidth:1400,north:-1300,south:1300,height:7.2,depth:6,batter:.08,
+  southGates:[-820,0,820],northGates:[-700,0,700],sideGates:[-720,-150,720],gateWidth:6,
+  zhuque:{position:[0,0,1300],width:54,depth:22,height:9,batter:.075,
+    openings:[{x:-17,width:4,topWidth:3.6,height:5.4},{x:0,width:7,topWidth:6.3,height:6.2},{x:17,width:4,topWidth:3.6,height:5.4}],
+    hallSpec:{frontBays:[4.5,5,5.5,5,4.5],sideBays:[4,4],caiGrade:4,klass:'diange',tiao:2,
+      columnHeight:5.8,roof:'wudian',tile:'banwa',platform:{height:0,margin:.5},
+      bayFill:{south:'lattice',north:'lattice',east:'wall',west:'wall'}}},
+};
+export const TIETA = {
+  position:[1150,0,-1050],height:55.88,storeys:13,sides:8,
+  evidence:'inferred',source:'T8: approximate north-east site at (1150,-1050); exact placement inferred',
+  dimensions:{height:55.88,storeys:13,sides:8,evidence:'excavated',source:'ART_BIBLE: extant 开宝寺塔, begun 1049, octagonal thirteen-storey brown glazed brick tower, 55.88 m'},
+  profile:{baseRadius:4.8,topRadius:2.1,baseHeight:.6,firstStorey:5,storey:3.5,eaveProjection:.86},
+};
+export const CITY_VIEWS = {
+  aerial:{pos:[150,300,300],target:[180,20,-350],fov:75,near:.5},
+  gallery:{pos:[-47.4,13.7,25],target:[170,6,750],fov:80,near:.1,time:'bluehour'},
+  avenue:{pos:[-120,YUJIE.surfaceY+1.6,690],target:[270,7,820],fov:62,near:.1},
+  roofs:{pos:[630,200,780],target:[270,0,180],fov:57,near:.1},
+  evidence:'inferred',source:'T8: 300 m aerial and gallery validation framings; no content consumes these cameras',
+};
