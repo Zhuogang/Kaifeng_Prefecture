@@ -5,12 +5,12 @@ it rendering an empty flat world on this machine. No Chinese buildings yet.
 
 ## Port
 
-- `index.html`, `package.json` and lockfile (`three` r186, `puppeteer-core`, `pngjs`), `src/main.js`
+- `index.html`, `src/main.js`. `package.json` and the lockfile are already in place and `node_modules` is
+  installed (`three` r186, `puppeteer-core`, `pngjs`). Don't run `npm`.
 - `src/core/*`
 - `tools/`: `serve`, `render`, `session`, `snap`, `crop`, `sample`, `colorstats`, `satstats`, `bake`. Skip the
   video tools.
-- Copy athenaion's `LICENSE` to `THIRD_PARTY_NOTICES.md` with a line saying what was ported. Give this
-  project its own package name, `dongjing`.
+- Copy athenaion's `LICENSE` to `THIRD_PARTY_NOTICES.md` with a line saying what was ported.
 
 ## Change
 
@@ -50,7 +50,6 @@ it rendering an empty flat world on this machine. No Chinese buildings yet.
 
 ## Acceptance (I'll re-run all of this myself)
 
-- `npm ci` is clean.
 - `node tools/render.mjs --test ground --view 0 --out out/t0/test0.png` exits 0 with no page errors, no shader
   errors and no missing-import errors. `--view 1` too.
 - `node tools/render.mjs --shot 1 --quality high --spp 4 --out out/t0/shot1.png` works. Report seconds per

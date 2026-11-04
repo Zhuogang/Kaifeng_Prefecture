@@ -15,7 +15,11 @@ in `docs/tasks/`.
 2. **Lead-owned files.** Never edit `AGENTS.md`, `docs/`, `test/` or `refs/historical/`. If a spec or test
    looks wrong, stop working on that item and explain why in your report. Never weaken, skip or delete a
    test, and never special-case code to satisfy one.
-3. **Git.** Don't run `git add`, `commit`, `stash`, `reset`, `checkout` or `clean`. The lead owns history.
+3. **Git.** Don't run `git add`, `commit`, `push`, `pull`, `fetch`, `stash`, `reset`, `checkout` or `clean`. The
+   lead owns history.
+   **Stay in this repo.** Don't read outside it except `athenaion` and the Chromium install named in your brief,
+   and never read `~/.ssh`, credentials, tokens or other projects. External network is off and dependencies are
+   already installed. If you need another package, stop and ask in your report.
 4. **Zero external assets.** Every runtime mesh, texture and shader is generated in code. No downloaded
    models, textures, HDRIs or fonts. Reference images never load at runtime.
 5. **No camera-specific content.** This is a world people walk through. Nothing may exist, change or be
