@@ -17,9 +17,11 @@ in `docs/tasks/`.
    test, and never special-case code to satisfy one.
 3. **Git.** Don't run `git add`, `commit`, `push`, `pull`, `fetch`, `stash`, `reset`, `checkout` or `clean`. The
    lead owns history.
-   **Stay in this repo.** Don't read outside it except `athenaion` and the Chromium install named in your brief,
-   and never read `~/.ssh`, credentials, tokens or other projects. External network is off and dependencies are
-   already installed. If you need another package, stop and ask in your report.
+   **Stay in this repo.** The sandbox enforces this. You can see only this repo, athenaion (read-only, at
+   `/lambda/nfs/jo-dc/PROJECTS/experiments/athenaion`), the headless Chromium and system files. `docs/`, `test/`,
+   `refs/`, `AGENTS.md`, `.codex/`, `.git/`, the package files and `node_modules/` are read-only, and external
+   network is blocked. Your home directory is throwaway. If something you need is blocked, stop and say so in your
+   report. Don't look for a way around it, and if you need another package, ask.
 4. **Zero external assets.** Every runtime mesh, texture and shader is generated in code. No downloaded
    models, textures, HDRIs or fonts. Reference images never load at runtime.
 5. **No camera-specific content.** This is a world people walk through. Nothing may exist, change or be

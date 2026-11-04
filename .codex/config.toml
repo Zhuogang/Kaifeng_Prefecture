@@ -1,0 +1,29 @@
+# Sandbox for Codex in this repo. Lead-owned, and read-only to Codex.
+# Reads are limited to system files, this repo, athenaion and the Chromium install.
+# External network and the host's localhost are blocked. Only the sandbox's own loopback works.
+default_permissions = "dongjing"
+
+[features]
+network_proxy = true
+
+[permissions.dongjing.filesystem]
+":minimal" = "read"
+"/lambda/nfs/jo-dc/PROJECTS/experiments/athenaion" = "read"
+"/home/ubuntu/.cache/ms-playwright/chromium_headless_shell-1248" = "read"
+
+[permissions.dongjing.filesystem.":workspace_roots"]
+"." = "write"
+"AGENTS.md" = "read"
+"docs" = "read"
+"test" = "read"
+"refs" = "read"
+".gitignore" = "read"
+"package.json" = "read"
+"package-lock.json" = "read"
+"node_modules" = "read"
+".codex" = "read"
+".git" = "read"
+
+[permissions.dongjing.network]
+enabled = true
+allow_local_binding = true

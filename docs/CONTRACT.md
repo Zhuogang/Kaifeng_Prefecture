@@ -2,7 +2,7 @@
 
 Zero-build ES modules with three.js r186 (import map in `index.html`). The engine and render harness are
 ported from the sibling project athenaion (MIT):
-`/home/ubuntu/jo-dc/PROJECTS/experiments/athenaion`. Read it freely and never modify it. Port what's useful.
+`/lambda/nfs/jo-dc/PROJECTS/experiments/athenaion`. Read it freely and never modify it. Port what's useful.
 Its Greek content (temples, statues, cypress, waterfalls) stays behind, and so does its reliance on fixed
 cameras.
 

@@ -1,6 +1,6 @@
 # T0: Bootstrap the engine and explore mode
 
-Port the engine and tooling from `/home/ubuntu/jo-dc/PROJECTS/experiments/athenaion` (read-only, MIT) and get
+Port the engine and tooling from `/lambda/nfs/jo-dc/PROJECTS/experiments/athenaion` (read-only, MIT) and get
 it rendering an empty flat world on this machine. No Chinese buildings yet.
 
 ## Port
@@ -15,12 +15,16 @@ it rendering an empty flat world on this machine. No Chinese buildings yet.
 ## Change
 
 1. **Linux and software GL.** `render.mjs` and `session.mjs` hardcode Windows Chrome and `--use-angle=d3d11`.
-   - Find Chrome via `$CHROME`, else the newest
-     `~/.cache/ms-playwright/chromium-*/chrome-linux-arm64/chrome`.
-   - Use `--use-angle=vulkan --enable-features=Vulkan --ignore-gpu-blocklist`, which I've confirmed gives
-     WebGL2 on llvmpipe here (`--use-angle=default` and `--use-gl=egl` give no WebGL2). Keep `$ANGLE` as an
-     override.
+   - Find the browser via `$CHROME`, else
+     `~/.cache/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-linux-arm64/chrome-headless-shell`.
+     It's the only browser your sandbox can see. Full Chrome crashes in the sandbox, because its process-singleton
+     lock needs `socket(AF_UNIX)`, which is blocked.
+   - Launch puppeteer with `headless: 'shell'`, `pipe: true` and
+     `--no-sandbox --disable-dev-shm-usage --no-proxy-server --use-angle=vulkan --enable-features=Vulkan --ignore-gpu-blocklist`.
+     I've tested this inside your sandbox: it gives WebGL2 on llvmpipe, loading a page from a server on 127.0.0.1.
+     `out/probe/harness.mjs` is the working minimal example. Keep `$ANGLE` as an override.
    - Default `GPU_SLOTS` to 2.
+   - If `ffmpeg` isn't visible in the sandbox, skip the compare image and report it.
 2. **Remove the world.** `core/engine.js` imports `world/layout.js` and `world/looks.js`. Replace them with
    a new `src/world/plan.js` (exports `SUN` default az 120, el 25, and `dirFromAzEl`), `src/world/looks.js`
    (empty), `src/world/shots.js`, and `src/world/index.js` with `MODULE_ORDER = ['ground']`.
