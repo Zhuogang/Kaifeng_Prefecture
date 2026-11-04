@@ -58,6 +58,14 @@ Materials: use `proceduralMaterial()` with world-space GLSL hooks. Atmosphere an
 injected by `engine.prepareScene()`. Don't set `scene.fog` or call CSM yourself. Lighting is linear HDR, and
 tone mapping and grading happen in post, so don't pre-tone-map colours.
 
+## Browser target
+
+This ships as a static web page and runs in the visitor's browser, on WebGL2. Target: desktops and laptops,
+about 30 fps at 1080p on an integrated GPU of Radeon 780M class while moving. Phones are out of scope for now.
+Browser tabs have tight memory limits, so geometry must be instanced, baked and loaded by district.
+
+`engine.groundHeight(x, z)` returns the walkable surface height. `src/core/explore.js` is the camera.
+
 ## Budgets
 
 | | explore | still |
@@ -80,7 +88,7 @@ node tools/render.mjs --test <module> --view <n> --out out/<you>/<name>.png
 node tools/render.mjs --shot <id> --quality preview
 node tools/session.mjs --port <p> &    # persistent session, then:
 node tools/snap.mjs --port <p> --shot 3 --out out/<you>/x.png
-node --test test/
+node --test test/*.spec.mjs
 ```
 
 Prefer `preview` and low resolution while iterating, since software rendering is slow. Write renders under
@@ -88,7 +96,7 @@ Prefer `preview` and low resolution while iterating, since software rendering is
 
 ## Gates (run by the lead, in order)
 
-1. **Tests:** `node --test test/` passes and `test/` is unchanged.
+1. **Tests:** `node --test test/*.spec.mjs` passes and `test/` is unchanged.
 2. **Clean build:** the lead re-runs the render itself. No page errors, no shader errors.
 3. **Budgets:** counts within the table above.
 4. **Rules:** no `Math.random`, `Date`, `onShot` or `shots.js` import in world code; no external assets.

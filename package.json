@@ -6,7 +6,7 @@
   "scripts": {
     "serve": "node tools/serve.mjs",
     "render": "node tools/render.mjs",
-    "test": "node --test test/"
+    "test": "node --test test/*.spec.mjs"
   },
   "dependencies": {
     "pngjs": "^7.0.0",
