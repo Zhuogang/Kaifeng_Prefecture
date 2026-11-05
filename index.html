@@ -91,7 +91,8 @@
       font: 14px/1.5 var(--scroll-serif); background: rgb(233 223 202 / 94%); box-shadow: 0 3px 12px #302a2026; }
     body[data-scroll-scene="0"] #scroll-caption-gloss { flex-basis: 340px; width: 340px; }
     #scroll-performance { position: absolute; left: 16px; top: 16px; margin: 0; padding: 10px 12px; color: #fff6e5; background: #272c2de8;
-      border-radius: 3px; font: 13px/1.7 ui-monospace, Consolas, monospace; white-space: pre; }
+      border-radius: 3px; font: 13px/1.7 ui-monospace, Consolas, monospace; white-space: pre-wrap;
+      max-width: min(640px, calc(100vw - 56px)); overflow-wrap: anywhere; }
     #scroll-error { position: fixed; z-index: 30; top: 40%; left: 10%; right: 10%; text-align: center; color: var(--ink); font: 16px/1.8 var(--scroll-serif); }
     @media (max-width: 600px) {
       #scroll-caption { bottom: 100px; right: 14px; gap: 10px; max-width: calc(100vw - 28px); }

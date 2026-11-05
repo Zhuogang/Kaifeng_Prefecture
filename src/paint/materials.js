@@ -64,6 +64,7 @@ export function dappleGLSL({height=8,wind=.12,scale=[1.05,.8]}={}){
 }
 
 export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao'}={}) {
+  time.windTime??={value:new THREE.Vector4(0,1,0,1)};
   const code = {
     stone: `vec2 q=abs(n.y)>.65?vP.xz:vec2(abs(n.x)>.65?vP.z:vP.x,vP.y);
       variation=dab(q*vec2(2.1,5.0)+vec2(q.y*.8,0.0))*.55+dab(q*vec2(8.0,14.0))*.20;
@@ -87,15 +88,15 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao'}={
   }[kind];
   const mat = new THREE.ShaderMaterial({
     name: 'gouache-' + kind, vertexColors: true, side: THREE.DoubleSide, alphaToCoverage: kind === 'leaf',
-    uniforms: { paintTime: time, paintSun: { value: new THREE.Vector3(...dirFromAzEl(SUN.azimuth, SUN.elevation)) } },
+    uniforms: { paintTime: time, paintWindTime:time.windTime, paintSun: { value: new THREE.Vector3(...dirFromAzEl(SUN.azimuth, SUN.elevation)) } },
     vertexShader: /* glsl */`
-      uniform float paintTime; attribute vec3 paintData; attribute float paintKind;
+      uniform float paintTime; uniform vec4 paintWindTime; attribute vec4 paintWind; attribute vec3 paintData; attribute float paintKind;
       varying vec3 vP,vN,vC,vData; varying vec2 vUv; varying float vKind;
       void main(){
         vec3 p=position;
         // Flex is in object space; brush coordinates below use the undeformed surface.
-        p.x+=sin(paintTime*.55+paintData.z*.6)*.075*paintData.y;
-        p.z+=sin(paintTime*.43+paintData.z*.5)*.045*paintData.y;
+        p.x+=dot(paintWind.xy,paintWindTime.xy);
+        p.z+=dot(paintWind.zw,paintWindTime.zw);
         vP=(modelMatrix*vec4(position,1.0)).xyz;
         vN=normalize(mat3(modelMatrix)*normal);vC=color;vData=paintData;vUv=uv;vKind=paintKind;
         gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);

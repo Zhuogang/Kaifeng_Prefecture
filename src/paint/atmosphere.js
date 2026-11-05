@@ -9,14 +9,17 @@ export async function paintedSky(engine,{shiftU=0,backdrop='bd1',heightOffset=0}
   const source = new URL(`../../assets/backdrops/${backdrop}.jpg`, import.meta.url);
   const map = await new THREE.TextureLoader().loadAsync(source.href);
   map.colorSpace = THREE.SRGBColorSpace;
+  // inferred: mirror the approved painting only beyond its former image edges;
+  // the original central projection and all existing UVs stay in register.
+  map.wrapS = map.wrapT = THREE.MirroredRepeatWrapping;
   map.anisotropy = Math.min(4, engine.renderer.capabilities.getMaxAnisotropy());
-  const p = [], uv = [], index = [], segments = 64;
+  const p = [], uv = [], index = [], segments = 128;
   // inferred: preserve the painting's aspect and keep its image boundaries
   // outside the main and reflected frusta. A soft horizon strip of the same
   // approved image meets the 3D distance without stretching the cloud shapes.
-  const rows=[[0,0],[1,1]];
+  const rows=[[-.5,-.5],[0,0],[1,1],[1.5,1.5]];
   for (let i = 0; i <= segments; i++) {
-    const u = i / segments, angle = (u - .5) * 1.7;
+    const u = i / segments * 2 - .5, angle = (u - .5) * 1.7;
     for (const [v,textureV] of rows) {
       p.push(3 + Math.sin(angle) * 240, -111 + heightOffset + v * 230, 10 - Math.cos(angle) * 240);
       uv.push(u, textureV);
@@ -50,19 +53,24 @@ export async function paintedSky(engine,{shiftU=0,backdrop='bd1',heightOffset=0}
   return mesh;
 }
 
-export function paintedWater(engine,time,reflectionScene,{width=1536,height=864,distortion=.48,bounds=null,river=true}={}) {
+export function paintedWater(engine,time,reflectionScene,{distortion=.48,bounds=null,river=true}={}) {
+  const buffer=engine.renderer.getDrawingBufferSize(new THREE.Vector2());
+  // D1b: full quality retains the approved reflection's sampling density.
+  // The old 1536×864 target is a floor; large drawing buffers still resize it.
+  // Budget pressure may halve this through the existing reflection rung.
+  const width=Math.max(1536,Math.round(buffer.x/2)),height=Math.max(864,Math.round(buffer.y/2));
   // inferred: a reduced-resolution linear-HDR reflection. Only explicit low-detail
   // proxies and the cyclorama enter it; no water, detailed leaves or shadow pass.
   const shader = {
     name: 'gouache-reflected-river',
     uniforms: { color: { value: null }, textureMatrix: { value: new THREE.Matrix4() },
-      tDiffuse: { value: null }, paintTime: time },
+      tDiffuse: { value: null }, reflectionTexel:{value:new THREE.Vector2(1/width,1/height)}, paintTime: time },
     vertexShader: `uniform mat4 textureMatrix; varying vec3 vP;
       void main(){vP=(modelMatrix*vec4(position,1.0)).xyz;
         gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
     fragmentShader: /* glsl */`
       varying vec3 vP; uniform float paintTime; uniform mat4 textureMatrix;
-      uniform sampler2D tDiffuse; ${BRUSH}
+      uniform sampler2D tDiffuse; uniform vec2 reflectionTexel; ${BRUSH}
       void main(){
         vec2 p=vP.xz;
         vec2 boat=p-vec2(${BOAT.position[0].toFixed(6)},${BOAT.position[2].toFixed(6)});
@@ -96,7 +104,7 @@ export function paintedWater(engine,time,reflectionScene,{width=1536,height=864,
         reflectedUV=clamp(reflectedUV,vec2(.004),vec2(.996));
         // inferred: a sub-texel horizontal footprint softens the reflected edge
         // without quantising its continuous world-space stroke displacement.
-        vec2 texel=vec2(${(1/width).toFixed(9)},${(1/height).toFixed(9)});
+        vec2 texel=reflectionTexel;
         vec3 reflected=texture2D(tDiffuse,reflectedUV).rgb*.4;
         reflected+=(texture2D(tDiffuse,reflectedUV+vec2(texel.x*.8,0.)).rgb+texture2D(tDiffuse,reflectedUV-vec2(texel.x*.8,0.)).rgb)*.15;
         reflected+=(texture2D(tDiffuse,reflectedUV+vec2(0.,texel.y*.65)).rgb+texture2D(tDiffuse,reflectedUV-vec2(0.,texel.y*.65)).rgb)*.15;
@@ -146,8 +154,20 @@ export function paintedWater(engine,time,reflectionScene,{width=1536,height=864,
   target.texture.generateMipmaps = true;
   target.texture.minFilter = THREE.LinearMipmapLinearFilter;
   const renderReflection = water.onBeforeRender;
-  const state = { width, height, scene: reflectionScene, target, water, lastStats: { calls: 0, triangles: 0 } };
+  const state = { width, height, scale:.5, interval:1, fresh:true, frame:0, scene: reflectionScene, target, water, lastStats: { calls: 0, triangles: 0 } };
+  state.resize=()=>{
+    engine.renderer.getDrawingBufferSize(buffer);
+    const w=Math.max(1,Math.round(Math.max(1536,Math.round(buffer.x/2))*state.scale*2));
+    const h=Math.max(1,Math.round(Math.max(864,Math.round(buffer.y/2))*state.scale*2));
+    if(state.width===w&&state.height===h)return;
+    state.width=w;state.height=h;target.setSize(w,h);state.fresh=true;
+    water.material.uniforms.reflectionTexel.value.set(1/w,1/h);
+  };
   water.onBeforeRender = function(renderer, scene, camera) {
+    state.resize();
+    const fresh=!engine.scroll||engine.params.has('ratio')||state.fresh||state.frame++%state.interval===0;
+    if(!fresh){state.lastStats={calls:0,triangles:0};return;}
+    state.fresh=false;
     const calls = renderer.info.render.calls, triangles = renderer.info.render.triangles;
     renderReflection.call(water, renderer, reflectionScene, camera);
     state.lastStats = { calls: renderer.info.render.calls - calls, triangles: renderer.info.render.triangles - triangles };

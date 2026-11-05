@@ -3,6 +3,7 @@ import {stoneBlocks,chippedPost} from './stonework.js';
 import {willowGeometry} from './willow.js';
 import { PaintBatch } from './batch.js';
 import { paintMaterial } from './materials.js';
+import { paintVisibility } from './visibility.js';
 import {paintedHalls} from './halls.js';
 import { goulan } from '../yingzao/ornament.js';
 import { Geometry, V } from '../flora/geometry.js';
@@ -12,7 +13,8 @@ import { BOAT, TOWERS, BRIDGE, QUAY, MOORING, HERO_WILLOW, MID_HALLS, WILLOWS } 
 // inferred: all placements, dimensions, palettes, brush scales and botanical forms
 // here compose c2 rather than reconstruct a surveyed location. The low stone beam
 // bridge, Song hall rules, structural brackets and ridge ornaments reuse the sources.
-export function compose(engine, time) {
+export function compose(engine, time, viewAt) {
+  const keep=paintVisibility(engine,viewAt),keepReflection=paintVisibility(engine,viewAt,{});
   const rng = engine.rng('P0-painted-zhouqiao');
   const families = ['stone', 'plaster', 'timber', 'roof', 'bark', 'leaf'];
   const batches = Object.fromEntries(families.map(k => [k, new PaintBatch()]));
@@ -224,9 +226,9 @@ export function compose(engine, time) {
     const wg=wood.build(),lg=crown.build();bark.add(wg,place);leaf.add(lg,place);reflected.bark.add(wg,place);reflected.leaf.add(lg,place);wg.dispose();lg.dispose();
   }
 
-  for (const k of families) engine.add(batches[k].mesh(paintMaterial(time, k), 'paint-' + k), { castShadow: false, receiveShadow: false });
+  for (const k of families) engine.add(keep(batches[k].mesh(paintMaterial(time, k), 'paint-' + k)), { castShadow: false, receiveShadow: false });
   const reflectionScene=new THREE.Scene();
-  for(const k of families){const material=paintMaterial(time,k);material.alphaToCoverage=false;reflectionScene.add(reflected[k].mesh(material,'reflection-'+k));}
+  for(const k of families){const material=paintMaterial(time,k,{});material.alphaToCoverage=false;reflectionScene.add(keepReflection(reflected[k].mesh(material,'reflection-'+k)));}
   halls.dispose();
   return reflectionScene;
 }

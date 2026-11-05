@@ -16,7 +16,7 @@ const up = new THREE.Vector3(0, 1, 0);
 
 // A single draw per paint family; construction coordinates survive merging.
 export class PaintBatch {
-  constructor() { this.p = []; this.n = []; this.c = []; this.uv = []; this.data = []; this.kind = []; this.idx = []; }
+  constructor() { this.p = []; this.n = []; this.c = []; this.uv = []; this.data = []; this.wind = []; this.kind = []; this.idx = []; }
   add(g, matrix = new THREE.Matrix4(), color = '#ffffff', ao = 1, sway = 0, paintKind = null) {
     const p = g.attributes.position, n = g.attributes.normal, uv = g.attributes.memberUV || g.attributes.uv;
     const tile=g.attributes.tileCoord;
@@ -34,6 +34,11 @@ export class PaintBatch {
       // inferred: vertex AO and branch flex replace a noisy screen-space occlusion pass.
       this.data.push(ao * (canopy?.getX(i) ?? 1), data ? data.getY(i) : sway,
         origin ? origin.getX(i) + origin.getZ(i) : p.getX(i) * .17 + p.getZ(i) * .31);
+      const flex=this.data.at(-2),phase=this.data.at(-1);
+      // sin(time + phase) expanded once on the CPU: the same flex, without
+      // two transcendental evaluations at every vertex of every frame.
+      this.wind.push(Math.cos(phase*.6)*.075*flex,Math.sin(phase*.6)*.075*flex,
+        Math.cos(phase*.5)*.045*flex,Math.sin(phase*.5)*.045*flex);
       const tag=paintKind===33&&g.attributes.memberType?(g.attributes.memberType.getX(i)===4?33:34):paintKind;
       this.kind.push(tag ?? data?.getX(i) ?? 0);
     }
@@ -51,7 +56,7 @@ export class PaintBatch {
   }
   mesh(material, name) {
     const g = new THREE.BufferGeometry();
-    for (const [key, array, size] of [['position', this.p, 3], ['normal', this.n, 3], ['color', this.c, 3], ['uv', this.uv, 2], ['paintData', this.data, 3], ['paintKind', this.kind, 1]])
+    for (const [key, array, size] of [['position', this.p, 3], ['normal', this.n, 3], ['color', this.c, 3], ['uv', this.uv, 2], ['paintData', this.data, 3], ['paintWind',this.wind,4], ['paintKind', this.kind, 1]])
       g.setAttribute(key, new THREE.Float32BufferAttribute(array, size));
     g.setIndex(this.idx); g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, material); mesh.name = name; mesh.userData.noPatch = true;

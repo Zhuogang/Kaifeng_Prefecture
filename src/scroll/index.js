@@ -1,9 +1,10 @@
 import { createEngine } from '../core/engine.js';
 import { getQuality } from '../core/quality.js';
-import { paintCamera } from '../paint/playback.js';
+import { paintCamera, LOOK_YAW, LOOK_PITCH } from '../paint/playback.js';
+import { ScrollQuality } from './quality.js';
 
 // inferred: paper/ink colours and caption anchors in index.html,
-// 0.25 pixel-ratio steps, four-per-second pointer easing, and the scrub gains
+// four-per-second pointer easing and the scrub gains
 // below are experience design choices rather than historical reconstructions.
 // inferred: the U1b slip dimensions, inner-rule treatment and ink (#302a20)
 // compose a title slip; its paper matches the opening at the specified 94%.
@@ -31,10 +32,13 @@ export async function bootScroll(params) {
   $('scroll-ui').hidden = true;
   const cover = $('scroll-cover'), opening = $('scroll-opening');
   let ready = false, active = false, lost = false, leaving = false, fraction = 0;
-  let ratio = Math.min(devicePixelRatio || 1, 1.5), frameMs = 0, calls = 0, triangles = 0;
+  const requestedRatio=Number(params.get('ratio'));
+  const qualityControl=new ScrollQuality(Math.min(devicePixelRatio || 1,2),
+    params.has('ratio')&&Number.isFinite(requestedRatio)&&requestedRatio>0?requestedRatio:null);
+  let ratio = qualityControl.ratio, frameMs = 0, calls = 0, triangles = 0, gpu = null;
   let engine, previous, raf, lastInput = -Infinity, elapsed = 0, captionOverride = null, captionLine = -1;
   let phase = 0, yaw = 0, pitch = 0, wantedYaw = 0, wantedPitch = 0;
-  let windowMs = 0, samples = 0, drag = null;
+  let drag = null;
   let hintDismissed = false;
   try { hintDismissed = sessionStorage.getItem('kaifeng:scroll-hint-dismissed') === '1'; } catch { /* dismissal still works in this document */ }
   const hint = $('scroll-hint');
@@ -45,7 +49,9 @@ export async function bootScroll(params) {
     hintDismissed = true; hint.classList.add('dismissed'); hint.setAttribute('aria-hidden', 'true');
     try { sessionStorage.setItem('kaifeng:scroll-hint-dismissed', '1'); } catch { /* dismissal still works in this document */ }
   };
-  const status = () => ({ frameMs, fps: frameMs ? 1000 / frameMs : 0, pixelRatio: ratio, calls, triangles });
+  const status = () => ({ frameMs, fps: frameMs ? 1000 / frameMs : 0, pixelRatio: ratio, calls, triangles,
+    qualityLevel:qualityControl.level, reflectionSize:engine?.registry.paint?.reflection ?
+      [engine.registry.paint.reflection.width,engine.registry.paint.reflection.height] : [0,0], gpu });
   const visibleCaption = () => active && !leaving && (captionOverride ?? (elapsed >= 2 && elapsed < 12 || elapsed >= 14 && elapsed < 24));
   const fail = message => {
     lost = true; ready = false; active = false; window.__READY = false;
@@ -84,6 +90,8 @@ export async function bootScroll(params) {
   const engineStart = performance.now();
   engine = await createEngine({ width: innerWidth, height: innerHeight, quality, params, painted: true });
   engine.scroll = true; window.engine = engine;
+  const context=engine.renderer.getContext(),debug=context.getExtension('WEBGL_debug_renderer_info');
+  gpu=debug?context.getParameter(debug.UNMASKED_RENDERER_WEBGL):null;
   const engineMs = Math.round(performance.now() - engineStart);
   engine.canvas.setAttribute('aria-label', TEXT[scene].name + ' · Drag or scroll to drift along the scene');
   engine.canvas.addEventListener('webglcontextlost', event => {
@@ -95,6 +103,7 @@ export async function bootScroll(params) {
     engine.renderer.setSize(engine.width, engine.height, false);
     engine.pipeline.setSize(engine.width, engine.height);
     engine.camera.aspect = innerWidth / innerHeight; engine.camera.updateProjectionMatrix();
+    engine.registry.paint?.reflection?.resize();
     engine._accFrames = undefined;
   };
   resize();
@@ -155,17 +164,17 @@ export async function bootScroll(params) {
     previous = now;
     if (delta > 0) {
       frameMs = frameMs ? frameMs * .9 + delta * .1 : delta;
-      windowMs += delta; samples++;
-      if (windowMs >= 2000) {
-        if (windowMs / samples > 28 && ratio > .75) { ratio = Math.max(.75, ratio - .25); resize(); }
-        windowMs = 0; samples = 0;
+      if (qualityControl.update(delta,now)) {
+        const reflection=engine.registry.paint.reflection;
+        reflection.interval=qualityControl.reflectionInterval;
+        reflection.scale=qualityControl.reflectionScale;
+        ratio=qualityControl.ratio;resize();
       }
     }
     elapsed += delta / 1000;
     if (elapsed >= 8) dismissHint();
     if (!reduced.matches && !drag && now - lastInput >= 4000 && !leaving) {
-      // inferred: a 48-second round trip matches the existing painted playback.
-      phase += dt * Math.PI / 24; fraction = .5 - .5 * Math.cos(phase);
+      phase += dt * Math.PI * 2 / engine.registry.paint.roundTrip; fraction = .5 - .5 * Math.cos(phase);
     }
     const ease = 1 - Math.exp(-dt * 4);
     yaw += (wantedYaw - yaw) * ease; pitch += (wantedPitch - pitch) * ease;
@@ -174,7 +183,8 @@ export async function bootScroll(params) {
     engine.renderInteractive(true);
     const info = engine.renderer.info.render; calls = info.calls; triangles = info.triangles;
     updateCaption();
-    $('scroll-performance').textContent = `${frameMs.toFixed(1)} ms · ${status().fps.toFixed(1)} FPS\n${calls} calls · ${triangles.toLocaleString('en-US')} triangles\nPixel ratio ${ratio.toFixed(2)}`;
+    const report=status();
+    $('scroll-performance').textContent = `${frameMs.toFixed(1)} ms · ${report.fps.toFixed(1)} FPS\n${calls} calls · ${triangles.toLocaleString('en-US')} triangles\nPixel ratio ${ratio.toFixed(2)}\nQuality ${report.qualityLevel} · reflection ${report.reflectionSize.join('×')}\nGPU ${gpu??'unavailable'}`;
     raf = requestAnimationFrame(loop);
   };
   $('scroll-open').addEventListener('click', begin);
@@ -184,7 +194,7 @@ export async function bootScroll(params) {
   for (const type of ['pointerdown', 'pointermove', 'wheel', 'keydown'])
     addEventListener(type, dismissHint, { capture: true, passive: true });
   document.addEventListener('visibilitychange', () => {
-    cancelAnimationFrame(raf); previous = undefined; windowMs = 0; samples = 0;
+    cancelAnimationFrame(raf); previous = undefined; qualityControl.resetWindow();
     if (!document.hidden && active && !lost) raf = requestAnimationFrame(loop);
   });
   addEventListener('keydown', event => {
@@ -205,8 +215,8 @@ export async function bootScroll(params) {
       const horizontal = event.clientX - drag.x, vertical = event.clientY - drag.y;
       scrub(drag.fraction + (Math.abs(horizontal) >= Math.abs(vertical) ? horizontal / innerWidth : -vertical / innerHeight));
     } else if (event.pointerType !== 'touch') {
-      wantedYaw = -(event.clientX / innerWidth * 2 - 1) * Math.PI / 60;
-      wantedPitch = -(event.clientY / innerHeight * 2 - 1) * Math.PI / 120;
+      wantedYaw = -(event.clientX / innerWidth * 2 - 1) * LOOK_YAW;
+      wantedPitch = -(event.clientY / innerHeight * 2 - 1) * LOOK_PITCH;
     }
   });
   const release = () => { if (drag) lastInput = performance.now(); drag = null; };

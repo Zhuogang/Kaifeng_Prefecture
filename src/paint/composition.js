@@ -20,8 +20,8 @@ export const HERO_WILLOW = {position:[-8.56,1.28,8.1], height:17,
     {from:4,tip:[19,15,-9],length:6.5,color:'#b3ae56'}
   ]};
 
-export const CAMERA={pos:[-.5,5.1,22],target:[4.2,2.7,-27],fov:45,pan:-7,travel:[.4,-.4,-Math.sqrt(12.96-.16)]};
+export const CAMERA={pos:[-.5,5.1,22],target:[4.2,2.7,-27],fov:45,pan:-7,travel:[.8,.6,-Math.sqrt(12.96-.16)]};
 export const MID_HALLS=[[-23,-42,.7],[-12,-41,.7],[9,-43,.5],[28,-50,.55],[-42,-53,.8],[3,-61,.8],[40,-63,.8],[46,-33,.44]];
 export const WILLOWS=[[-22,-28,10],[-12,-32,8],[16.5,-27,9],[38,-30,11],[-37,-43,11],[4,-48,8],[45,-44,12]];
-export const WATER={width:1536,height:864,distortion:.48};
+export const WATER={distortion:.48};
 export const BACKDROP={shiftU:-.025}; // inferred: put clear blue sky behind the open middle.

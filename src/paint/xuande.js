@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {PaintBatch} from './batch.js';
 import {paintMaterial} from './materials.js';
+import {paintVisibility} from './visibility.js';
 import {paintedHalls} from './halls.js';
 import {blossomGeometry,scatteredPetals} from './blossom.js';
 import {chippedPost} from './stonework.js';
@@ -8,7 +9,8 @@ import {Geometry,V} from '../flora/geometry.js';
 import {buildCrane} from '../modules/cranes.js';
 // inferred: all composed dimensions/placements and wear fields here follow c1,
 // not a surveyed site. Hall members, roof profile and brackets use yingzao.
-export function composeXuande(engine,time){
+export function composeXuande(engine,time,viewAt){
+ const keep=paintVisibility(engine,viewAt),keepReflection=paintVisibility(engine,viewAt,{reflection:true,waterBounds:[-28.5,-2,-14.4,85]});
  const families=['stone','plaster','timber','roof','bark','leaf'],batches=Object.fromEntries(families.map(k=>[k,new PaintBatch()])),reflected=Object.fromEntries(families.map(k=>[k,new PaintBatch()]));
  const rng=engine.rng('S1-xuande'),{stone,plaster,timber,bark,leaf}=batches;
  const both=(family,p,s,c,ao=1,chipped=false,kind=null)=>{batches[family].box(p,s,c,ao,0,chipped,kind);reflected[family].box(p,s,c,ao,0,false,kind);};
@@ -100,8 +102,8 @@ export function composeXuande(engine,time){
  for(let i=0;i<12;i++){tree(-34+rng.range(-4,4),5+i*4.2,rng.range(5.7,9.5),i%3===0);tree(29+rng.range(-2,5),3+i*4,rng.range(5,8),i%3===1);}
  const heroPetals=scatteredPetals(engine.rng('S1-lying-petals'),{count:80,x:[-9,8],z:[48,66],scale:2.5});leaf.add(heroPetals);heroPetals.dispose();
  const petals=scatteredPetals(rng,{count:650,x:[-13,22],z:[1,74],scale:1.25});leaf.add(petals);petals.dispose();
- for(const k of families)engine.add(batches[k].mesh(paintMaterial(time,k,{profile:'xuande'}),'xuande-'+k),{castShadow:false,receiveShadow:false});
- const reflection=new THREE.Scene();for(const k of families){const m=paintMaterial(time,k,{profile:'xuande'});m.alphaToCoverage=false;reflection.add(reflected[k].mesh(m,'xuande-reflection-'+k));}
+ for(const k of families)engine.add(keep(batches[k].mesh(paintMaterial(time,k,{profile:'xuande'}),'xuande-'+k)),{castShadow:false,receiveShadow:false});
+ const reflection=new THREE.Scene();for(const k of families){const m=paintMaterial(time,k,{profile:'xuande'});m.alphaToCoverage=false;reflection.add(keepReflection(reflected[k].mesh(m,'xuande-reflection-'+k)));}
  halls.dispose();
  // Source crane silhouette with painted pigments, 0.18 Hz wing beats and glide.
  for(const [i,p]of [[0,[11,35.5,-3]],[1,[28,36,-4]],[2,[44,30,-8]]]){
@@ -110,14 +112,32 @@ export function composeXuande(engine,time){
   const bird=batch.mesh(m,'painted-crane-'+i);bird.position.set(...p);bird.scale.setScalar(2.0);bird.rotation.y=-1.0;bird.rotation.z=.1;engine.add(bird,{castShadow:false,receiveShadow:false});
   engine.onUpdate(t=>{bird.position.x=p[0]+Math.sin(t*.08+i)*.8;bird.position.y=p[1]+Math.sin(t*.12+i)*.22;});
  }
- // inferred: a sparse drift with deterministic reset below the paving;
- // eight separate petals keep orientation/glide simple and draw count bounded.
- const petalRng=engine.rng('S1-falling-petals');
+ // The eight independently authored petals share one draw. Their original
+ // local geometry, paint coordinates and deterministic transforms are retained.
+ const petalRng=engine.rng('S1-falling-petals'),petalBatch=new PaintBatch(),petalsInFlight=[];
  for(let i=0;i<8;i++){
-  const g=scatteredPetals(petalRng,{count:1,x:[0,0],z:[0,0],scale:1.5}),batch=new PaintBatch();batch.add(g);g.dispose();
-  const mesh=batch.mesh(paintMaterial(time,'leaf',{profile:'xuande'}),'falling-petal-'+i);
-  const x=petalRng.range(-13,10),z=petalRng.range(36,63),phase=petalRng.range(0,11);engine.add(mesh,{castShadow:false,receiveShadow:false});
-  engine.onUpdate(t=>{mesh.position.set(x+Math.sin(t*.31+i)*.75,((phase-t*.22)%11+11)%11-.3,z+Math.sin(t*.17+i)*.4);mesh.rotation.set(.7+Math.sin(t*.43+i)*.5,t*.13+i,Math.cos(t*.35+i)*.7);});
+  const g=scatteredPetals(petalRng,{count:1,x:[0,0],z:[0,0],scale:1.5}),start=petalBatch.p.length/3;
+  petalBatch.add(g);
+  const positions=g.attributes.position.array.slice(),normals=g.attributes.normal.array.slice();g.dispose();
+  const x=petalRng.range(-13,10),z=petalRng.range(36,63),phase=petalRng.range(0,11);
+  petalsInFlight.push({i,start,positions,normals,x,z,phase});
  }
+ const falling=petalBatch.mesh(paintMaterial(time,'leaf',{profile:'xuande'}),'falling-petals');
+ falling.frustumCulled=false;engine.add(falling,{castShadow:false,receiveShadow:false});
+ const point=new THREE.Vector3(),normal=new THREE.Vector3(),matrix=new THREE.Matrix4(),rotation=new THREE.Euler(),quaternion=new THREE.Quaternion(),unit=new THREE.Vector3(1,1,1);
+ engine.onUpdate(t=>{
+  const p=falling.geometry.attributes.position,n=falling.geometry.attributes.normal;
+  for(const {i,start,positions,normals,x,z,phase}of petalsInFlight){
+   rotation.set(.7+Math.sin(t*.43+i)*.5,t*.13+i,Math.cos(t*.35+i)*.7);
+   quaternion.setFromEuler(rotation);
+   point.set(x+Math.sin(t*.31+i)*.75,((phase-t*.22)%11+11)%11-.3,z+Math.sin(t*.17+i)*.4);
+   matrix.compose(point,quaternion,unit);
+   for(let j=0;j<positions.length/3;j++){
+    point.fromArray(positions,j*3).applyMatrix4(matrix);p.setXYZ(start+j,point.x,point.y,point.z);
+    normal.fromArray(normals,j*3).applyQuaternion(quaternion);n.setXYZ(start+j,normal.x,normal.y,normal.z);
+   }
+  }
+  p.needsUpdate=true;n.needsUpdate=true;
+ });
  return reflection;
 }
