@@ -146,6 +146,25 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             gl_FragColor=vec4(canopy,1.);return;
           }
         `:''}
+        ${kind==='leaf'&&profile==='zhouqiao'?`
+          // inferred: willow spears use a simple measured pigment ramp. Skip
+          // the unrelated blossom/card brush fields before shading dense whips.
+          if(abs(vKind-83.)<.5||abs(vKind-91.)<.5){
+            float light=.26+.28*abs(dot(n,paintSun))+.28*noise(vP.xz*.45);
+            vec3 c=vC*mix(vec3(.72,.79,.72),vec3(1.10,1.07,.85),light)*(.82+.18*vData.x);
+            float grey=dot(c,vec3(.2126,.7152,.0722));
+            c=mix(vec3(grey),c,abs(vKind-83.)<.5?.88:.80)*(abs(vKind-83.)<.5?.90:1.06);
+            c=mix(c,linearColor(vec3(.76,.75,.69)),smoothstep(35.,140.,-vP.z)*.68);
+            float edge=abs(vUv.x-.5)*2.,aa=max(.06,fwidth(edge));
+            // inferred: distant whips retain fractional leaf coverage below
+            // one pixel; fading them at the near-leaf threshold exposed bare
+            // branches at adaptive resolutions and the wide look corners.
+            float pixelWidth=1./max(fwidth(vUv.x),.0001);
+            float resolved=abs(vKind-91.)<.5?smoothstep(.25,.90,pixelWidth):smoothstep(.70,1.6,pixelWidth);
+            float coverage=(1.-smoothstep(.86-aa,1.+aa,edge))*resolved;
+            gl_FragColor=vec4(c,coverage);return;
+          }
+        `:''}
         float variation=0.0, wash=0.0; ${code}
         ${kind==='roof'?`
           float rowFade=0.,rowPhase=0.;
@@ -647,7 +666,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
         ${kind==='leaf'?`
           // inferred: willow leaves keep three coherent whip values; closed
           // crowns receive soft directional light instead of cutout noise.
-          if(abs(vKind-83.)<.5)c=vC*mix(vec3(.72,.79,.72),vec3(1.10,1.07,.85),light)*(.82+.18*vData.x);
+          ${profile==='zhouqiao'?'':'if(abs(vKind-83.)<.5)c=vC*mix(vec3(.72,.79,.72),vec3(1.10,1.07,.85),light)*(.82+.18*vData.x);'}
           if(abs(vKind-86.)<.5||abs(vKind-87.)<.5||abs(vKind-88.)<.5)c=vC*(.78+.32*light);
         `:''}
         // inferred: painted aerial wash, deliberately independent of view direction.

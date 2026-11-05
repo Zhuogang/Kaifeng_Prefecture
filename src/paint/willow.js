@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import {Geometry,V} from '../flora/geometry.js';
 import {barkRelief} from './bark.js';
-import {crownLobe} from './foliage.js';
 
 // inferred: parameterised pollarded willow, growth-following roots and botanical
 // leaf/clump dimensions. Leaves stay within 25 degrees of their strand.
@@ -27,15 +26,18 @@ import {crownLobe} from './foliage.js';
       const a=.6+i*2.15,tip=V(Math.cos(a)*2.05,-.18,Math.sin(a)*1.95);
       wood.tube([V(Math.cos(a)*.8,.30,Math.sin(a)*.8),V(tip.x*.68,.03,tip.z*.68),tip],[.32,.19,.025],new THREE.Color('#554735'),{sides:7,gnarl:.25,smooth:3});
     }
-    for (let j = 0; j < (hero ? branches.length : 16); j++) {
+    // inferred: a separate pigment stream interleaves dark and lit whips
+    // throughout the crown, instead of assigning one value to a whole branch.
+    const pigmentRng=rng.fork('D4b-whip-values');
+    for (let j = 0; j < (hero ? branches.length : 20); j++) {
       const angle=j*2.399,start=trunk[hero?branches[j].from:2];
       const tip=hero?V(...branches[j].tip):V(Math.cos(angle)*h*rng.range(.25,.43),h*rng.range(.66,.90),Math.sin(angle)*h*rng.range(.24,.40));
       if(!hero)tip.y=h*(.89-.27*Math.pow(Math.hypot(tip.x,tip.z)/(h*.50),2)+rng.range(-.045,.045));
       const mid = start.clone().lerp(tip, .55).add(V(0, h * .06, 0));
       wood.tube([start, mid, tip], [hero ? .26 : h * .016, hero ? .12 : h * .008, .018], new THREE.Color('#696551'), { sides: 6, gnarl: .4, smooth: 3 });
-      const family=hero?['#c9c56a','#8fa04e','#4d6b3a','#8fa04e','#c9c56a'][j%5]:rng.pick(['#bec06a','#8fa04e','#c9c56a','#617c3d']);
+      const family=hero?branches[j].color:rng.pick(['#adb55f','#879249','#c1b65e','#667b53']);
       const clusterLength=hero?branches[j].length:h*rng.range(.57,.80);
-      for (let k = 0; k < (hero ? rng.int(58,70) : 23); k++) {
+      for (let k = 0; k < (hero ? rng.int(68,80) : 28); k++) {
         const base = mid.clone().lerp(tip,rng.range(hero?.70:.55,hero?1:1.08)).add(V(rng.range(-.7, .7), rng.range(-.4, .6), rng.range(-.8, .8)));
         const lengthVariation=rng.range(.78,1.16),end=hero?0:h*THREE.MathUtils.clamp(.15+.23*Math.pow(Math.hypot(base.x,base.z)/(h*.45),1.5)+rng.range(-.12,.12),.10,.57);
         // inferred: the mid-distance crown hangs down around its short trunk,
@@ -45,10 +47,10 @@ import {crownLobe} from './foliage.js';
           const t = i / 8;
           return base.clone().add(V(Math.cos(yaw) * .7 * Math.sin(t * 1.8), -length * t + .3 * Math.sin(t * Math.PI), Math.sin(yaw) * .5 * t));
         });
-        const c=new THREE.Color(family).multiplyScalar(rng.range(.88,1.09));
+        const c=new THREE.Color(hero?pigmentRng.pick(['#b7b267','#a6a36c','#8d9a68','#65764f','#c0b459']):family).multiplyScalar(rng.range(.88,1.09));
         const clumpShade=hero?.68+.32*THREE.MathUtils.clamp((base.z-tip.z+.8)/1.6,0,1):.65+.35*THREE.MathUtils.clamp(base.y/h,0,1);
         leaves.curtain(path,rng.range(.008,.018),yaw,c,{sway:1,ao:clumpShade,random:rng.random()});
-        const count=hero?rng.int(34,44):rng.int(25,33);
+        const count=hero?rng.int(34,44):rng.int(32,42);
         for (let s = 1; s < count; s++) {
           if(rng.chance(hero?.26:.15))continue;
           const t=(s+rng.range(-.38,.38))/count,index=Math.min(7,Math.floor(t*8)),p=path[index].clone().lerp(path[index+1],t*8-index);
@@ -59,25 +61,21 @@ import {crownLobe} from './foliage.js';
           p.addScaledVector(lateral,rng.range(-.035,.035));
           const taper=.58+.42*Math.sin(t*Math.PI),length=rng.range(hero?.216:.35,hero?.456:.66)*taper;
           const first=leaves.canopy.length;
-          // inferred: 1.5x wider near spears; omit every eighth instead of piling
-          // more alpha layers into the same whips. Preserve random draw order.
+          // D4b: retain D4's wide spears and restore the omitted leaves.
+          // The full crown consists of whips and leaf strokes, with dark gaps.
           const width=length*rng.range(.14,.23)*(hero?1.5:1.35),roll=hero?-Math.PI/2+rng.range(-.8,.8):a;
           const pigment=c.clone().multiplyScalar(hero?(.78+.22*clumpShade):1);
-          if((s+j+k)%8!==0)leaves.leaf(p,length,width,direction,pigment,t*.65,roll,83);
+          if(hero)leaves.leaf(p,length,width,direction,pigment,t*.65,roll,83);
+          // inferred: a two-triangle lance is sufficient at the tower trees'
+          // distance, keeping the dense fringe without redundant vertices.
+          else{leaves.blade(p,length,width,direction,pigment,t*.65,roll);for(let v=first;v<leaves.canopy.length;v++)leaves.data[v*3]=91;}
           for(let v=first;v<leaves.canopy.length;v++)leaves.canopy[v]=clumpShade;
 
         }
       }
     }
-    if(!hero){
-      // inferred: a low domed interior is closed geometry; fewer wider
-      // exterior whips give it a drooping fringe and leave the trunk visible.
-      for(let j=0;j<29;j++){
-        const a=j*2.399,r=h*(j===0?0:rng.range(.08,.27));
-        const center=V(Math.cos(a)*r,h*(.70-.38*Math.pow(r/(h*.48),2)+rng.range(-.035,.035)),Math.sin(a)*r);
-        crownLobe(leaves,center,V(h*.125,h*.145,h*.125),new THREE.Color(rng.pick(['#879849','#a4ab57','#748944','#b0b360'])),j,{kind:84,sway:.05});
-      }
-    }
+    // D4b: no solid inner dome. The rounded outline and all visible crown
+    // surfaces come from the branching arrangement of the drooping whips.
 
     // inferred: small radial chips use the same elongated plate field as the
     // fragment material, with no extra silhouette meshes.

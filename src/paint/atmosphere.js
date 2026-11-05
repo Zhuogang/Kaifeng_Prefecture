@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { BRUSH } from './materials.js';
-import { BOAT, QUAY } from './composition.js';
+import { BOAT, QUAY, BRIDGE } from './composition.js';
 
 // inferred: finite curved cyclorama, horizon height and colour wash compose bd1
 // with this river. Its ends are beyond both sides of the entire camera path.
@@ -94,6 +94,85 @@ export function paintedWater(engine,time,reflectionScene,{distortion=.48,bounds=
         float along=(boat.x*${Math.cos(BOAT.yaw).toFixed(6)}-boat.y*${Math.sin(BOAT.yaw).toFixed(6)})/${(BOAT.length/2).toFixed(6)};
         float across=boat.x*${Math.sin(BOAT.yaw).toFixed(6)}+boat.y*${Math.cos(BOAT.yaw).toFixed(6)};
         ${river?`if(abs(along)<.99&&abs(across)<${(BOAT.width/2).toFixed(6)}*(1.-.72*pow(abs(along),3.))*.688-.025)discard;`:''}
+        ${river?`
+        // inferred: three layers of roughly 15:1–25:1 apparent dashes sit on the actual water
+        // plane. Their slow advection and derivative footprint keep them calm.
+        float front=smoothstep(-20.,14.,p.y);
+        vec2 drift=p+vec2(paintTime*.018,paintTime*.006);
+        // inferred: integrate a depth-frequency ramp to compensate for
+        // foreshortening. Far marks remain small resolved dashes, not lines
+        // thinner than a pixel; the phase never jumps between depth bands.
+        float depth=clamp((drift.y+28.)/44.,0.,1.);
+        float phase=2.5*drift.y+9.5*(44.*(pow(depth,3.)-.5*pow(depth,4.))+max(drift.y-16.,0.));
+        vec3 dashes=vec3(waterDash(vec2(drift.x*1.2,phase)+vec2(3.1,1.7)),
+                         waterDash(vec2(drift.x*2.3,phase*2.)+vec2(9.7,4.2)),
+                         waterDash(vec2(drift.x*.62,phase*.55)+vec2(1.4,8.9)));
+        float ripple=noise(p*vec2(1.4,12.)+vec2(paintTime*.024,0.))-.5;
+        float rippleFine=noise(p*vec2(3.2,25.)+7.)-.5;
+        vec2 shifted=p+vec2(ripple*.36+(dashes.y-.25)*.22,rippleFine*.035)*${distortion.toFixed(6)};
+        vec2 reflectedUV=mirrorUV(shifted);
+        // inferred: smear along depth, keeping adjacent shafts horizontally
+        // distinct. D3's narrow blur keeps the bright reflection columns.
+        float reach=mix(.60,.40,front);
+        vec3 reflected=texture2D(tDiffuse,reflectedUV).rgb*.72;
+        reflected+=(texture2D(tDiffuse,mirrorUV(shifted+vec2(0.,reach))).rgb+texture2D(tDiffuse,mirrorUV(shifted-vec2(0.,reach))).rgb)*.14;
+        // inferred: recover bright cream/gold after the narrow vertical
+        // filter, scaling the reflected colour without shifting its hue.
+        float highlight=smoothstep(.18,.45,dot(reflected,vec3(.2126,.7152,.0722)));
+        reflected*=1.+highlight*.20;
+        // D4b: D3's body, mirror strength and pigment balance are restored.
+        // The retained fine dashes only offset sampling and modulate value.
+        float colourDepth=clamp((p.y+20.)/34.,0.,1.);
+        float colourPhase=1.8*p.y+10.2*(34.*(pow(colourDepth,3.)-.5*pow(colourDepth,4.))+max(p.y-14.,0.));
+        vec2 q=vec2(p.x*mix(.18,1.15,front),colourPhase);
+        q.x+=noise(p*.21)*1.9*front;
+        q.y+=noise(p*vec2(.36,1.1))*.8+sin(p.x*.6+paintTime*.55)*.15;
+        float footprint=max(length(dFdx(q)),length(dFdy(q)));
+        float broad=mix(.5,noise(q),1.-smoothstep(.65,1.75,footprint));
+        float fine=mix(.5,noise(q*vec2(2.4,2.1)+17.),1.-smoothstep(.5,1.5,footprint*2.4));
+        float strokes=smoothstep(.36,.68,broad*.75+fine*.25);
+        // inferred: bright jade pigment raises dark reflected objects and
+        // lowers bright ones through mixing, never by scaling the mirror dark.
+        vec3 body=mix(linearColor(vec3(.34,.51,.45)),linearColor(vec3(.53,.65,.52)),noise(p*.18));
+        ${river?'body=mix(body,linearColor(vec3(.26,.48,.47)),smoothstep(1.,18.,p.y)*.45);':''}
+        ${river?`
+        // inferred: the water newly exposed beyond the bridge is pale jade,
+        // with a quieter mirror so sky shapes do not fill the pier openings.
+        float beyondBridge=(1.-smoothstep(-35.,-26.,p.y-(${BRIDGE.skew.toFixed(6)})*p.x-(${BRIDGE.offset.toFixed(6)})));
+        beyondBridge*=smoothstep(${(BRIDGE.start-3).toFixed(6)},${(BRIDGE.start-1).toFixed(6)},p.x)*(1.-smoothstep(${(BRIDGE.end+1).toFixed(6)},${(BRIDGE.end+3).toFixed(6)},p.x));
+        body=mix(body,linearColor(vec3(.60,.70,.61)),beyondBridge*.75);
+        `:''}
+        float skyOpening=smoothstep(.008,.13,reflected.b-reflected.r);
+        // Actual blue/cream sky exposed in the two open tower passages caused
+        // the teal-white patches after the former tint. Neutralise its chroma.
+        reflected=mix(reflected,body,skyOpening*.78);
+        float warmStone=smoothstep(.01,.07,reflected.r-reflected.b)*(1.-smoothstep(1.25,1.65,reflected.r/max(.001,reflected.g)));
+        reflected=mix(reflected,linearColor(vec3(.64,.59,.46)),warmStone*.16);
+        float warmReflection=smoothstep(.05,.26,reflected.r-reflected.b);
+        reflected*=mix(vec3(1.),vec3(1.18,1.04,.82),warmReflection*.25);
+        float calm=${river?'1.-smoothstep(-14.,-2.,p.y)':'0.'};
+        float mirror=${river?'mix((.46+.22*strokes)*(1.-smoothstep(1.,18.,p.y)*.55),.86,calm)':'.40+.20*strokes'};
+        ${river?'mirror=mix(mirror,.36,beyondBridge);':''}
+        vec3 c=mix(body,reflected,mirror);
+        c+=linearColor(vec3(.68,.65,.50))*(1.-strokes)*mix(.055,.015,calm);
+        float glint=smoothstep(.74,.94,fine)*smoothstep(.45,.74,noise(p*vec2(.37,3.7)+8.));
+        c+=linearColor(vec3(.73,.75,.62))*glint*mix(.055,.015,calm);
+        // inferred: independent horizontal pigment loads follow the same
+        // depth-scaled river coordinates as the reflection strokes.
+        c=brokenColor(c,q,${river?'vec2(.70,.45),mix(mix(2.8,.75,front),.12,calm)':'vec2(.35,.25),2.8'},vec3(1.40,1.08,.55),vec3(.60,1.02,1.50),vec3(.72,1.12,1.08),vec3(1.35,1.10,.68));
+        ${river?'c*=1.+pigmentDab(q*vec2(.8,.55)+5.)*mix(mix(1.4,.05,front),.06,calm);':''}
+        // inferred: centered, hue-preserving modulation is bounded to ±12%.
+        // There is no separate teal stroke colour covering the reflection.
+        float mark=clamp((dashes.x-.25)*.9+(dashes.y-.25)*.7+(dashes.z-.25)*.4,-1.,1.);
+        c*=1.+mark*.12;
+        float bankEdge=(${QUAY.intercept.toFixed(6)})+p.y*${QUAY.slope.toFixed(6)};
+        float bankShade=exp(-max(0.,p.x-bankEdge)*.8)*smoothstep(-13.,0.,p.y);
+        float hullHalf=${(BOAT.width*.5).toFixed(6)}*(1.-.72*pow(min(abs(along),1.),3.))*.70;
+        float boatShade=exp(-pow(abs(along)/1.04,8.))*exp(-pow(abs(across)/(hullHalf+.24),4.));
+        float hullSmear=exp(-pow(abs(along)/1.08,8.))*exp(-pow(abs(across-.24)/(hullHalf+.55),4.));
+        ${river?`c=mix(c,linearColor(vec3(.39,.30,.19)),hullSmear*.24*(.35+dashes.x));
+        c=mix(c,c*vec3(.32,.46,.44),max(bankShade*.62,boatShade*.80));`:''}
+        `:`
         // inferred: three layers of roughly 15:1–25:1 apparent dashes sit on the actual water
         // plane. Their slow advection and derivative footprint keep them calm.
         float front=smoothstep(-28.,16.,p.y);
@@ -141,6 +220,7 @@ export function paintedWater(engine,time,reflectionScene,{distortion=.48,bounds=
         float hullSmear=exp(-pow(abs(along)/1.08,8.))*exp(-pow(abs(across-.24)/(hullHalf+.55),4.));
         ${river?`c=mix(c,linearColor(vec3(.39,.30,.19)),hullSmear*.24*(.35+dashes.x));
         c=mix(c,c*vec3(.32,.46,.44),max(bankShade*.62,boatShade*.80));`:''}
+        `}
         gl_FragColor=vec4(c,1.0);
       }`,
   };
