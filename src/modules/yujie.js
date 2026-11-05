@@ -7,7 +7,7 @@ import { buildCorridors, buildFences } from '../yujie/architecture.js';
 import { buildCanals } from '../yujie/canals.js';
 import { buildPlanting } from '../yujie/planting.js';
 import { addPavingRelief } from '../yujie/paving-relief.js';
-import { reaches, surfaceY, halfWidth, northEnd, southEnd, northShoulder, southShoulder, pavingLayoutGLSL } from '../yujie/layout.js';
+import { rowReaches, plazaEnd, onXuandeStructure, surfaceY, halfWidth, northEnd, southEnd, northShoulder, southShoulder, pavingLayoutGLSL } from '../yujie/layout.js';
 
 function apron(batch, x0, x1, z0, z1, endX0 = x0, endX1 = x1) {
   const geometry = new THREE.BufferGeometry();
@@ -20,7 +20,8 @@ function apron(batch, x0, x1, z0, z1, endX0 = x0, endX1 = x1) {
 
 function buildPaving(engine) {
   const road = new GeometryBatch(), lanes = new GeometryBatch(), banks = new GeometryBatch(), drains = new GeometryBatch();
-  for (const [start, end] of reaches) {
+  apron(road, -P.width / 2, P.width / 2, P.start, plazaEnd);
+  for (const [start, end] of rowReaches) {
     apron(road, -P.section.road, P.section.road, start, end);
     for (const sign of [-1, 1]) {
       const ordered = (a, b) => [Math.min(sign * a, sign * b), Math.max(sign * a, sign * b)];
@@ -53,7 +54,9 @@ export async function build(engine) {
     if (z > northEnd && z < southEnd) return previousGround(x, z);
     if (z >= P.start && z <= P.end && Math.abs(x) <= halfWidth(z)) {
       if (corridors.modules.some(m => Math.abs(x - m.x) < 2.3 && z >= m.start && z <= m.end)) return corridors.floorY;
-      return Math.max(surfaceY(z), previousGround(x, z));
+      if (onXuandeStructure(x, z)) return previousGround(x, z);
+      // The avenue is a level constructed surface, independent of the silt relief below.
+      return surfaceY(z);
     }
     return previousGround(x, z);
   };

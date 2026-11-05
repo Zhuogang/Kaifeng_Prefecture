@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { YUJIE as P } from '../world/plan.js';
 import { pavingMaterial } from '../materials/paving.js';
-import { reaches, pavingLayoutGLSL } from './layout.js';
+import { reaches, plazaEnd, onXuandeStructure, pavingLayoutGLSL } from './layout.js';
 
 const fract = x => x - Math.floor(x);
 // Same stable cell hash as cgHash12, so near geometry agrees with the procedural bond.
@@ -50,9 +50,10 @@ export function addPavingRelief(engine) {
           const x = (cell + .5 - ((row % 2 + 2) % 2) * .5) * sx - offset, z = (row + .5) * sz;
           const d = Math.hypot(x - p.x, z - p.z);
           if (d >= radius || !reaches.some(([a,b]) => z >= a && z <= b) || Math.abs(x) > P.section.edge) continue;
-          if (Math.abs(x) > P.section.road && Math.abs(x) < P.section.bank) continue;
+          if (onXuandeStructure(x,z)) continue;
+          if (z >= plazaEnd && Math.abs(x) > P.section.road && Math.abs(x) < P.section.bank) continue;
           const corridor = engine.registry.yujie.corridors.modules.some(m => Math.abs(x - m.x) < 2.25 && z > m.start && z < m.end);
-          const brick = Math.abs(x) > P.section.bank && !corridor;
+          const brick = z >= plazaEnd && Math.abs(x) > P.section.bank && !corridor;
           if (brick !== !!kind) continue;
           const fade = 1 - THREE.MathUtils.smoothstep(d, 3, radius), h = (.001 + hash(cell, row) * .003) * fade;
           matrix.makeScale(sx - .007, h / .003, sz - .007); matrix.setPosition(x, engine.groundHeight(x,z) + .0002, z);

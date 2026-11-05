@@ -202,7 +202,7 @@ export const PALACE = palaceEntry({
 
 export const PALACE_VIEWS = {
   // inferred: ref8-like frontal inspection inside the vast court, plus an eye-height long view.
-  front: { pos: [0, 2.31, -222], target: [0, 12.8, -320], fov: 50, near: 0.1 },
+  front: { pos: [0, 2.31, -250], target: [0, 12.5, -320], fov: 62, near: 0.1 },
   court: { pos: [8, 2.31, -115], target: [0, 9, -320], fov: 65, near: 0.1 },
   aerial: { pos: [85, 130, 90], target: [0, 12, -250], fov: 46, near: 0.1 },
   terrace: { pos: [32, 5.43, -291], target: [0, 10, -307], fov: 66, near: 0.05 },
@@ -217,6 +217,14 @@ export const CITY = {
   east: 1400, north: -1300, south: 1300, outerExtent: 4000, farmlandExtent: 14000,
   avenueHalfWidth: YUJIE_WIDTH / 2, surfaceY: .56, palaceReservation: {halfWidth: 370, north: -710, south: 90},
   crossStreets: [180, 400, 610, 810, 1010, 1210], templeRadius: 64,
+  // inferred: W1 packed courtyard morphology; coverage is measured from the roof
+  // rectangles, not increased by shrinking the 312 m avenue or palace reservation.
+  fabric: {courtWidth:24, courtDepth:27, outerCourtWidth:29, outerCourtDepth:31,
+    lane:3.4, roofFraction:.97, northDepth:.35, southDepth:.30, wingDepth:.33,
+    roofHalfWidth:7.8808, roofHalfDepth:4.3164, cornerLift:.12},
+  lighting: {corridorSpacing:16, corridorInset:1.4, lanternHeight:2.7,
+    galleryOffsets:[[-4.2,3.1,-8],[-4.2,3.1,8]],galleryIntensity:85,
+    evidence:'inferred',source:'W1 city: permanent hanging lanterns and warm gallery spill, lit only at bluehour'},
   evidence: 'inferred', source: 'T8: inner city approximately x ±1400, z ±1300, outer city to 4 km; ART_BIBLE avenue/palace reservations',
   offices: [
     {name:'明堂颁朔布政府',position:[-228,0,112],halfWidth:48,halfDepth:46},
@@ -224,7 +232,7 @@ export const CITY = {
     {name:'景灵西宫',position:[-235,0,272],halfWidth:55,halfDepth:55},
     {name:'景灵东宫',position:[235,0,272],halfWidth:55,halfDepth:55},
   ].map(o=>({...o,evidence:'inferred',source:'ART_BIBLE: named offices opposite 掖门 and along avenue; exact compound footprints inferred'})),
-  houseSpec: {frontBays:[2.8,2.8,2.8],sideBays:[3.4],caiGrade:8,klass:'yuwu',tiao:1,
+  houseSpec: {frontBays:[2.8,2.8,2.8,2.8,2.8],sideBays:[4.2],caiGrade:8,klass:'yuwu',tiao:1,
     columnHeight:2.9,roof:'xuanshan',tile:'banwa',jiaPerSlope:2,platform:{height:.18,margin:.3},
     bayFill:{south:'lattice',north:'wall',east:'wall',west:'wall'}},
   officeSpec: {frontBays:[4.2,4.6,5,4.6,4.2],sideBays:[3.5,3.5],caiGrade:5,klass:'tingtang',tiao:2,
@@ -249,7 +257,7 @@ export const TIETA = {
 };
 export const CITY_VIEWS = {
   aerial:{pos:[150,300,300],target:[180,20,-350],fov:75,near:.5},
-  gallery:{pos:[-47.4,13.7,25],target:[170,6,750],fov:80,near:.1,time:'bluehour'},
+  gallery:{pos:[47.4,13.7,25],target:[80,3,750],fov:78,near:.1,time:'bluehour'},
   avenue:{pos:[-120,YUJIE.surfaceY+1.6,690],target:[270,7,820],fov:62,near:.1},
   roofs:{pos:[630,200,780],target:[270,0,180],fov:57,near:.1},
   evidence:'inferred',source:'T8: 300 m aerial and gallery validation framings; no content consumes these cameras',

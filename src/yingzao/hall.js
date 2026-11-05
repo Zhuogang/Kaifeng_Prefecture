@@ -16,6 +16,7 @@ export function defaultHallMaterials(spec = {}, engine = {quality:{detail:0.5}})
   const tile = spec.tile === 'banwa' ? 'grey' : 'green';
   return {timber:timberMaterial(engine), bracket:paintMaterial(engine,{style:'wucai'}),
     stone:masonryMaterial(engine), plaster:plasterMaterial(engine),
+    window:timberMaterial(engine,{variant:'unpainted',color:0x40372c,wear:0.6}),
     tile:tileMaterial(engine,{variant:tile}), ridge:tileMaterial(engine,{variant:tile,ribbed:false})};
 }
 
@@ -36,7 +37,7 @@ function columnGeometry(column, radius, f, segments) {
 
 function frame(layout, lod, batches, collision, { fill = true, lowOuter = false } = {}) {
   const { spec: s } = layout, f = fen(s.caiGrade), radius = columnDiameterFen(s.klass).max * f / 2;
-  const { timber, stone, bracket, plaster } = batches;
+  const { timber, stone, bracket, plaster, window:shutter } = batches;
   for (const c of layout.columns) {
     if (lod === 2) {
       if (!lowOuter || !c.perimeter) continue;
@@ -57,17 +58,36 @@ function frame(layout, lod, batches, collision, { fill = true, lowOuter = false 
     // inferred: 普拍方 occupies the top 15 分 below the bracket datum, width 32 分.
     timber.beam([a.headX, a.topY - 7.5 * f, a.headZ], [b.headX, b.topY - 7.5 * f, b.headZ], 32 * f, 15 * f);
     const dx = side === 'east' ? 1 : side === 'west' ? -1 : 0, dz = side === 'south' ? 1 : side === 'north' ? -1 : 0;
-    // inferred: 栱眼壁 closes the bearing band behind the exposed brackets; no daylight gap through the hall.
-    const bh = bracketHeight(s);
-    timber.beam([a.headX-dx*0.14,a.topY+bh*0.5,a.headZ-dz*0.14],
-      [b.headX-dx*0.14,b.topY+bh*0.5,b.headZ-dz*0.14],0.16,bh);
+    // inferred: recessed lime infill behind closed bays separates structural brackets from
+    // the room wall. Open galleries retain a narrow timber binding board rather than a solid stripe.
+    const bh=bracketHeight(s),recess=Math.max(0.25,layout.projection*0.55);
+    if(fill&&bayFill(s,side,edge.bay)!=='open')plaster.beam(
+      [a.headX-dx*recess,a.topY+bh*0.34,a.headZ-dz*recess],
+      [b.headX-dx*recess,b.topY+bh*0.34,b.headZ-dz*recess],0.18,bh*0.68);
+    timber.beam([a.headX,a.topY+bh-5*f,a.headZ],[b.headX,b.topY+bh-5*f,b.headZ],0.20,10*f);
     const ly = bracketHeight(s) + 7.5 * f;
     timber.beam([a.headX + dx * layout.projection, a.topY + ly, a.headZ + dz * layout.projection],
       [b.headX + dx * layout.projection, b.topY + ly, b.headZ + dz * layout.projection], 10 * f, 15 * f);
-    if (lod === 1) {
-      const y = bracketHeight(s) * 0.55;
-      bracket.beam([a.headX + dx * layout.projection * 0.45, a.topY + y, a.headZ + dz * layout.projection * 0.45],
-        [b.headX + dx * layout.projection * 0.45, b.topY + y, b.headZ + dz * layout.projection * 0.45], layout.projection, bracketHeight(s) * 0.62);
+    // 卷四 總鋪作次序: 重栱's 慢栱 carries 素方 (羅漢方), with sloping 遮椽版 above.
+    // inferred: section is one 材 (15 x 10 分); the stepped assemblies determine the levels.
+    const rails=[];
+    for(let jump=1;jump<s.tiao;jump++) {
+      const height=(92.5+(jump-1)*31)*f,projection=jump*30*f;
+      bracket.beam([a.headX+dx*projection,a.topY+height,a.headZ+dz*projection],
+        [b.headX+dx*projection,b.topY+height,b.headZ+dz*projection],10*f,15*f);
+      rails.push({height:height+7.5*f,projection});
+    }
+    rails.push({height:ly+7.5*f,projection:layout.projection});
+    for(let i=1;i<rails.length;i++) {
+      const inner=rails[i-1],outer=rails[i];
+      const positions=[a.headX+dx*inner.projection,a.topY+inner.height,a.headZ+dz*inner.projection,
+        b.headX+dx*inner.projection,b.topY+inner.height,b.headZ+dz*inner.projection,
+        b.headX+dx*outer.projection,b.topY+outer.height,b.headZ+dz*outer.projection,
+        a.headX+dx*outer.projection,a.topY+outer.height,a.headZ+dz*outer.projection];
+      const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+      g.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,0,1,1,0,1],2));g.setIndex([0,1,2,0,2,3]);g.computeVertexNormals();
+      if(g.attributes.normal.getY(0)>0){g.setIndex([0,2,1,0,3,2]);g.computeVertexNormals();}
+      bracket.add(g,undefined,{size:[Math.hypot(a.x-b.x,a.z-b.z),30*f]});g.dispose();
     }
   }
   if (lod === 0 && fill) {
@@ -93,13 +113,30 @@ function frame(layout, lod, batches, collision, { fill = true, lowOuter = false 
     const span = Math.hypot(a.x - b.x, a.z - b.z) - radius * 2, h = s.columnHeight - 0.55;
     const angle = edge.side === 'east' || edge.side === 'west' ? Math.PI / 2 : 0;
     const local = (u, y, v = 0) => [x + u * Math.cos(angle) + v * Math.sin(angle), s.platform.height + y, z - u * Math.sin(angle) + v * Math.cos(angle)];
-    const rect = (batch, u, y, width, height, depth = 0.15) => batch.box(local(u, y), [width, height, depth], angle);
+    const rect = (batch, u, y, width, height, depth = 0.15, v = 0) => batch.box(local(u, y, v), [width, height, depth], angle);
     if (lod === 2) {
       const g = new THREE.PlaneGeometry(span + radius * 2, h);
       g.rotateY({ south: 0, east: Math.PI / 2, north: Math.PI, west: -Math.PI / 2 }[edge.side]);
       g.translate(x, s.platform.height + h / 2, z);
       (type === 'wall' ? plaster : timber).add(g); g.dispose();
     } else if (type === 'wall') rect(plaster, 0, h / 2, span, h, 0.28);
+    else if(type==='lattice') {
+      // inferred: three narrow sash leaves set in plaster, 0.16 m vertical slat spacing and
+      // two horizontal ties. Window proportions follow the gate paintings, not modern glass grids.
+      const opening=span*(s.windowJambs?0.52:0.68),bottom=Math.max(0.85,h*0.17),height=Math.min(4.1,h*0.72);
+      const outward=edge.side==='south'||edge.side==='east'?1:-1;
+      rect(plaster,0,bottom/2,span,bottom,0.24);
+      rect(plaster,0,(bottom+height+h)/2,span,h-bottom-height,0.24);
+      for(const sign of [-1,1])rect(plaster,sign*(span+opening)/4,h/2,(span-opening)/2,h,0.24);
+      rect(shutter,0,bottom+height/2,opening,height,0.07,-outward*0.28);
+      for(const y of [bottom,bottom+height])rect(timber,0,y,opening+0.12,0.12,0.17);
+      for(let i=0;i<=3;i++)rect(timber,-opening/2+i*opening/3,bottom+height/2,0.075,height,0.17);
+      if(lod===0) {
+        const n=Math.ceil(opening/0.16);
+        for(let i=1;i<n;i++)rect(timber,-opening/2+i*opening/n,bottom+height/2,0.025,height,0.09);
+        for(const t of [1/3,2/3])rect(timber,0,bottom+height*t,opening,0.035,0.10);
+      }
+    }
     else {
       // inferred: six leaves per doorway, a solid lower panel and open rectangular lattice above.
       const bottom = type === 'door' ? 1.05 : 1.4;

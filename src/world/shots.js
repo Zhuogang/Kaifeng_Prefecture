@@ -23,3 +23,6 @@ SHOTS.push({ id: 7, ...YUJIE_VIEWS.corridor });
 
 import { CITY_VIEWS } from './plan.js';
 SHOTS.push({ id: 4, ...CITY_VIEWS.aerial }, { id: 9, ...CITY_VIEWS.gallery });
+
+// inferred: W1 item 5, lower and closer five-door inspection; both forward towers may crop out.
+Object.assign(SHOTS.find(shot => shot.id === 1), {pos:[-3,2.45,104],target:[0,13.6,-8],fov:23,near:0.1});

@@ -6,12 +6,12 @@ import { stoneMaterial } from '../materials/stone.js';
 import { pavingMaterial } from '../materials/paving.js';
 import { RiverReflection } from '../water/reflection.js';
 import { GeometryBatch } from '../yingzao/geometry.js';
-import { reaches, subtractGaps } from './layout.js';
+import { rowReaches, subtractGaps } from './layout.js';
 
 export function buildCanals(engine) {
   const lining = new GeometryBatch(), coping = new GeometryBatch(), bridges = new GeometryBatch();
   const surfaces = new GeometryBatch(), width = P.section.canal - P.section.road;
-  for (const sign of [-1, 1]) for (const [start, end] of reaches) {
+  for (const sign of [-1, 1]) for (const [start, end] of rowReaches) {
     const cx = sign * (P.section.canal + P.section.road) / 2, z = (start + end) / 2, length = end - start;
     for (const edge of [P.section.road, P.section.canal]) {
       lining.box([sign * edge, P.surfaceY - 0.48, z], [0.42, 0.96, length]);

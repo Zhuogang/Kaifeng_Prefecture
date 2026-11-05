@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import { XUANDE as P, XUANDE_VIEWS } from '../world/plan.js';
+import { XUANDE as P, XUANDE_VIEWS, YUJIE } from '../world/plan.js';
 import { GeometryBatch, meshStats } from '../yingzao/geometry.js';
 import { buildHall } from '../yingzao/hall.js';
 import { roofOrnaments, chazi } from '../yingzao/ornament.js';
 import { timberMaterial } from '../materials/timber.js';
 import { masonryMaterial } from '../materials/masonry.js';
+import { forecourtMaterial } from '../materials/forecourt.js';
 import { pavingMaterial } from '../materials/paving.js';
 import { plasterMaterial } from '../materials/plaster.js';
 import { metalMaterial } from '../materials/metal.js';
@@ -67,25 +68,68 @@ function railing(batch,path,height=1.15,detail=true) {
   }
 }
 
+const centreDoor = P.doors.centers[Math.floor(P.doors.centers.length/2)];
+const passageHalfWidth = P.doors.topWidth/2-0.25;
+const passageBack = P.platform.center[2]-P.platform.depth/2;
+const passageFront = P.platform.center[2]+P.platform.depth/2;
+// inferred: six-millimetre clearance above the avenue's millimetric stone relief; the passage falls gently
+// to the palace's existing apron datum. Dimensions derive from the shared plan, not a camera.
+const forecourtY = YUJIE.surfaceY+0.006;
+const forecourtEnd=P.forecourt.center[2]+P.forecourt.depth/2;
+const fenceInner=Math.min(...P.fences.flatMap(path=>path.map(p=>Math.abs(p[0]))));
+// inferred: an opening three doorway widths wide admits the processional approach within the enclosure.
+const fencePaths=P.fences.map(path=>path.map(([x,,z])=>[Math.abs(x)===fenceInner?Math.sign(x)*P.doors.width*1.5:x,forecourtY,z]));
+function passageY(z) {
+  const t=THREE.MathUtils.clamp((passageFront-z)/P.platform.depth,0,1);
+  return THREE.MathUtils.lerp(forecourtY,P.forecourt.center[1]+0.06,t);
+}
+
 function doors(batches, lod) {
-  const p=P.doors,h=p.height-0.16;
+  const p=P.doors,base=forecourtY+0.035,h=p.height-base-0.12;
   for(const x of p.centers) {
-    const z=-p.recess;
-    // inferred: paired leaves in the reveal, twelve planks and nine rows of gilt studs.
-    const boards=lod===0?12:2;
-    for(let i=0;i<boards;i++)batches.door.box([x-p.width/2+(i+0.5)*p.width/boards,0.08+h/2,z],[p.width/boards-0.012,h,0.20]);
-    batches.door.box([x,p.height+0.16,-0.67],[p.width+0.8,0.38,0.65]);
-    for(const y of [0.2,2.1,4.4,h-0.08])batches.door.box([x,y,z-0.14],[p.width,0.17,0.17]);
-    if(lod===0) {
-      for(let row=0;row<9;row++)for(let col=0;col<8;col++) {
-        const g=new THREE.SphereGeometry(1,12,8);g.scale(0.064,0.064,0.039);
-        g.translate(x+(col-3.5)*0.61,0.48+row*0.77,z+0.14);batches.gold.add(g);g.dispose();
+    const open=x===centreDoor,half=open?p.topWidth/2-0.13:p.width/2-0.035;
+    for(const sign of [-1,1]) {
+      const wood=new GeometryBatch(),gold=new GeometryBatch(),iron=new GeometryBatch();
+      const n=lod===0?6:1;
+      // inferred: each central leaf swings inward by a quarter turn, lying along its jamb.
+      // Closed leaves keep their paired six-board construction and nine rows of gilt studs.
+      for(let i=0;i<n;i++)wood.box([-sign*(i+0.5)*half/n,h/2,0],[half/n-0.009,h,0.20]);
+      for(const y of [0.17,h*0.33,h*0.67,h-0.17])wood.box([-sign*half/2,y,-0.14],[half,0.16,0.16]);
+      if(lod===0) {
+        for(let row=0;row<9;row++)for(let col=0;col<4;col++) {
+          const g=new THREE.SphereGeometry(1,12,8);g.scale(0.064,0.064,0.039);
+          g.translate(-sign*(0.24+col*(half-0.48)/3),0.24+row*(h-0.48)/8,0.14);gold.add(g);g.dispose();
+        }
+        const u=-sign*(half-0.25),y=h*0.47;
+        const ring=new THREE.TorusGeometry(0.135,0.025,6,18);ring.translate(u,y-0.1,0.22);gold.add(ring);ring.dispose();
+        iron.box([u,y,0.14],[0.23,0.30,0.035]);
       }
-      for(const sign of [-1,1]) {
-        const ring=new THREE.TorusGeometry(0.135,0.025,6,18);ring.translate(x+sign*0.25,3.25,z+0.22);batches.gold.add(ring);ring.dispose();
-        batches.iron.box([x+sign*0.25,3.37,z+0.14],[0.23,0.30,0.035]);
-      }
+      const m=matrix([x+sign*half,base,-p.recess],open?-sign*Math.PI/2:0);
+      for(const [batch,target]of [[wood,batches.door],[gold,batches.gold],[iron,batches.iron]])if(batch.indices.length){const g=batch.geometry();target.add(g,m);g.dispose();}
     }
+    batches.door.box([x,p.height+0.16,-0.67],[p.width+0.8,0.38,0.65]);
+  }
+}
+
+function passage(batches,lod) {
+  // Flat timber lintels and a complete lining follow 清明上河图's gate. The plank sizes,
+  // frame spacing and 0.12 m lining thickness are inferred, rather than measured remains.
+  const top=P.doors.height-0.15,span=P.doors.topWidth-0.2,depth=P.platform.depth;
+  const floor=new THREE.PlaneGeometry(span,depth,1,8);floor.rotateX(-Math.PI/2);
+  const a=floor.attributes.position;
+  for(let i=0;i<a.count;i++){const z=a.getZ(i)+P.platform.center[2];a.setXYZ(i,a.getX(i)+centreDoor,passageY(z),z);}
+  floor.computeVertexNormals();batches.forecourt.add(floor);floor.dispose();
+  batches.passage.box([centreDoor,top,P.platform.center[2]],[span,0.18,depth]);
+  const retreat=(P.doors.width-P.doors.topWidth)/2;
+  for(const sign of [-1,1]) {
+    const bottomX=centreDoor+sign*(P.doors.width/2-0.08),topX=centreDoor+sign*(P.doors.width/2-retreat-0.08);
+    block(batches.passage,rect(bottomX-0.06,bottomX+0.06,passageBack,passageFront),
+      rect(topX-0.06,topX+0.06,passageBack,passageFront),passageY(passageFront),top);
+  }
+  if(lod<2)for(let z=passageFront-0.6;z>passageBack;z-=3.0) {
+    for(const sign of [-1,1])batches.passage.beam([centreDoor+sign*(span/2-0.06),passageY(z),z],
+      [centreDoor+sign*(span/2-0.06),top-0.16,z],0.18,0.22);
+    batches.passage.box([centreDoor,top-0.17,z],[span,0.24,0.28]);
   }
 }
 
@@ -117,7 +161,7 @@ function structure(mats,lod) {
     // inferred: stone cap and lime course crown the battered platform.
     batches.lime.box([p.center[0],p.height-0.17,p.center[2]],[p.width-1.6,0.3,p.depth-1.6]);
   }
-  doors(batches,lod);wall(batches,lod);
+  doors(batches,lod);passage(batches,lod);wall(batches,lod);
   if(lod<2) {
     const rail=path=>railing(batches.timber,path,1.15,lod===0);
     const main=P.platform, inset=main.batter*main.height+0.2;
@@ -160,21 +204,27 @@ function structure(mats,lod) {
 
 function materials(engine) {
   return {
+    passage:timberMaterial(engine,{baseY:forecourtY,color:0x705342,grainAxis:[0,0,1],wear:0.8}),
     timber:timberMaterial(engine,{baseY:12,wear:0.8}),door:timberMaterial(engine,{baseY:0,wear:0.85,variation:3}),
+    window:timberMaterial(engine,{variant:'unpainted',color:0x40372c,wear:0.6,baseY:12}),
     bracket:paintMaterial(engine,{style:'wucai',wear:0.8}),
-    masonry:masonryMaterial(engine,{topY:12,batter:0.08,variation:11}),
+    masonry:masonryMaterial(engine,{topY:12,batter:0.08,variation:11,coursePeriod:2.496,courseHeight:0.156}),
     lime:plasterMaterial(engine,{wear:0.5}),plaster:plasterMaterial(engine,{baseY:12,variation:8}),
     paving:pavingMaterial(engine,{ruts:0,drains:0,variation:4}),
+    forecourt:forecourtMaterial(engine,{variation:4}),
     reliefBed:surfaceMaterial(engine,'frieze-recess',{variation:19},`
       float n=t2Fbm(cgP*1.2+t2Variation);
       t2Albedo=mix(vec3(0.125,0.12,0.105),vec3(0.21,0.20,0.17),n);t2Rough=0.96;t2Height=(n-0.5)*0.002;
     `),
     carving:surfaceMaterial(engine,'carved-warm-grey-stone',{variation:17},`
-      float n=t2Fbm(cgP*12.0+t2Variation);
+      float n=t2Fbm(cgP*3.0+t2Variation);
       t2Albedo=mix(vec3(0.19,0.185,0.165),vec3(0.34,0.325,0.28),n);
       t2Rough=0.94;t2Height=(n-0.5)*0.003;
-      t2Occlusion=0.85+max(cgN.y,0.0)*0.15;
-    `),
+      float groove=step(5.5,vReliefKind);
+      t2Albedo*=mix(1.0,0.48,groove);t2Occlusion=mix(0.92,0.55,groove);
+      t2Height+=(n-0.5)*0.001;
+    `,{vertexHead:'attribute float memberType; varying float vReliefKind;',
+      vertexPre:'vReliefKind=memberType;',head:'varying float vReliefKind;',attributes:{memberType:[0]}}),
     gold:metalMaterial(engine,{wear:0.7}),iron:metalMaterial(engine,{variant:'iron'}),
     tile:tileMaterial(engine,{wear:0.7}),ridge:tileMaterial(engine,{ribbed:false,wear:0.8}),
   };
@@ -224,7 +274,7 @@ function previewShadows(complex,engine) {
   invisible.userData.noPatch=true;
   const depth=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking});
   for(const original of complex.levels[1].object.children) {
-    if(!original.castShadow || original.material.name.startsWith('paint-'))continue;
+    if(!original.castShadow)continue;
     const m=original.clone();m.material=invisible;m.customDepthMaterial=depth;m.receiveShadow=false;proxy.add(m);
   }
   for(const original of complex.levels[0].object.children) {
@@ -251,10 +301,13 @@ function registerCollision(engine,halls) {
     edge([left,0],[right,0],'xuande-pier');left=x+P.doors.width/2;
   }
   // inferred: height-blind occupancy closes passage mouths, leaving the walk above the recessed leaves clear.
-  for(const x of P.doors.centers)fp.addRect(x,-P.platform.batter*P.doors.height,P.doors.width/2,0.14,0,'xuande-closed-passage');
+  for(const x of P.doors.centers)if(x!==centreDoor)fp.addRect(x,-P.platform.batter*P.doors.height,P.doors.width/2,0.14,0,'xuande-closed-passage');
+  for(const sign of [-1,1])fp.addRect(centreDoor+sign*(P.doors.topWidth/2-0.13),
+    -P.doors.recess-(P.doors.topWidth/2-0.13)/2,0.18,(P.doors.topWidth/2-0.13)/2,0,'xuande-open-leaf');
   const back=p.center[2]-p.depth/2+0.96;
-  edge([-half,back],[half,back]);
-  edge([-half+1,-0.96],[half-1,-0.96]);
+  for(const z of [back,-0.96])for(const [a,b]of [[-half,centreDoor-passageHalfWidth],[centreDoor+passageHalfWidth,half]])edge([a,z],[b,z]);
+  for(const sign of [-1,1])edge([centreDoor+sign*(passageHalfWidth+0.20),passageBack],
+    [centreDoor+sign*(passageHalfWidth+0.20),passageFront],'xuande-passage-jamb');
   for(const w of P.wingPlatforms) {
     const sign=Math.sign(w.center[0]),stair=P.stairs.find(s=>Math.sign(s.x)===sign);
     const inner=w.center[0]-sign*(w.width/2-1.16),outer=w.center[0]+sign*(w.width/2-1.16);
@@ -265,12 +318,20 @@ function registerCollision(engine,halls) {
     edge([outer,stair.z-18],[out,stair.z-18]);edge([out,stair.z-18],[out,stair.z]);
     for(const x of [stair.x-stair.width/2,stair.x+stair.width/2])edge([x,stair.z],[x,stair.z+stair.run]);
   }
-  for(const path of P.fences)fp.addPath(path.map(p=>[p[0],p[2]]),0.08,'xuande-chazi');
+  for(const path of fencePaths)fp.addPath(path.map(p=>[p[0],p[2]]),0.08,'xuande-chazi');
   for(const sign of [-1,1])fp.addRect(sign*(P.wall.extent+60)/2,P.wall.centerZ,(P.wall.extent-60)/2,P.wall.depth/2,0,'palace-wall');
   for(const {hall,entry}of halls)for(const obstacle of hall.footprint.obstacles) {
     const point=new THREE.Vector3(obstacle.x,0,obstacle.z).applyMatrix4(matrix(entry.position,entry.rotation??0));
     if(obstacle.type==='circle')fp.addCircle(point.x,point.z,obstacle.radius,'xuande-column');
-    else fp.addRect(point.x,point.z,obstacle.hw,obstacle.hd,obstacle.rotation+(entry.rotation??0),'xuande-infill');
+    else {
+      const angle=obstacle.rotation+(entry.rotation??0),c=Math.abs(Math.cos(angle)),s=Math.abs(Math.sin(angle));
+      const hx=c*obstacle.hw+s*obstacle.hd,hz=s*obstacle.hw+c*obstacle.hd;
+      // Upper-hall infill is above this open tunnel, not a ground-level obstruction.
+      if(point.z+hz>passageBack&&point.z-hz<passageFront&&point.x-hx<centreDoor+passageHalfWidth&&point.x+hx>centreDoor-passageHalfWidth) {
+        for(const [a,b]of [[point.x-hx,Math.min(point.x+hx,centreDoor-passageHalfWidth)],
+          [Math.max(point.x-hx,centreDoor+passageHalfWidth),point.x+hx]])if(b>a)fp.addRect((a+b)/2,point.z,(b-a)/2,hz,0,'xuande-infill');
+      } else fp.addRect(point.x,point.z,obstacle.hw,obstacle.hd,angle,'xuande-infill');
+    }
   }
 }
 
@@ -283,7 +344,7 @@ export async function build(engine) {
   for(const entry of [P.hall,...P.elbows,...P.wings,...P.towers]) {
     const spec={...entry,klass:'diange',roof:'wudian',eaves:1,tile:'tongwa',rafterDiameter:0.156,jiaPerSlope:5,
       platform:{height:0,margin:0},interior:false,enclosedBrackets:true,windowJambs:true,bayFill:{south:'lattice',north:'wall',east:'wall',west:'wall'}};
-    const hall=buildHall(spec,engine,{timber:mats.timber,bracket:mats.bracket,stone:mats.masonry,plaster:mats.plaster,tile:mats.tile,ridge:mats.ridge});
+    const hall=buildHall(spec,engine,{timber:mats.timber,bracket:mats.bracket,stone:mats.masonry,plaster:mats.plaster,window:mats.window,tile:mats.tile,ridge:mats.ridge});
     const ornaments=roofOrnaments(engine,hall.anchors,{height:entry===P.hall?2.6:1.5});
     for(const group of [ornaments.lod0,ornaments.lod1])group.traverse(o=>{if(o.isMesh)o.material=mats.ridge;});
     hall.lod0.add(ornaments.lod0);hall.lod1.add(ornaments.lod1);
@@ -292,7 +353,15 @@ export async function build(engine) {
   }
   const apron=new THREE.Mesh(new THREE.BoxGeometry(P.forecourt.width,0.06,P.forecourt.depth),mats.paving);
   apron.name='xuande-forecourt';apron.position.set(...P.forecourt.center);apron.castShadow=false;root.add(apron);
-  for(const path of P.fences) {
+  // A laid stone court meets the avenue at the existing vermilion enclosure. Its thin finish
+  // clears the avenue paving, leaving the two canals and planted banks open at their plan widths.
+  const end=forecourtEnd;
+  for(const [x0,x1]of [[-YUJIE.section.edge,-YUJIE.section.bank],[-YUJIE.section.road,YUJIE.section.road],[YUJIE.section.bank,YUJIE.section.edge]]) {
+    const laid=new THREE.Mesh(new THREE.BoxGeometry(x1-x0,0.035,end-passageFront),mats.forecourt);
+    laid.position.set((x0+x1)/2,forecourtY-0.0175,(end+passageFront)/2);laid.castShadow=false;
+    laid.name='xuande-laid-forecourt';root.add(laid);
+  }
+  for(const path of fencePaths) {
     const fence=chazi(engine,{path});
     for(const group of [fence.lod0,fence.lod1])group.traverse(o=>{if(o.isMesh)o.material=mats.door;});
     const l=new THREE.LOD();l.addLevel(fence.lod0,0);l.addLevel(fence.lod1,230);root.add(l);
@@ -306,11 +375,13 @@ export async function build(engine) {
   registerCollision(engine,halls);
   const previous=engine.groundHeight??(()=>0);
   engine.groundHeight=(x,z)=>{
+    if(Math.abs(x-centreDoor)<passageHalfWidth&&z>=passageBack&&z<=passageFront)return passageY(z);
     for(const p of [P.platform,...P.wingPlatforms])if(Math.abs(x-p.center[0])<p.width/2-p.batter*p.height&&Math.abs(z-p.center[2])<p.depth/2-p.batter*p.height)return p.height+0.035;
     for(const s of P.stairs){
       if(Math.abs(x-s.x)<s.width/2&&z>=s.z-18&&z<=s.z)return s.rise+0.04;
       if(Math.abs(x-s.x)<s.width/2&&z>=s.z&&z<=s.z+s.run)return Math.max(P.forecourt.center[1]+0.03,s.rise*(1-Math.floor((z-s.z)/(s.run/Math.ceil(s.rise/0.16)))/Math.ceil(s.rise/0.16)));
     }
+    if(z>=passageFront&&z<=forecourtEnd&&(Math.abs(x)<YUJIE.section.road||Math.abs(x)>YUJIE.section.bank)&&Math.abs(x)<=YUJIE.section.edge)return forecourtY;
     if(Math.abs(x-P.forecourt.center[0])<=P.forecourt.width/2&&Math.abs(z-P.forecourt.center[2])<=P.forecourt.depth/2)return P.forecourt.center[1]+0.03;
     return previous(x,z);
   };

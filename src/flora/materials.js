@@ -27,7 +27,7 @@ transformed.x += sin(position.y * 0.71) * inst.z * position.y * 0.035;
 if ((aFlora.x > 1.5 && aFlora.x < 2.5) || (aFlora.x > 5.5 && aFlora.x < 6.5)) {
   transformed = mix(aOrigin, transformed, step(aFlora.z, inst.y));
 }
-float phase = inst.x + aOrigin.x * 0.4 + aOrigin.z * 0.3;
+float phase = inst.x + aOrigin.x * 0.4 + aOrigin.z * 0.3 + aFlora.z * 6.2831853;
 float wind = aFlora.y * aFlora.y;
 transformed.xz += wind * vec2(0.23 * sin(uFloraTime * 0.85 + phase) + 0.07 * sin(uFloraTime * 1.9 + phase), 0.13 * cos(uFloraTime * 0.63 + phase));
 `;
@@ -47,12 +47,8 @@ export function floraMaterials(engine) {
         vec4 spray = texture2D(uFoliageAtlas,tileUV);
         // inferred: willow cutout thresholds retain subpixel whips across LODs;
         // the choice follows geometric LOD, not a named view.
-        float cutoff=vFlora.x<5.5?(vFlora.x>5.1?0.26:0.24):0.376;
+        float cutoff=vFlora.x<5.5?(vFlora.x>5.1?0.16:0.22):0.376;
         float alpha=spray.a;
-        if(vFlora.x<5.5) {
-          float top=(1.0-vFloraUV.y)-0.15*abs(vFloraUV.x*2.0-1.0);
-          alpha*=smoothstep(0.0,0.18,top)*smoothstep(0.0,0.12,min(vFloraUV.x,1.0-vFloraUV.x));
-        }
         if(alpha < cutoff) discard;
         diffuseColor.rgb *= spray.rgb * (0.78 + 0.35*vCanopy) * (0.88+0.24*vFlora.z);
       } else if (vFlora.x < 0.5) {
@@ -123,12 +119,8 @@ export function floraMaterials(engine) {
       if(vFlora.x>4.5) {
         float tile=floor(vFlora.x-5.0+0.1);
         vec2 tileUV=(clamp(vec2(vFloraUV.x,1.0-vFloraUV.y),0.003,0.997)+vec2(mod(tile,2.0),floor(tile/2.0)))*0.5;
-        float cutoff=vFlora.x<5.5?(vFlora.x>5.1?0.26:0.24):0.376;
+        float cutoff=vFlora.x<5.5?(vFlora.x>5.1?0.16:0.22):0.376;
         float alpha=texture2D(uFoliageAtlas,tileUV).a;
-        if(vFlora.x<5.5) {
-          float top=(1.0-vFloraUV.y)-0.15*abs(vFloraUV.x*2.0-1.0);
-          alpha*=smoothstep(0.0,0.18,top)*smoothstep(0.0,0.12,min(vFloraUV.x,1.0-vFloraUV.x));
-        }
         if(alpha<cutoff) discard;
       }
     `);

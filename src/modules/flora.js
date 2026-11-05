@@ -4,27 +4,64 @@ import { proceduralMaterial } from '../core/materials.js';
 import { floraMaterials } from '../flora/materials.js';
 import { instanceTrees } from '../flora/instances.js';
 import { instanceLotus, instanceGrass, instancePetals } from '../flora/groundcover.js';
-import { addCranes } from './cranes.js';
+import { addCranes, build as buildCranes } from './cranes.js';
 
 export { buildWillow, buildBlossom, buildPalaceTree } from '../flora/trees.js';
 export { buildLotus, buildGrass } from '../flora/groundcover.js';
 export { instanceTrees, instanceWillows, instanceBlossoms, instancePalaceTrees } from '../flora/instances.js';
 export { instanceLotus, instanceGrass, instancePetals } from '../flora/groundcover.js';
 
-/** World integration consumes only plan.js placement; no invented city coordinates here.
- * Optional FLORA={trees:[{species,positions,seed,height}],lotus:[positions],
- * grass:[positions],petals:[{species,positions}]}.
- */
-// inferred: FLORA integration schema for lead-supplied placements; no default city coordinates.
-export async function build(engine) {
-  const plan=PLAN.FLORA,materials=floraMaterials(engine),trees=[];
-  if(plan) {
-    for(const row of plan.trees??[]) trees.push(instanceTrees(engine,row.species,row.positions,{...row,materials}));
-    if(plan.lotus?.length) instanceLotus(engine,plan.lotus,{materials});
-    if(plan.grass?.length) instanceGrass(engine,plan.grass,{materials});
-    for(const scatter of plan.petals??[]) instancePetals(engine,scatter.positions,{species:scatter.species,materials});
+// inferred: soft river reflections use the same trees' distant silhouettes,
+// split into bark and canopy. The reflection baker keeps standard attributes only.
+function bankReflection(engine,batches) {
+  const reflection=engine.registry.riverReflection;
+  if(!reflection)return null;
+  const group=new THREE.Group();group.name='bank-willow-reflection-silhouettes';
+  for(const tree of batches)for(const wood of [true,false]) {
+    const source=tree.model.lod2,kind=source.attributes.aFlora,indices=[];
+    for(let i=0;i<source.index.count;i+=3) {
+      const a=source.index.getX(i);
+      if((kind.getX(a)<0.5)===wood)indices.push(a,source.index.getX(i+1),source.index.getX(i+2));
+    }
+    const geometry=source.clone();geometry.setIndex(indices);
+    const material=proceduralMaterial({name:wood?'willow-reflection-bark':'willow-reflection-canopy',params:{color:wood?0x756b53:0x819268,roughness:0.92}});
+    const mesh=new THREE.InstancedMesh(geometry,material,tree.items.length);
+    tree.items.forEach((item,i)=>mesh.setMatrixAt(i,item.matrix));group.add(mesh);
   }
-  engine.registry.flora={trees,pending:plan?null:'plan.js FLORA placements not yet supplied'};
+  reflection.register(group);return group;
+}
+
+/** Plant reserved banks and reuse court planting already built by their owners. */
+export async function build(engine) {
+  if(engine.registry.flora?.built)return engine.registry.flora;
+  const materials=floraMaterials(engine),trees=[],banks=PLAN.WILLOWS?.positions??[];
+  // inferred: old willows beside the bridge have taller, wider crowns than
+  // distant bank trees, with branches extending naturally above the river.
+  // Roots use the supplied reservations, and do not intrude into its approaches.
+  for(const near of [true,false])for(const south of [false,true]) {
+    const positions=banks.filter(p=>(Math.abs(p[0]-PLAN.BIANHE.center[0])<100)===near && (p[2]>PLAN.BIANHE.center[2])===south);
+    if(positions.length)trees.push(instanceTrees(engine,'willow',positions,{seed:`bianhe:${south?'south':'north'}:${near?'old':'row'}`,height:near?14:11,crownWidth:near?1.85:1,materials}));
+  }
+  const palace=engine.registry.palace?.trees;
+  if(!palace && PLAN.PALACE?.trees)for(const species of ['huai','bai']) {
+    const positions=PLAN.PALACE.trees[species];
+    if(positions?.length)trees.push(instanceTrees(engine,species,positions,{seed:'palace:'+species,height:species==='huai'?11:13,materials}));
+  }
+  const plan=PLAN.FLORA;
+  if(plan) {
+    for(const row of plan.trees??[])trees.push(instanceTrees(engine,row.species,row.positions,{...row,materials}));
+    if(plan.lotus?.length)instanceLotus(engine,plan.lotus,{materials});
+    if(plan.grass?.length)instanceGrass(engine,plan.grass,{materials});
+    for(const scatter of plan.petals??[])instancePetals(engine,scatter.positions,{species:scatter.species,materials});
+  }
+  const cranes=await buildCranes(engine),city=engine.registry.city?.flora;
+  const reflectedBanks=bankReflection(engine,trees.filter(t=>t.stats.species==='willow'));
+  const palaceTrees=palace??trees.filter(t=>['huai','bai'].includes(t.stats.species));
+  const summary={bankWillows:banks.length,bankBatches:trees.filter(t=>t.stats.species==='willow').length,
+    palaceTrees:palaceTrees.reduce((sum,t)=>sum+t.stats.instances,0),cityTrees:city?.stats?.instances??0,cranes:cranes?.group?.userData.cranes?.count??0};
+  engine.registry.flora={built:true,trees,materials,cranes,reflection:reflectedBanks,courts:{palace:palaceTrees,city},summary};
+  console.log('[flora] '+JSON.stringify(summary));
+  return engine.registry.flora;
 }
 
 export async function test(engine) {
@@ -79,6 +116,8 @@ export async function test(engine) {
   for(const x of [5993,6007]) {
     const post=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.2,8,8),perchMaterial);post.position.set(x,4,0);engine.add(post);
   }
+  const bird=cranes.positions.slice(0,18).reduce((outer,p)=>Math.hypot(p.x-6000,p.z)>Math.hypot(outer.x-6000,outer.z)?p:outer).clone();
+  const birdViewOffset=new THREE.Vector3(bird.x-6000,-2,bird.z).normalize().multiplyScalar(15);
   const views=[
     {pos:[0,3,12],target:[0,4.5,0],fov:56},
     {pos:[1000,4,60],target:[1000,4,0],fov:50},
@@ -88,6 +127,11 @@ export async function test(engine) {
     {pos:[5000,2.2,3.3],target:[5000,0,0],fov:62,near:0.05},
     {pos:[1.2,1.6,1.6],target:[0,6.1,0],fov:78,near:0.05},
     {pos:[6005,8,12],target:[6000,20,0],fov:35,near:0.1},
+    // inferred: a side/underside anatomy inspection, exactly 15 m from an
+    // existing flying crane. The same twenty fixtures exist in every view.
+    {pos:bird.clone().add(birdViewOffset).toArray(),target:bird.toArray(),fov:24,near:0.1,time:engine.time},
+    {pos:[0,3,-12],target:[0,4.5,0],fov:56,near:0.1},
+    {pos:[6007,8.85,13],target:[5993,8.85,0],fov:18,near:0.1},
   ];
   engine.registry.flora={trees,views,cranes};
   console.log('[flora] geometry budgets '+JSON.stringify(trees.map(t=>({species:t.stats.species,lodTriangles:t.stats.lodTriangles}))));

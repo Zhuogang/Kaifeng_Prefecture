@@ -4,12 +4,12 @@ import { buildBlossom } from '../flora/trees.js';
 import { buildLotus, instancePetals } from '../flora/groundcover.js';
 import { floraMaterials } from '../flora/materials.js';
 import { matrix, instanceLods } from './instances.js';
-import { reaches } from './layout.js';
+import { rowReaches } from './layout.js';
 
 export function buildPlanting(engine) {
   const materials = floraMaterials(engine), rng = engine.rng('yujie:planting');
   const treeEntries = [], lotusEntries = [], petals = Object.fromEntries(P.planting.species.map(s => [s, []]));
-  for (const sign of [-1, 1]) for (const [start, end] of reaches) {
+  for (const sign of [-1, 1]) for (const [start, end] of rowReaches) {
     for (let z = start + P.planting.spacing / 2, i = 0; z < end - 3; z += P.planting.spacing, i++) {
       const pz = z + rng.range(-P.planting.jitter, P.planting.jitter);
       if (P.crossings.some(c => Math.abs(pz - c) < P.fenceGap / 2 + 2)) continue;
@@ -36,15 +36,26 @@ export function buildPlanting(engine) {
   }
   // A shared vertex-coloured model lets all four species share draws; their public
   // botanical models retain different flowers, bark and crown shapes.
-  const treeGroups = [];
+  const treeGroups = []; let shadowModel;
   for (const species of P.planting.species) {
     const model = buildBlossom({ species, height: P.planting.height, rng: engine.rng('yujie:model:' + species) });
-    // inferred: fine individual blossoms only within 7 m; aggregated sprays to 115 m.
+    shadowModel ??= model;
+    // W1: retain the best available botanical mesh through at least 80 metres.
     treeGroups.push(instanceLods(engine, 'yujie:trees:' + species,
       [model.lod0, model.lod1, model.lod2].map(geometry => [{ geometry, material: materials.surface }]),
-      treeEntries.filter(t => t.species === species), [7, 115], { depth: materials.depth, flora: true }));
+      treeEntries.filter(t => t.species === species), [80, 180], { depth: materials.depth, flora: true, shadow: false }));
     instancePetals(engine, petals[species], { species, materials });
   }
+  // inferred: one shared public blossom silhouette supplies the four species'
+  // shadow canopy; full visible flowers stay at LOD0 through 80 m. The sparse
+  // far silhouette suffices for preview shadows; stills retain LOD1 branchwork.
+  const shadowMaterial=new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:false});
+  shadowMaterial.userData.noPatch=true; shadowMaterial.shadowSide=THREE.DoubleSide;
+  const shadowGeometry=engine.quality.detail>=1?shadowModel.lod1:shadowModel.lod2;
+  const treeShadows=instanceLods(engine,'yujie:blossom-shadows',
+    [[{geometry:shadowGeometry,material:shadowMaterial}],[],[]],treeEntries,[180,180],
+    {depth:materials.depth,flora:true});
+  treeShadows.traverse(o=>{if(o.isMesh)o.receiveShadow=false;});
   const lotus = buildLotus({ rng: engine.rng('yujie:lotus') });
   // inferred: at long range retain the public leaf's notched outer rim as a triangle fan.
   // The five interior rings only describe centimetre relief, invisible beyond 80 m.
@@ -58,5 +69,5 @@ export function buildPlanting(engine) {
   farLeaf.setIndex(Array.from({ length: 16 }, (_, i) => [0, i + 2, i + 1]).flat());
   const leaves = instanceLods(engine, 'yujie:lotus', [lotus.lod0, lotus.lod1, farLeaf].map(geometry =>
     [{ geometry, material: materials.surface }]), lotusEntries, [18, 80], { depth: materials.depth, flora: true, shadow: false });
-  return { treeGroups, leaves, trees: treeEntries.length, lotus: lotusEntries.length };
+  return { treeGroups, treeShadows, leaves, trees: treeEntries.length, lotus: lotusEntries.length };
 }

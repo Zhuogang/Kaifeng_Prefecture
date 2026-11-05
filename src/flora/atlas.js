@@ -10,19 +10,19 @@ function leaf(ctx,x,y,length,width,angle,tone) {
   ctx.bezierCurveTo(width*0.4,-length*0.8,width,-length*0.35,0,0);ctx.fill();ctx.restore();
 }
 function willow(ctx,rng) {
-  for(let j=0;j<9;j++) {
-    const x=90+j*103+rng.range(-22,22),end=rng.range(760,1000),bend=rng.range(-42,42),start=rng.range(8,180);
-    ctx.strokeStyle='#756e45';ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(x,start);ctx.quadraticCurveTo(x+bend,350,x+bend*1.2,end);ctx.stroke();
-    for(let y=start+20;y<end;y+=rng.range(21,32)) {
-      const t=(y-start)/(end-start),px=x+bend*(2*t-t*t*0.8);
-      // Compensate for a curtain's approximately 1:5 world aspect so leaves
-      // emerge obliquely from the whip instead of becoming vertical dashes.
-      for(const side of [-1,1]) {
-        ctx.save();ctx.translate(px,y+rng.range(-5,5));ctx.scale(4,1);
-        leaf(ctx,0,0,rng.range(17,26),rng.range(2.6,4.2),Math.PI+side*rng.range(0.45,1.15),rng.pick(['#bbc69c','#a9b88b','#9aac7c','#c8cfaa','#aebf92']));
-        ctx.restore();
-      }
-    }
+  // inferred: one narrow shoot per strip, with alternate lanceolate leaves.
+  // A strip is approximately twenty-five times longer than it is wide in world
+  // space, so compensate while painting; no metre-wide sheet of repeated shoots.
+  const end=1008,bend=rng.range(-42,42),stem=x=>512+bend*Math.sin(x/end*2.4);
+  ctx.strokeStyle='#7f8058';ctx.lineWidth=3.2;ctx.beginPath();ctx.moveTo(stem(0),0);
+  for(let y=16;y<=end;y+=16)ctx.lineTo(stem(y),y);
+  ctx.stroke();
+  let side=1;
+  for(let y=24;y<end-18;y+=rng.range(9,16)) {
+    const taper=0.4+0.6*Math.sin(Math.PI*(y/end)*0.85);
+    ctx.save();ctx.translate(stem(y),y);ctx.scale(16,1);
+    leaf(ctx,0,0,rng.range(13,21)*taper,rng.range(1.7,2.5),Math.PI+side*rng.range(0.42,1.05),rng.pick(['#b5c18e','#a6b681','#94a66f','#c1c99c']));
+    ctx.restore();side=-side;
   }
 }
 function spray(ctx,rng,kind) {

@@ -5,7 +5,7 @@ import { proceduralMaterial } from '../core/materials.js';
 // inferred: distant city surfaces share one filtered shader, so each hall's six
 // material batches can be drawn together. Hero masonry uses the shared families.
 const PALETTE = { timber: [0.09, 0.048, 0.027], bracket: [0.15, 0.078, 0.037],
-  plaster: [0.46, 0.42, 0.34], stone: [0.18, 0.19, 0.18], tile: [0.075, 0.085, 0.09], ridge: [0.07, 0.075, 0.075] };
+  plaster: [0.46, 0.44, 0.39], stone: [0.18, 0.19, 0.18], tile: [0.12, 0.135, 0.145], ridge: [0.10, 0.115, 0.12] };
 
 export function packedGeometry(group, { green = false } = {}) {
   group.updateMatrixWorld(true);
@@ -42,11 +42,16 @@ export function cityMaterial(engine) {
   const dusk = { value: 0 };
   const material = proceduralMaterial({ name: 'batched-city-surfaces',
     params: { vertexColors: true, roughness: 0.88 }, uniforms: { cityDusk: dusk },
-    vertexHead: 'attribute float cityKind; varying float vCityKind; varying vec2 vCityUV;',
+    vertexHead: `attribute float cityKind; varying float vCityKind; varying vec2 vCityUV;
+      #ifdef USE_INSTANCING
+      attribute float cityStorey;
+      #endif`,
     vertexPre: `vCityKind=cityKind; vCityUV=uv;
       #ifdef USE_INSTANCING
-      // inferred: tall courtyard houses show two window registers and a floor beam.
-      if(cityKind>0.5 && cityKind<1.5 && length(instanceMatrix[1].xyz)>1.5) vCityUV.y*=2.0;
+      // inferred: a second storey raises the roof without stretching its pitch.
+      if(cityKind>1.5 || position.y>3.80) transformed.y+=cityStorey;
+      else transformed.y*=1.0+cityStorey/3.80;
+      if(cityKind>0.5 && cityKind<1.5 && cityStorey>1.0) vCityUV.y*=2.0;
       #endif`,
     head: `varying float vCityKind; varying vec2 vCityUV; uniform float cityDusk;
       float cityWindow(vec2 uv) {
@@ -60,9 +65,10 @@ export function cityMaterial(engine) {
     color: `
       float grain=cgVnoise3(cgP*0.31);
       diffuseColor.rgb*=0.86+0.28*grain;
-      if(vCityKind>1.5) {
-        // inferred: 8% straw roofs, with the same physical envelope at this distance.
-        float straw=step(0.92,cgSeed);
+      if(vCityKind>1.5 && vCityKind<2.5) {
+        // inferred: 4% thatch, with a small warm/cool grey tile variation.
+        diffuseColor.rgb*=mix(vec3(.93,.97,1.02),vec3(1.08,1.01,.94),cgSeed);
+        float straw=step(0.96,cgSeed);
         diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.23,0.17,0.087),straw);
         float fp=max(length(dFdx(vCityUV)),length(dFdy(vCityUV)));
         float ribs=sin(vCityUV.x*24.17)*sin(vCityUV.y*17.95);
@@ -76,6 +82,7 @@ export function cityMaterial(engine) {
       }
     `,
     emissive: `
+      if(vCityKind>2.5) totalEmissiveRadiance+=vec3(12.0,3.0,.42)*cityDusk;
       if(vCityKind>0.5 && vCityKind<1.5) {
         float window=cityWindow(vCityUV);
         float bars=mix(step(.14,fract(vCityUV.x*23.0)),.86,smoothstep(.2,1.0,fwidth(vCityUV.x*23.0)));

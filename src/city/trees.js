@@ -1,35 +1,47 @@
 import * as THREE from 'three';
 import { instancePalaceTrees } from '../flora/instances.js';
 
-/** Background urban trees, using the public flora geometry, wind and cutout APIs. */
+/** Public flora geometry, wind and cutouts with city-distance batching. */
 export function cityTrees(engine,positions) {
-  const flora=instancePalaceTrees(engine,positions,{species:'huai',height:11,seed:'T8-courtyard-fields',collision:false});
-  // inferred: these are background courtyard/field trees. Public LOD1 is ample
-  // at the nearest tier; the public porous LOD2 crown supplies their shadows.
+  const flora=instancePalaceTrees(engine,positions,{species:'huai',height:13,seed:'T8-courtyard-fields',collision:false});
   flora.meshes[0].geometry.dispose();flora.meshes[0].geometry=flora.meshes[1].geometry.clone();
   flora.stats.lodTriangles[0]=flora.stats.lodTriangles[1];
-  for(const mesh of flora.meshes){mesh.castShadow=false;mesh.userData.castShadow=false;}
+  // At city distances roofs hide the trunk. Retain every public canopy card,
+  // omitting only buried trunk triangles from the distant visible model.
+  const far=flora.meshes[2].geometry,kind=far.attributes.aFlora,indices=far.index.array,canopy=[];
+  for(let i=0;i<indices.length;i+=3)if(kind.getX(indices[i])>.5)canopy.push(indices[i],indices[i+1],indices[i+2]);
+  far.setIndex(canopy);flora.stats.lodTriangles[2]=canopy.length/3;
+  for(const m of flora.meshes){m.castShadow=false;m.userData.castShadow=false;}
   const geometry=flora.model.lod2.clone();
   geometry.setAttribute('iFlora',new THREE.InstancedBufferAttribute(new Float32Array(positions.length*4),4).setUsage(THREE.DynamicDrawUsage));
   const material=new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:false});material.userData.noPatch=true;
   const proxy=new THREE.InstancedMesh(geometry,material,positions.length);
-  proxy.name='city-tree-shadow-crowns';proxy.castShadow=true;proxy.receiveShadow=false;
-  proxy.customDepthMaterial=flora.meshes[0].customDepthMaterial;
+  proxy.name='city-tree-shadow-crowns';proxy.castShadow=true;proxy.receiveShadow=false;proxy.customDepthMaterial=flora.meshes[0].customDepthMaterial;
   proxy.instanceMatrix.setUsage(THREE.DynamicDrawUsage);flora.group.add(proxy);
-  const matrix=new THREE.Matrix4();let last=[];
+  const frustum=new THREE.Frustum(),projection=new THREE.Matrix4(),sphere=new THREE.Sphere(new THREE.Vector3(),9);let last=[];
   function update() {
-    flora.update();const camera=engine.camera.position,position=camera.toArray();
-    if(position.every((v,i)=>v===last[i]))return;
-    last=position;let count=0;
-    for(const source of flora.meshes.slice(0,2))for(let i=0;i<source.count;i++) {
-      source.getMatrixAt(i,matrix);proxy.setMatrixAt(count,matrix);
-      const variation=source.geometry.attributes.iFlora;
-      geometry.attributes.iFlora.set(variation.array.subarray(i*4,i*4+4),count*4);count++;
+    const camera=engine.camera,view=[...camera.position.toArray(),...camera.quaternion.toArray(),camera.fov,camera.aspect];
+    if(view.every((v,i)=>v===last[i]))return;last=view;
+    frustum.setFromProjectionMatrix(projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+    const counts=[0,0,0];let shadows=0;
+    for(const item of flora.items) {
+      const distance=item.p.distanceTo(camera.position);
+      if(distance<180) {
+        proxy.setMatrixAt(shadows,item.matrix);geometry.attributes.iFlora.set(item.variation,shadows*4);shadows++;
+      }
+      sphere.center.copy(item.p);sphere.center.y+=7;if(!frustum.intersectsSphere(sphere))continue;
+      // inferred: background courtyard trees use the public middle/far models.
+      const l=distance<40?0:distance<120?1:2,k=counts[l]++,m=flora.meshes[l];
+      m.setMatrixAt(k,item.matrix);m.setColorAt(k,item.tint);m.geometry.attributes.iFlora.set(item.variation,k*4);
     }
-    proxy.count=count;proxy.visible=count>0;proxy.instanceMatrix.needsUpdate=true;
-    geometry.attributes.iFlora.needsUpdate=true;if(count)proxy.computeBoundingSphere();
-    flora.stats.shadowInstances=count;flora.stats.shadowTriangles=count*flora.stats.lodTriangles[2];
+    flora.meshes.forEach((m,l)=>{
+      m.count=counts[l];m.visible=m.count>0;m.instanceMatrix.needsUpdate=true;
+      if(m.instanceColor)m.instanceColor.needsUpdate=true;m.geometry.attributes.iFlora.needsUpdate=true;if(m.count)m.computeBoundingSphere();
+    });
+    proxy.count=shadows;proxy.visible=shadows>0;proxy.instanceMatrix.needsUpdate=true;geometry.attributes.iFlora.needsUpdate=true;if(shadows)proxy.computeBoundingSphere();
+    Object.assign(flora.stats,{counts,shadowInstances:shadows,shadowTriangles:shadows*flora.stats.lodTriangles[2],
+      triangles:counts.reduce((sum,n,l)=>sum+n*flora.stats.lodTriangles[l],0),calls:counts.filter(Boolean).length});
   }
   flora.group.updateMatrixWorld=function(force){update();THREE.Group.prototype.updateMatrixWorld.call(this,force);};
-  update();return {...flora,shadowProxy:proxy};
+  update();return {...flora,update,shadowProxy:proxy};
 }

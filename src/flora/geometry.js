@@ -35,7 +35,10 @@ export class Geometry {
   }
   curtain(path, width, yaw, color, {sway=1, random=0, ao=1, normal=null, kind=5}={}) {
     const across=V(Math.cos(yaw),0,Math.sin(yaw)), n=normal??across.clone().cross(V(0,1,0));
-    const rows=path.map((p,j)=>[-1,1].map(side=>this.vertex(p.clone().addScaledVector(across,side*width*0.5*(1-0.35*j/(path.length-1))),n,color,kind,sway*j/(path.length-1),[(side+1)/2,1-j/(path.length-1)],path[0],random,ao)));
+    const rows=path.map((p,j)=>{
+      const t=j/(path.length-1),taper=Math.max(0.025,Math.pow(1-t,0.42));
+      return [-1,1].map(side=>this.vertex(p.clone().addScaledVector(across,side*width*0.5*taper),n,color,kind,sway*t,[(side+1)/2,1-t],path[0],random,ao));
+    });
     for(let j=1;j<rows.length;j++) {
       this.tri(rows[j-1][0],rows[j][0],rows[j-1][1]);this.tri(rows[j-1][1],rows[j][0],rows[j][1]);
     }
@@ -82,13 +85,43 @@ export class Geometry {
     const ids = outline.map(([x,y]) => this.vertex(p.clone().addScaledVector(d,length*y).addScaledVector(s,width*x), n, color, kind, sway, [x+0.5,y], p, random));
     for(let i=1;i<ids.length-1;i++) this.tri(ids[0],ids[i],ids[i+1]);
   }
-  feather(p, length, width, direction, color, flap = 0) {
+  // inferred: a narrow diamond blade is sufficient for individual willow leaves.
+  blade(p,length,width,direction,color,sway=0,roll=0) {
+    const d=direction.clone().normalize(),u=d.clone().cross(Math.abs(d.y)>0.9?V(1,0,0):V(0,1,0)).normalize().applyAxisAngle(d,roll),n=u.clone().cross(d).normalize();
+    const ids=[[0,0],[0.5,0.45],[0,1],[-0.5,0.45]].map(([x,y])=>this.vertex(p.clone().addScaledVector(d,y*length).addScaledVector(u,x*width),n,color,1,sway,[x+0.5,y],p));
+    this.tri(ids[0],ids[1],ids[2]);this.tri(ids[0],ids[2],ids[3]);
+  }
+  feather(p, length, width, direction, color, flap = 0, curved = false) {
     const d = direction.clone().normalize(), side = d.clone().cross(V(0,1,0)).normalize();
     const n = side.clone().cross(d).normalize();
+    // inferred: remiges have a cambered shaft, curled tip and a thin underside.
+    // Both surfaces carry curved normals so they retain form from beneath.
+    if(curved) {
+      for(const under of [false,true]) {
+        const rows=[];
+        for(let j=0;j<6;j++) {
+          const t=j/5,w=Math.max(0.008,Math.sin(t*Math.PI)**0.58)*width;
+          const ridge=length*(0.045*Math.sin(t*Math.PI)+0.09*t**3);
+          rows.push([-1,0,1].map(x=>{
+            const q=p.clone().addScaledVector(d,t*length).addScaledVector(side,x*w*0.5).addScaledVector(n,ridge+(under?-0.003:0)+Math.abs(x)*-width*0.1);
+            const normal=n.clone().multiplyScalar(under?-1:1).addScaledVector(side,x*0.7).addScaledVector(d,-0.12-0.2*t*t).normalize();
+            return this.vertex(q,normal,color,4,flap,[(x+1)/2,t],p,1);
+          }));
+        }
+        for(let j=1;j<6;j++)for(let k=0;k<2;k++) {
+          if(under) {
+            this.tri(rows[j-1][k],rows[j][k],rows[j-1][k+1]);this.tri(rows[j-1][k+1],rows[j][k],rows[j][k+1]);
+          } else {
+            this.tri(rows[j-1][k],rows[j-1][k+1],rows[j][k]);this.tri(rows[j-1][k+1],rows[j][k+1],rows[j][k]);
+          }
+        }
+      }
+      return;
+    }
     const center = this.vertex(p.clone().addScaledVector(d,length*0.5).addScaledVector(n,width*0.2), n, color, 4, flap, [0.5,0.5],p,1);
     const outline = [[0,0],[-0.44,0.17],[-0.5,0.72],[-0.34,0.93],[0,1],[0.34,0.93],[0.5,0.72],[0.44,0.17]];
     const ids = outline.map(([x,y]) => this.vertex(p.clone().addScaledVector(d,y*length).addScaledVector(side,x*width), n.clone().addScaledVector(side,x*0.8).normalize(), color, 4, flap, [x+0.5,y],p,1));
-    for(let i=0;i<ids.length;i++) this.tri(center,ids[i],ids[(i+1)%ids.length]);
+    for(let i=0;i<ids.length;i++) this.tri(center,ids[(i+1)%ids.length],ids[i]);
   }
   flower(p, radius, normal, color, sway, random, petals = 5) {
     const n = normal.clone().normalize(), u = n.clone().cross(Math.abs(n.y) > 0.9 ? V(1,0,0) : V(0,1,0)).normalize(), v = n.clone().cross(u);

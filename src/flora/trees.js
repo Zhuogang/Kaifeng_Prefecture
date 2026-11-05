@@ -15,52 +15,52 @@ const tint = (c, r) => c.clone().multiplyScalar(r.range(0.76, 1.15));
 const point = (r, p, spread) => p.clone().add(V(...r.sphere()).multiplyScalar(r.range(0, spread)));
 const result = (gs, height, species) => ({ lod0: gs[0].build(), lod1: gs[1].build(), lod2: gs[2].build(), height, species });
 
-export function buildWillow({ seed = 'willow', height = 9, rng = new RNG(seed) } = {}) {
+export function buildWillow({ seed = 'willow', height = 9, crownWidth = 1, rng = new RNG(seed) } = {}) {
   const wood = color('#796f54'), leaf = color('#9cae82'), h = height;
   const trunk = [V(),V(-0.035*h,0.12*h,0.02*h),V(-0.02*h,0.28*h,-0.02*h),V(0.035*h,0.43*h,0.01*h),V(0.015*h,0.51*h,0)];
   const boughs = [], whips = [];
-  for (let j = 0; j < 10; j++) {
-    const a = j * TAU / 10 + rng.range(-0.22,0.22), reach = rng.range(0.23,0.39) * h;
-    const start = trunk[3 + j % 2].clone();
-    const tip = V(Math.cos(a)*reach, h*rng.range(0.77,0.96),Math.sin(a)*reach);
-    const middle = mix(start,tip,0.55).add(V(0,h*0.09,0));
+  // inferred: pollard shoots arch outward and split into separate pendant whips.
+  // Their lengths, attachment heights and curvature vary before any LOD is built.
+  for (let j=0;j<14;j++) {
+    const a=j*2.399+rng.range(-0.28,0.28),reach=h*rng.range(0.19,0.40);
+    const start=mix(trunk[2],trunk[4],rng.range(0.35,1));
+    const tip=V(Math.cos(a)*reach*crownWidth,h*(1.12-0.7*reach/h)*rng.range(0.88,1.04),Math.sin(a)*reach*crownWidth);
+    const middle=mix(start,tip,0.55).add(V(h*rng.range(-0.03,0.03),h*0.065,h*rng.range(-0.03,0.03)));
     boughs.push([start,middle,tip]);
-    for (let k = 0; k < 32; k++) {
-      const t = rng.range(0.25,1), base = mix(middle,tip,t), angle = a + rng.range(-1.25,1.25);
-      const reach2 = h * rng.range(0.07,0.18), drop = h * rng.range(0.27,0.62);
-      const path = [];
-      for (let s = 0; s <= 8; s++) {
-        const u = s / 8;
-        path.push(base.clone().add(V(Math.cos(angle)*reach2*(1-Math.exp(-4*u)), h*0.08*Math.sin(u*Math.PI)-drop*u*u, Math.sin(angle)*reach2*(1-Math.exp(-4*u)))));
-      }
-      whips.push({ path, random: rng.random() });
+    for(let k=0;k<220;k++) {
+      const base=mix(middle,tip,rng.range(0.05,1)).add(V(rng.range(-0.045,0.045)*h,rng.range(-0.025,0.04)*h,rng.range(-0.045,0.045)*h));
+      const angle=a+rng.range(-1.7,1.7),out=h*rng.range(0.015,0.11)*Math.sqrt(crownWidth),drop=h*rng.range(0.20,0.65),curve=rng.range(0.7,1.6);
+      const path=Array.from({length:6},(_,i)=>{
+        const t=i/5,reach=out*(1-Math.exp(-4*t));
+        return base.clone().add(V(Math.cos(angle)*reach+Math.sin(t*4.7)*h*0.007,h*0.035*Math.sin(t*Math.PI)-drop*t**curve,Math.sin(angle)*reach+Math.sin(t*3.9)*h*0.005));
+      });
+      whips.push({path,random:rng.random(),width:h*rng.range(0.012,0.025),yaw:rng.range(0,TAU)});
     }
   }
-  const gs = [new Geometry(), new Geometry(), new Geometry()];
-  for (let l = 0; l < 2; l++) {
-    const g = gs[l], r = rng.fork('willow-lod'+l);
-    g.tube(trunk,[0.07,0.047,0.045,0.053,0.06].map(v=>v*h),wood,{ sides:l?7:16,gnarl:0.45,smooth:l?2:5 });
-    for (let j=0;j<7;j++) {
+  const gs=[new Geometry(),new Geometry(),new Geometry()];
+  for(let l=0;l<2;l++) {
+    const g=gs[l],r=rng.fork('willow-lod'+l);
+    g.tube(trunk,[0.07,0.047,0.045,0.053,0.049].map(v=>v*h),wood,{sides:l?7:16,gnarl:0.45,smooth:l?2:5});
+    for(let j=0;j<7;j++) {
       const a=j*TAU/7;
-      g.tube([V(Math.cos(a)*h*0.13,0.015,Math.sin(a)*h*0.13), V(Math.cos(a)*h*0.045,h*0.045,Math.sin(a)*h*0.045),trunk[0].clone().add(V(0,h*0.1,0))], [h*0.009,h*0.025,h*0.035],wood,{sides:l?4:7,gnarl:0.4});
+      g.tube([V(Math.cos(a)*h*0.13,0.015,Math.sin(a)*h*0.13),V(Math.cos(a)*h*0.045,h*0.045,Math.sin(a)*h*0.045),trunk[0].clone().add(V(0,h*0.1,0))],[h*0.009,h*0.025,h*0.035],wood,{sides:l?4:7,gnarl:0.4});
     }
-    boughs.forEach((p,j)=>{
-      g.tube(p,[h*0.022,h*0.011,h*0.0018],wood,{sides:l?5:9,gnarl:0.4});
-      if (!l) g.ellipsoid(p[0],V(h*0.035,h*0.03,h*0.032),wood,{detail:1,kind:0});
-    });
-    whips.forEach(({path,random},j)=>{
-      if (l && j%2) return;
-      const ao=0.55+0.4*random;
-      g.curtain(path,h*r.range(0.095,0.17),r.range(0,TAU),tint(leaf,r),{sway:0.8,random,ao,normal:V(path[0].x,h*0.15,path[0].z).normalize(),kind:l?5.2:5});
-      if(!l && j%3===0) g.tube(path,path.map((_,i)=>h*(0.00065-0.0006*i/8)),wood,{sides:3,smooth:1,sway:0.8});
+    boughs.forEach(p=>g.tube(p,[h*0.019,h*0.008,h*0.0012],wood,{sides:l?4:8,gnarl:0.4}));
+    whips.forEach(({path,random,width,yaw},j)=>{
+      if(l && j%2)return;
+      const normal=V(path[0].x,h*0.14,path[0].z).normalize(),ao=0.65+0.3*random,leafTint=tint(leaf,r);
+      g.curtain(path,width,yaw,leafTint,{sway:0.85,random,ao,normal,kind:l?5.2:5});
+      if(!l && j%6===0)g.curtain(path,width,yaw+Math.PI/2,leafTint,{sway:0.85,random,ao,normal,kind:5});
+      if(!l)for(let k=0;k<2;k++) {
+        const t=r.range(0.08,0.92),i=Math.min(4,Math.floor(t*5)),q=mix(path[i],path[i+1],t*5-i),a=yaw+(k?1:-1)*1.2;
+        g.blade(q,h*r.range(0.008,0.014),h*0.002,V(Math.cos(a)*0.7,-0.65,Math.sin(a)*0.7),leafTint,0.85*t,a);
+      }
     });
   }
-  const far=gs[2];
-  far.tube([trunk[0],trunk[3]],[h*0.055,h*0.04],wood,{sides:4});
-  // Ten fixed hanging sprays retain the same porous crown at long range.
-  for(let j=0;j<10;j++) {
+  const far=gs[2];far.tube([trunk[0],trunk[3]],[h*0.055,h*0.04],wood,{sides:4});
+  for(let j=0;j<4;j++) {
     const a=j*2.399;
-    far.card(V(Math.cos(a)*h*0.23,h*(0.55+0.06*Math.sin(j)),Math.sin(a)*h*0.23),h*0.46,h*0.66,V(Math.cos(a),0,Math.sin(a)),leaf,{kind:5.2,sway:0.6,random:j/10,ao:0.85});
+    far.ellipsoid(V(Math.cos(a)*h*0.19*crownWidth,h*(0.57+0.035*Math.sin(j)),Math.sin(a)*h*0.19*crownWidth),V(h*0.23*crownWidth,h*(0.29+j*0.015),h*0.23*crownWidth),leaf,{sway:0.3});
   }
   return result(gs,h,'willow');
 }

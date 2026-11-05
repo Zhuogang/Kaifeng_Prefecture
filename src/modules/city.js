@@ -3,6 +3,7 @@ import { CITY, CITY_VIEWS } from '../world/plan.js';
 import { buildHall } from '../yingzao/hall.js';
 import { GeometryBatch } from '../yingzao/geometry.js';
 import { cityTrees } from '../city/trees.js';
+import { cityLights } from '../city/lights.js';
 import { cityLayout } from '../city/layout.js';
 import { instanceHouses } from '../city/houses.js';
 import { cityMaterial, packedGeometry, mergePacked, colorGeometry, disposeHall } from '../city/batch.js';
@@ -43,7 +44,7 @@ export async function build(engine) {
   const t0=performance.now(),material=cityMaterial(engine),layout=cityLayout(engine);
   const houses=instanceHouses(engine,layout.houses,material),officeResult=offices(engine,material,layout.blocks),office=officeResult.mesh,officeShadow=officeResult.shadow;
   for(const b of layout.blocks)if(!b.outer)engine.footprints.addRect(b.x,b.z,b.hw,b.hd,0,'city-block');
-  const trees=layout.trees.filter(([x,,z],i)=>i%(Math.abs(x)<CITY.east&&z>CITY.north&&z<CITY.south?1:7)===0),rng=engine.rng('T8-field-tree-lines');
+  const trees=[...layout.trees],rng=engine.rng('T8-field-tree-lines');
   // inferred: distant rows of 槐 at field divisions. No camera-relative dressing.
   for(let i=0;i<280;i++) {
     const sign=i%2?1:-1,across=rng.range(-CITY.farmlandExtent*.8,CITY.farmlandExtent*.8);
@@ -51,8 +52,8 @@ export async function build(engine) {
     const [x,z]=i%4<2?[edge,across]:[across,edge];trees.push([x,.52,z]);
   }
   const flora=cityTrees(engine,trees);
-  const river=extendRiver(engine),fields=farmland(engine),ground=cityGround(engine);
-  const result={...houses,office,officeShadow,flora,river,fields,ground,layout,material,buildMs:Math.round(performance.now()-t0)};
+  const river=extendRiver(engine),fields=farmland(engine),ground=cityGround(engine),lights=cityLights(engine,layout,material);
+  const result={...houses,office,officeShadow,flora,river,fields,ground,lights,layout,material,buildMs:Math.round(performance.now()-t0)};
   engine.registry.city=result;
   console.log('[city] '+JSON.stringify({buildMs:result.buildMs,blocks:layout.blocks.length,houses:layout.houses.length,trees:trees.length,lods:houses.stats}));
   return result;

@@ -8,8 +8,11 @@ import { timberMaterial } from '../materials/timber.js';
 import { tileMaterial } from '../materials/tile.js';
 import { plasterMaterial } from '../materials/plaster.js';
 import { pavingMaterial } from '../materials/paving.js';
+import { paintMaterial } from '../yingzao/paint.js';
+import { bracketGeometry, bracketHeight } from '../yingzao/brackets.js';
+import { addCorridorPanels } from './corridor-panels.js';
 import { bake, matrix, instanceLods } from './instances.js';
-import { reaches, subtractGaps, northEnd, southEnd, northShoulder, southShoulder } from './layout.js';
+import { reaches, rowReaches, subtractGaps, northEnd, southEnd, northShoulder, southShoulder } from './layout.js';
 
 export function buildCorridors(engine) {
   const timber = timberMaterial(engine, { wear: 0.86 }), tile = tileMaterial(engine, { variant: 'grey' });
@@ -25,11 +28,30 @@ export function buildCorridors(engine) {
     };
     material.userData.shaderKey += ':yujie-bay-wear';
   }
-  const spec = { ...hallTestSpec('corridor'), columnHeight: P.corridor.columnHeight,
-    // inferred: outer walls protect the corridor; occasional lattice openings break the long plaster wall.
-    bayFill: { north: 'open', south: Array.from({ length: P.corridor.bays }, (_, i) => i % 4 === 1 ? 'lattice' : 'wall'),
-      east: 'open', west: 'open' } };
+  // inferred: this official 御廊 uses structural 五铺作 (two jumps), rather than
+  // the one-jump small-corridor laboratory model. All arm/block dimensions and
+  // the matching roof bearing height remain generated from 营造法式.
+  const spec = { ...hallTestSpec('corridor'), tiao: 2, columnHeight: P.corridor.columnHeight, bayFill: 'open' };
   const hall = buildHall(spec, engine, { timber, bracket: timber, tile, ridge: tile, stone: floor, plaster });
+  // Keep real public 铺作 independently instanced: selecting the shell LOD by a
+  // 32 m module centre previously hid the brackets on nearby corridor bays.
+  for(const lod of [hall.lod0,hall.lod1,hall.lod2])
+    for(const child of [...lod.children]) if(child.name.startsWith('铺作-') || child.name==='bracket') lod.remove(child);
+  // The public frame installs a solid 栱眼壁 on open elevations too. On this
+  // gallery's open north face it hides the actual inward bracket arms. Remove
+  // only that 0.16 m bearing board, identified by its source member section.
+  for(const lod of [hall.lod0,hall.lod1]) {
+    const g=lod.children.find(o=>o.name==='timber').geometry;
+    const p=g.attributes.position, size=g.attributes.memberSize, keep=[];
+    for(let i=0;i<g.index.count;i+=3) {
+      const tri=[g.index.getX(i),g.index.getX(i+1),g.index.getX(i+2)];
+      const board=tri.every(v=>Math.abs(size.getY(v)-bracketHeight(hall.layout.spec))<.00001 &&
+        Math.abs(p.getZ(v)-(-hall.layout.depth/2+.14))<.11);
+      if(!board) keep.push(...tri);
+    }
+    g.setIndex(keep);
+  }
+  addCorridorPanels(hall,{timber,plaster});
   const entries = [], modules = [];
   const localLength = hall.layout.width;
   for (const sign of [-1, 1]) for (const [a, b] of reaches)
@@ -38,7 +60,7 @@ export function buildCorridors(engine) {
       for (let i = 0; i < count; i++) {
         const x = sign * P.corridor.centerX, z = start + (i + 0.5) * length, yaw = sign * Math.PI / 2;
         const scale = length / localLength;
-        const m = matrix([x, P.surfaceY, z], yaw, [scale, 1, 1]); entries.push({ matrix: m });
+        const m = matrix([x, P.surfaceY, z], yaw, [scale, 1, 1]); entries.push({ matrix: m, yaw });
         modules.push({ x, start: start + i * length, end: start + (i + 1) * length });
         for (const obstacle of hall.footprint.obstacles) {
           const point = new THREE.Vector3(obstacle.x, 0, obstacle.z).applyMatrix4(m);
@@ -46,12 +68,39 @@ export function buildCorridors(engine) {
           else engine.footprints.addRect(point.x, point.z, obstacle.hw * scale, obstacle.hd,
             obstacle.rotation + yaw, 'yujie:corridor-wall');
         }
+        // Closed outer panels/doors; cross-street openings are supplied by the
+        // interrupted module runs and remain free of both geometry and collision.
+        const back=new THREE.Vector3(0,0,hall.layout.depth/2).applyMatrix4(m);
+        engine.footprints.addRect(back.x,back.z,localLength*scale/2,.15,yaw,'yujie:corridor-wall');
       }
     }
   // inferred: close timber at 28 m, merged structure to 140 m, then complete roof/wall silhouettes.
-  const group = instanceLods(engine, 'yujie:corridors', [bake(hall.lod0), bake(hall.lod1), bake(hall.lod2)], entries, [28, 140]);
-  console.log('[yujie] corridor prototype ' + JSON.stringify(hall.stats));
-  return { group, modules, floorY: P.surfaceY + spec.platform.height };
+  const levels=[bake(hall.lod0),bake(hall.lod1),bake(hall.lod2)];
+  const shadowBatch=new GeometryBatch();
+  for(const part of levels[1]) shadowBatch.add(part.geometry);
+  const shadowGeometry=shadowBatch.geometry();
+  const group = instanceLods(engine, 'yujie:corridors', levels, entries, [28, 140],
+    {shadowLevels:[[shadowGeometry],[shadowGeometry],[]]});
+  // inferred: subdued 碾玉装 on the official gallery's large structural brackets,
+  // kept distinct from vermilion columns so the actual rolled arms read below the eaves.
+  const paint=paintMaterial(engine,{style:'nianyu',wear:.86,tint:new THREE.Color().setRGB(1.6,1.65,1.35)}), brackets=[];
+  for(const kind of ['zhutou','bujian','zhuanjiao']) {
+    const sets=[];
+    for(const entry of entries) for(const set of hall.layout.sets.filter(s=>s.kind===kind)) {
+      const position=new THREE.Vector3(set.x,set.y,set.z).applyMatrix4(entry.matrix);
+      // Fit set positions to the gallery run without scaling the prescribed
+      // 材 sections or 72/62/92 分 arms themselves.
+      sets.push({matrix:matrix(position.toArray(),entry.yaw+set.angle)});
+    }
+    const detail=bracketGeometry(hall.layout.spec,kind), proxy=bracketGeometry({...hall.layout.spec,shadowProxy:true},kind);
+    brackets.push(instanceLods(engine,'yujie:puzuo:'+kind,
+      [[{geometry:detail,material:paint}],[{geometry:proxy,material:paint}],[]],sets,[80,140],
+      // inferred: preview bearing/roof shadows are supplied by the shell's
+      // merged structural proxy; stills additionally shadow each rolled arm.
+      {shadow:engine.quality.detail>=1,shadowLevels:[[proxy],[proxy],[]]}));
+  }
+  console.log('[yujie] corridor shells '+JSON.stringify(levels.map(parts=>parts.reduce((sum,p)=>sum+(p.geometry.index?.count??p.geometry.attributes.position.count)/3,0))));
+  return { group, brackets, modules, floorY: P.surfaceY + spec.platform.height };
 }
 
 function fenceLevels(engine, variant) {
@@ -82,7 +131,7 @@ export function buildFences(engine) {
       engine.footprints.addPath([[a[0], a[2]], [b[0], b[2]]], 0.09, 'yujie:fence:' + variant);
     };
     for (const sign of [-1, 1]) {
-      for (const [a, b] of reaches) for (const [start, end] of subtractGaps(a, b, P.crossings, P.fenceGap))
+      for (const [a, b] of rowReaches) for (const [start, end] of subtractGaps(a, b, P.crossings, P.fenceGap))
         segment([sign * x, P.surfaceY, start], [sign * x, P.surfaceY, end]);
       if (variant === 'black') {
         segment([sign * x, P.surfaceY, northShoulder], [sign * P.bridgeHalfWidth, P.bridge.north[1], northEnd]);

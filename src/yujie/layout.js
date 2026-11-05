@@ -1,8 +1,19 @@
-import { YUJIE as P } from '../world/plan.js';
+import { YUJIE as P, XUANDE } from '../world/plan.js';
 
 export const northEnd = P.bridge.north[2], southEnd = P.bridge.south[2];
 export const northShoulder = northEnd - P.approachLength, southShoulder = southEnd + P.approachLength;
 export const reaches = [[P.start, northShoulder], [southShoulder, P.end]];
+// inferred: end the planted/fenced cross-section half a gate gap clear of the
+// outermost existing 宣德楼 forecourt fence, rather than burying it in the wings.
+export const plazaEnd = Math.max(...XUANDE.wingPlatforms.map(p => p.center[2] + p.depth / 2),
+  ...XUANDE.fences.flatMap(path => path.map(p => p[2]))) + P.fenceGap / 2;
+export const rowReaches = [[plazaEnd, northShoulder], [southShoulder, P.end]];
+
+export function onXuandeStructure(x, z) {
+  return [XUANDE.platform, ...XUANDE.wingPlatforms].some(p =>
+    Math.abs(x - p.center[0]) <= p.width / 2 && Math.abs(z - p.center[2]) <= p.depth / 2) ||
+    XUANDE.stairs.some(s => Math.abs(x - s.x) <= s.width / 2 && z >= s.z - 18 && z <= s.z + s.run);
+}
 
 export function pavingLayoutGLSL(brick = false) {
   const f = value => value.toFixed(4);

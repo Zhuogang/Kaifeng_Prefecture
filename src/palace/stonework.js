@@ -6,6 +6,42 @@ import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const CHI = 0.312;
 const simplifiedRails=new Map(),modifier=new SimplifyModifier();
+let railTemplate;
+
+function template(engine) {
+  if(!railTemplate) {
+    const model=goulan(engine,{path:[[0,0,0],[7*CHI,0,0]]});
+    railTemplate=model.lod1;
+    model.lod0.traverse(o=>{if(o.isMesh)o.geometry.dispose();});
+  }
+  return railTemplate;
+}
+
+async function railPaths(engine,paths,material) {
+  const panels=[],posts=[],unit=template(engine),root=new THREE.Group();
+  for(const path of paths) {
+    for(let k=1;k<path.length;k++) {
+      const a=new THREE.Vector3(...path[k-1]),b=new THREE.Vector3(...path[k]);
+      const length=Math.hypot(b.x-a.x,b.z-a.z),n=Math.ceil(length/(7*CHI));
+      for(let i=0;i<n;i++) {
+        const p=a.clone().lerp(b,i/n),q=a.clone().lerp(b,(i+1)/n),d=q.clone().sub(p),horizontal=Math.hypot(d.x,d.z);
+        panels.push(new THREE.Matrix4().set(d.x/(7*CHI),0,-d.z/horizontal,p.x,
+          d.y/(7*CHI),1,0,p.y,d.z/(7*CHI),0,d.x/horizontal,p.z,0,0,0,1));
+        posts.push(new THREE.Matrix4().makeTranslation(p.x,p.y,p.z));
+      }
+    }
+    const a=path[0],b=path.at(-1);
+    if(new THREE.Vector3(...a).distanceTo(new THREE.Vector3(...b))>1e-6)posts.push(new THREE.Matrix4().makeTranslation(...b));
+  }
+  for(const source of unit.children) {
+    const geometry=engine.quality.detail<1?await previewRail(source.geometry,source.name):source.geometry;
+    const matrices=source.name==='rail-panels'?panels:posts;
+    const mesh=new THREE.InstancedMesh(geometry,material,matrices.length);mesh.name=source.name;
+    matrices.forEach((matrix,i)=>mesh.setMatrixAt(i,matrix));mesh.instanceMatrix.needsUpdate=true;
+    mesh.castShadow=mesh.receiveShadow=true;mesh.computeBoundingSphere();root.add(mesh);
+  }
+  return root;
+}
 
 async function previewRail(geometry,name) {
   if(!simplifiedRails.has(name))simplifiedRails.set(name,(async()=>{
@@ -60,16 +96,7 @@ export async function terrace(engine, entry, material, railMaterial, { rails = t
     [x-w/2+0.16,topY,front-0.16]]);
   root.add(stone.mesh(material, 'palace-stage-stone'));
   // Shared public API supplies 望柱, 云栱 and 华版; use its simplified relief for this large complex.
-  if (rails) for (const path of paths) {
-    const rail = goulan(engine, { path });
-    rail.lod1.traverse(o => { if (o.isMesh) o.material = railMaterial; });
-    if(engine.quality.detail<1)for(const mesh of rail.lod1.children) {
-      const original=mesh.geometry;mesh.geometry=await previewRail(original,mesh.name);original.dispose();
-      mesh.computeBoundingSphere();
-    }
-    root.add(rail.lod1);
-    rail.lod0.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
-  }
+  if (rails) root.add(await railPaths(engine,paths,railMaterial));
   return root;
 }
 
