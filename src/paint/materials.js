@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TOWERS, BRIDGE } from './composition.js';
+import { TOWERS, BRIDGE, MOORING } from './composition.js';
 import { SUN, dirFromAzEl } from '../world/plan.js';
 
 // inferred: pigment ramps, stroke fields, ragged coverage and painted occlusion
@@ -21,7 +21,15 @@ float dab(vec2 p) {
 vec3 linearColor(vec3 c) { return mix(c/12.92,pow((c+.055)/1.055,vec3(2.4)),step(vec3(.04045),c)); }
 `;
 
-export function paintMaterial(time, kind = 'stone') {
+// inferred: soft moving leaf shade, projected along the source sun direction.
+export function dappleGLSL({height=8,wind=.12,scale=[1.05,.8]}={}){
+  return `            vec2 canopy=vP.xz+(${height.toFixed(6)}-vP.y)*paintSun.xz/paintSun.y;
+            canopy+=vec2(sin(paintTime*.55+vP.z*.3),cos(paintTime*.43+vP.x*.4))*${wind.toFixed(6)};
+            float dapple=smoothstep(.42,.64,noise(canopy*vec2(${scale[0].toFixed(6)},${scale[1].toFixed(6)}))*.76+noise(canopy*3.1)*.24);
+            c=mix(c*vec3(.58,.57,.69)+linearColor(vec3(.13,.10,.19))*.04,c*vec3(1.50,1.38,1.12),dapple);`;
+}
+
+export function paintMaterial(time,kind='stone',{dapple={}}={}) {
   const code = {
     stone: `vec2 q=abs(n.y)>.65?vP.xz:vec2(abs(n.x)>.65?vP.z:vP.x,vP.y);
       variation=dab(q*vec2(2.1,5.0)+vec2(q.y*.8,0.0))*.55+dab(q*vec2(8.0,14.0))*.20;
@@ -62,47 +70,74 @@ export function paintMaterial(time, kind = 'stone') {
         float light=smoothstep(-.15,.70,dot(n,paintSun));
         ${kind === 'leaf' ? 'light=.26+.28*abs(dot(n,paintSun))+.28*noise(vP.xz*.45);' : ''}
         vec3 shadow=vC*vec3(.38,.48,.74)+linearColor(vec3(.20,.17,.29))*.35;
-        vec3 lit=vC*vec3(1.33,1.14,.86);
+        ${kind==='timber'?'if(vP.z<0.)shadow=vC*vec3(.60,.66,.82)+linearColor(vec3(.29,.23,.27))*.30;':''}
+        vec3 lit=vC*${kind==='timber'?'vec3(1.65,1.42,1.12)':'vec3(1.33,1.14,.86)'};
         vec3 c=mix(shadow,lit,light)*(1.0+variation+wash*.10);
-        ${kind === 'leaf' ? 'c=mix(c,c*vec3(.70,.96,1.13),(1.-light)*.6);' : ''}
+        ${kind === 'stone' ? `
+          // inferred: warm limestone planes; cool pigment is confined to soft cast shade.
+          shadow=vC*vec3(.50,.47,.42);lit=vC*vec3(1.20,1.10,.92);
+          c=mix(shadow,lit,light)*(1.+variation*.36+wash*.06);
+          float joint=1.-smoothstep(.006,.024,abs(mod(vP.y+.09,.66)-.33));
+          if(vP.z< -12. && abs(n.y)<.5)c*=1.-joint*.065;
+          c*=.92+.16*noise(q*vec2(5.7,8.));
+        ` : ''}
+        ${kind === 'plaster' ? `
+          shadow=vC*vec3(.70,.58,.48);lit=vC*vec3(1.60,1.35,1.00);
+          c=mix(shadow,lit,light)*(1.+variation*.32+wash*.07);
+          float course=1.-smoothstep(.008,.028,abs(mod(vP.y,.59)-.295));
+          c*=1.-course*.055;
+        ` : ''}
+        ${kind === 'leaf' ? 'c=mix(c,c*vec3(.70,.96,1.13),(1.-light)*.6);c*=.67+.63*smoothstep(.42,.76,noise(vP.xz*.45));' : ''}
         ${kind === 'roof' ? `
-          c=mix(linearColor(vec3(.29,.33,.43)),linearColor(vec3(.53,.58,.62)),light*.85);
+          c=mix(linearColor(vec3(.32,.35,.43)),linearColor(vec3(.59,.62,.64)),light*.85);
           c*=1.0+variation+wash*.18;
           float glaze=max(0.0,dab(vP.xz*vec2(4.8,1.1)+vec2(vP.z*.3,0.)));
           c+=linearColor(vec3(.66,.56,.37))*glaze*.55;
         ` : ''}
         ${kind === 'bark' ? `
           float twist=noise(q*vec2(2.0,.35));
-          float stripe=noise(vec2(q.x*13.0+twist*2.5,q.y*1.8));
+          float stripe=noise(vec2(q.x*9.0+twist*2.5,q.y*.85));
           float groove=smoothstep(.63,.82,stripe);
-          c=mix(linearColor(vec3(.22,.25,.31)),linearColor(vec3(.49,.39,.28)),light*.85+variation*.5);
+          c=mix(linearColor(vec3(.25,.22,.27)),linearColor(vec3(.56,.46,.36)),light*.85+variation*.5);
           float plane=smoothstep(.12,.87,noise(q*vec2(1.7,.35)));
-          c=mix(c*vec3(.64,.62,.90),c*vec3(1.20,1.03,.76),plane);
-          c=mix(c,linearColor(vec3(.19,.22,.26)),groove*.65);
+          c=mix(c*vec3(.53,.54,.72),c*vec3(1.35,1.16,.98),plane);
+          c=mix(c,linearColor(vec3(.15,.12,.17)),groove*.82);
           float scumble=max(0.0,dab(q*vec2(7.,2.)+vec2(twist*2.0,0.)));
-          c+=linearColor(vec3(.67,.51,.30))*scumble*1.3;
-          c+=linearColor(vec3(.48,.52,.51))*max(0.0,dab(q*vec2(19.,5.)))*.7;
+          c+=linearColor(vec3(.67,.56,.43))*scumble*3.3;
+          c+=linearColor(vec3(.36,.33,.35))*max(0.0,dab(q*vec2(19.,5.)))*.7;
         ` : ''}
-        c=mix(c*vec3(.55,.58,.76),c,clamp(vData.x,0.0,1.0));
-        ${kind === 'timber' ? 'if(vP.z>0.0){c*=mix(vec3(.48,.49,.57),vec3(1.25,1.12,.91),smoothstep(-.15,.58,vP.y));if(n.y>.6&&vP.y>.25)c*=vec3(1.23,1.14,.96);}' : ''}
-        ${kind === 'stone' ? `float bridgeY=vP.y-(${BRIDGE.fall.toFixed(6)})*vP.x,bridgeZ=vP.z-(${BRIDGE.skew.toFixed(6)})*vP.x;
+        c=mix(c*${kind==='stone'?'vec3(.64,.61,.59)':'vec3(.55,.58,.76)'},c,clamp(vData.x,0.0,1.0));
+        ${kind === 'timber' ? `if(vP.z>0.0){c*=mix(vec3(.48,.49,.57),vec3(1.25,1.12,.91),smoothstep(-.15,.58,vP.y));if(n.y>.6&&vP.y>.25)c*=vec3(1.23,1.14,.96);
+          float worn=smoothstep(.34,.72,noise(vP.xz*vec2(2.7,1.3))*.65+noise(q*vec2(2.2,9.))*.35);
+          c=mix(c*vec3(.63,.67,.74),c*vec3(1.37,1.16,.86),worn);}` : ''}
+        ${kind === 'stone' ? `float bridgeY=vP.y-(${BRIDGE.fall.toFixed(6)})*vP.x,bridgeZ=vP.z-(${BRIDGE.skew.toFixed(6)})*vP.x-(${BRIDGE.offset.toFixed(6)});
           float underDeck=(1.-smoothstep(2.1,2.95,bridgeY))*smoothstep(1.2,2.95,bridgeY)*(1.-smoothstep(-15.9,-15.4,bridgeZ));
           c=mix(c,c*vec3(.61,.68,.86),underDeck*.52);
-          float bridgeShadow=(1.-smoothstep(27.,33.,abs(vP.x)))*(1.-smoothstep(-23.0,-22.5,vP.z))*(1.-smoothstep(2.3,3.3,bridgeY));
+          // inferred: the broad front face is warm shade; the narrow sun face
+          // and chipped arris retain cream light, making each shaft read solid.
+          float shaft=(1.-smoothstep(2.85,3.1,bridgeY))*(1.-smoothstep(-15.9,-15.4,bridgeZ));
+          if(abs(n.z)>.70){float sunBreak=smoothstep(.45,.80,noise(vP.xy*vec2(1.4,.45)));c*=1.-shaft*mix(.42,.04,sunBreak);}
+          float bridgeShadow=(1.-smoothstep(27.,33.,abs(vP.x)))*(1.-smoothstep(-22.9,-22.3,bridgeZ))*(1.-smoothstep(2.3,3.3,bridgeY));
           c=mix(c,linearColor(vec3(.25,.32,.35)),bridgeShadow*.85);
+          vec3 postP=vP-vec3(${MOORING.position.map(x=>x.toFixed(6)).join(',')});
+          if(abs(postP.x)<${(MOORING.width*.6).toFixed(6)}&&abs(postP.z)<${(MOORING.width*.6).toFixed(6)}&&postP.y>0.){
+            float stain=noise(q*vec2(13.,2.9))*.7+noise(q*vec2(23.,9.))*.3;
+            c*=mix(.60,1.13,smoothstep(.26,.72,stain));
+            c+=linearColor(vec3(.65,.59,.47))*max(0.,dab(q*vec2(18.,7.)))*.25;
+          }
+          float moss=(1.-smoothstep(.08,.72,vP.y))*smoothstep(.36,.72,noise(vP.xz*3.));
+          c=mix(c,linearColor(vec3(.29,.35,.23)),moss*.52);
           if(vP.z>-7. && n.y>.5){
-            vec2 canopy=vP.xz+(8.-vP.y)*paintSun.xz/paintSun.y;
-            canopy+=vec2(sin(paintTime*.55+vP.z*.3),cos(paintTime*.43+vP.x*.4))*.12;
-            float dapple=smoothstep(.42,.64,noise(canopy*vec2(1.05,.8))*.76+noise(canopy*3.1)*.24);
-            c=mix(c*vec3(.43,.47,.74)+linearColor(vec3(.13,.10,.19))*.06,c*vec3(1.19,1.11,.88),dapple);
+            ${dappleGLSL(dapple)}
           }` : ''}
         ${['timber','plaster'].includes(kind) ? TOWERS.map(([x,z,s]) => `{
           vec3 p=(vP-vec3(${x.toFixed(6)},3.6,${z.toFixed(6)}))/${s.toFixed(6)};
           float roofShade=(1.-smoothstep(7.,9.,abs(p.x)))*(1.-smoothstep(4.5,6.5,abs(p.z)));
           roofShade*=smoothstep(6.9,8.8,p.y)*(1.-smoothstep(10.8,11.8,p.y));
           float lintelShade=(1.-smoothstep(3.2,4.4,abs(p.x)))*smoothstep(4.5,5.4,p.y)*(1.-smoothstep(6.0,6.4,p.y));
-          c=mix(c,c*vec3(.37,.46,.70),max(roofShade*.82,lintelShade*.65));
+          c=mix(c,c*vec3(.52,.56,.63),max(roofShade*.58,lintelShade*.65));
         }`).join('\n') : ''}
+        ${kind==='timber'?'if(vP.z<0.)c*=1.17;':''}
         // inferred: painted aerial wash, deliberately independent of view direction.
         float haze=smoothstep(35.0,140.0,-vP.z)*.68;
         c=mix(c,linearColor(vec3(.76,.75,.69)),haze);

@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { BRUSH } from './materials.js';
-import { BOAT } from './composition.js';
+import { BOAT, QUAY } from './composition.js';
 
 // inferred: finite curved cyclorama, horizon height and colour wash compose bd1
 // with this river. Its ends are beyond both sides of the entire camera path.
-export async function paintedSky(engine) {
+export async function paintedSky(engine,{shiftU=0}={}) {
   const source = new URL('../../assets/backdrops/bd1.jpg', import.meta.url);
   const map = await new THREE.TextureLoader().loadAsync(source.href);
   map.colorSpace = THREE.SRGBColorSpace;
@@ -34,8 +34,8 @@ export async function paintedSky(engine) {
     uniforms: { backdrop: { value: map } }, side: THREE.DoubleSide, depthWrite: false,
     vertexShader: 'varying vec2 vUv;varying float vHeight;void main(){vUv=uv;vHeight=position.y;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
     fragmentShader: `uniform sampler2D backdrop; varying vec2 vUv;varying float vHeight; ${BRUSH}
-      void main(){vec3 c=texture2D(backdrop,vUv).rgb;
-        vec3 distance=texture2D(backdrop,vec2(vUv.x,.22+(vHeight-5.)/230.)).rgb;
+      void main(){vec3 c=texture2D(backdrop,vUv+vec2(${shiftU.toFixed(6)},0.)).rgb;
+        vec3 distance=texture2D(backdrop,vec2(vUv.x+(${shiftU.toFixed(6)}),.22+(vHeight-5.)/230.)).rgb;
         distance=mix(distance,linearColor(vec3(.78,.77,.66)),.55);
         c=mix(c,distance,1.-smoothstep(3.,14.,vHeight));
         gl_FragColor=vec4(c,1.0);}`,
@@ -48,10 +48,9 @@ export async function paintedSky(engine) {
   return mesh;
 }
 
-export function paintedWater(engine, time, reflectionScene) {
-  // inferred: a 512 x 288 linear-HDR reflection. Only explicit low-detail
+export function paintedWater(engine,time,reflectionScene,{width=768,height=432,distortion=.48}={}) {
+  // inferred: a reduced-resolution linear-HDR reflection. Only explicit low-detail
   // proxies and the cyclorama enter it; no water, detailed leaves or shadow pass.
-  const width = 512, height = 288;
   const shader = {
     name: 'gouache-reflected-river',
     uniforms: { color: { value: null }, textureMatrix: { value: new THREE.Matrix4() },
@@ -83,20 +82,30 @@ export function paintedWater(engine, time, reflectionScene) {
         float fine=mix(.5,noise(q*vec2(2.4,2.1)+17.),1.-smoothstep(.5,1.5,footprint*2.4));
         float strokes=smoothstep(.36,.68,broad*.75+fine*.25);
         float sway=(noise(q*vec2(.38,.6)+vec2(paintTime*.045,0.))-.5);
-        vec2 shifted=p+vec2(sway*.45+(broad-.5)*.70,(broad-.5)*.55);
+        // inferred: coherent mirror at contact, larger broken marks in front.
+        float ripple=mix(.025,${distortion.toFixed(6)},smoothstep(-19.,10.,p.y));
+        vec2 shifted=p+vec2(sway*1.2+(broad-.5), (broad-.5)*.6)*ripple;
         vec4 projected=textureMatrix*vec4(shifted.x,-shifted.y,0.,1.);
         vec2 reflectedUV=projected.xy/projected.w;
         reflectedUV=clamp(reflectedUV,vec2(.004),vec2(.996));
-        vec3 reflected=texture2D(tDiffuse,reflectedUV).rgb*.5;
-        reflected+=(texture2D(tDiffuse,reflectedUV+vec2(.0015,0.)).rgb+texture2D(tDiffuse,reflectedUV-vec2(.0015,0.)).rgb)*.25;
-        float warmth=smoothstep(-.04,.12,reflected.r-reflected.b);
-        reflected*=mix(vec3(.72,.94,.83),vec3(.98,.95,.76),warmth);
-        vec3 body=mix(linearColor(vec3(.26,.44,.40)),linearColor(vec3(.44,.60,.54)),noise(p*.18));
-        vec3 c=mix(body,reflected,.28+strokes*.48);
-        c*=.83+strokes*.25;
-        float glint=smoothstep(.67,.86,fine)*smoothstep(.44,.72,noise(p*vec2(.37,3.7)+8.));
+        vec3 reflected=texture2D(tDiffuse,reflectedUV).rgb;
+        float warmth=smoothstep(-.025,.10,reflected.r-reflected.b);
+        reflected*=mix(vec3(.77,1.00,.83),vec3(1.13,1.01,.78),warmth);
+        vec3 body=mix(linearColor(vec3(.40,.55,.48)),linearColor(vec3(.63,.68,.54)),noise(p*.18));
+        float vermilion=smoothstep(1.25,1.7,reflected.r/max(.001,reflected.g));
+        float mirror=mix(.40+.26*strokes,.72+.20*strokes,vermilion);
+        mirror=mix(.76,mirror,smoothstep(-21.,-14.,p.y));
+        vec3 frontBody=mix(linearColor(vec3(.32,.47,.44)),linearColor(vec3(.46,.57,.50)),noise(p*.19));
+        float nearFade=smoothstep(1.,12.,p.y);
+        body=mix(body,frontBody,nearFade);
+        mirror*=1.-nearFade*.50;
+        vec3 c=mix(body,reflected,mirror);
+        // Transparent cream pigment catches the same warm sky between strokes.
+        c+=linearColor(vec3(.66,.61,.43))*(1.-strokes)*.10;
+        c*=.95+strokes*.12;
+        float glint=smoothstep(.70,.91,fine)*smoothstep(.44,.72,noise(p*vec2(.37,3.7)+8.));
         c+=linearColor(vec3(.73,.76,.61))*glint*.12;
-        float bankEdge=-13.5+(p.y+13.)*.4375;
+        float bankEdge=(${QUAY.intercept.toFixed(6)})+p.y*${QUAY.slope.toFixed(6)};
         float bankShade=exp(-max(0.,p.x-bankEdge)*.8)*smoothstep(-13.,0.,p.y);
         float boatShade=exp(-pow(along/.97,4.)-pow((across-.25)/1.75,4.));
         c=mix(c,c*vec3(.45,.62,.62),max(bankShade*.70,boatShade*.65));
@@ -111,8 +120,8 @@ export function paintedWater(engine, time, reflectionScene) {
   water.material.userData.noPatch = true; water.userData.noPatch = true;
   water.name = 'world-brushed-planar-water';
   const target = water.getRenderTarget();
-  target.texture.generateMipmaps = true;
-  target.texture.minFilter = THREE.LinearMipmapLinearFilter;
+  target.texture.generateMipmaps = false;
+  target.texture.minFilter = THREE.LinearFilter;
   const renderReflection = water.onBeforeRender;
   const state = { width, height, scene: reflectionScene, target, water, lastStats: { calls: 0, triangles: 0 } };
   water.onBeforeRender = function(renderer, scene, camera) {

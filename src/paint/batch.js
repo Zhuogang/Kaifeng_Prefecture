@@ -3,7 +3,15 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 
 const cube = new THREE.BoxGeometry();
 // inferred: broad chipped arrises catch a few warm strokes, without stone micro-detail.
-const stoneCube = new RoundedBoxGeometry(1, 1, 1, 1, .055);
+const stoneCube = new RoundedBoxGeometry(1, 1, 1, 1, .025);
+// inferred: small deterministic chips around the bevel keep broad faces flat.
+const chipPositions=stoneCube.attributes.position;
+for(let i=0;i<chipPositions.count;i++){
+  const x=chipPositions.getX(i),y=chipPositions.getY(i),z=chipPositions.getZ(i);
+  const edge=[x,y,z].filter(v=>Math.abs(v)>.46).length;
+  if(edge>1){const chip=.009*(1+Math.sin(x*117+y*83+z*137));chipPositions.setXYZ(i,x*(1-chip),y*(1-chip),z*(1-chip));}
+}
+stoneCube.computeVertexNormals();
 const up = new THREE.Vector3(0, 1, 0);
 
 // A single draw per paint family; construction coordinates survive merging.

@@ -1,22 +1,23 @@
 import * as THREE from 'three';
 import { installPaintOutput } from '../paint/materials.js';
 import { paintedSky, paintedWater } from '../paint/atmosphere.js';
+import {CAMERA,WATER,BACKDROP} from '../paint/composition.js';
 import { compose } from '../paint/scene.js';
 
-// inferred: a six metre composed dolly, matching c2's low riverside viewpoint.
+// inferred: a 3.6 metre composed dolly, matching c2's low riverside viewpoint.
 export function paintView(fraction = 0, time = 0) {
-  return { pos: [-.5 + fraction * 1.2, 5.1 - fraction * .8, 22 - fraction * Math.sqrt(36 - 1.44)],
-    target: [4.2 + fraction * .8, 2.7 - fraction * .8, -27], fov: 45, time, near: .15, far: 900 };
+  return { pos: CAMERA.pos.map((v,i)=>v+fraction*CAMERA.travel[i]),
+    target:CAMERA.target.map((v,i)=>v+fraction*(i===0?.4:i===1?-.4:0)), fov:CAMERA.fov, time, near: .15, far: 900 };
 }
 
 export async function build(engine) {
   installPaintOutput(engine);
   const time = { value: engine.time };
   engine.onUpdate(t => { time.value = t; });
-  const backdrop = await paintedSky(engine);
+  const backdrop = await paintedSky(engine,BACKDROP);
   const reflectionScene = compose(engine, time);
   reflectionScene.add(backdrop.clone());
-  paintedWater(engine, time, reflectionScene);
+  paintedWater(engine,time,reflectionScene,WATER);
   engine.registry.paint.views = [paintView(), ...Array.from({ length: 8 }, (_, i) => paintView(i / 7, i * 2))];
   if (engine.params.get('drift') === '1') {
     const render = engine.renderInteractive.bind(engine);
