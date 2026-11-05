@@ -22,7 +22,8 @@ in `docs/tasks/`.
    `refs/`, `AGENTS.md`, `.codex/`, `.git/`, the package files and `node_modules/` are read-only, and external
    network is blocked. Your home directory is throwaway. If something you need is blocked, stop and say so in your
    report. Don't look for a way around it, and if you need another package, ask.
-4. **Zero external assets.** Every runtime mesh, texture and shader is generated in code. No downloaded
+4. **Assets.** Everything is generated in code, with one exception: the client allowed painted backdrops, for sky and
+   far distance only, from `assets/backdrops/`. Buildings, water, trees and everything near stay in code. No downloaded
    models, textures, HDRIs or fonts. Reference images never load at runtime.
 5. **Composed scenes.** Scene-specific composition and dressing are allowed, and no longer need to hold from every
    angle. Judge in motion along the scene's camera path.

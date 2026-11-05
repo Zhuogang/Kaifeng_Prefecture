@@ -1,0 +1,13 @@
+# P1: 州桥, round two
+
+You keep `src/paint/` and `src/modules/paint_zhouqiao.js`, and may edit `tools/build.mjs` so that `assets/` ships in `dist/`. The first proof works as a direction: no toon look, and strokes hold in motion. Keep that, and keep budgets. Now close the gap to `refs/style/c2.png`, biggest first.
+
+1. **Use `assets/backdrops/bd1.jpg` for sky and distance.** Replace the procedural sky and flat clouds with it, on a large curved backdrop that moves with slight parallax as the camera drifts. Tone its horizon to meet the scene, with haze so the join between 3D ground or water and the painted horizon disappears. Keep the image's seam out of view on the camera path. Add loose painted mid-distance roofs and trees in 3D in front of it, so depth builds toward the towers as in `c2`.
+2. **Water is the biggest gap.** Replace the regular mosaic of dashes. In `c2`, the water is a mirror of the world broken into loose horizontal strokes: long warm reflections of the bridge columns, towers and sky, a green-teal body, lighter glints, and darker water at the near bank and under the boat. Render a real reflection cheaply, reduced resolution and low-detail geometry, then break it up with animated world-space brush strokes, wider near the camera and fine at distance. No visible repeating pattern.
+3. **Willow and trunk.** Fine, long sunlit whips with many small leaf strokes, lit yellow-green on the sun side and blue-green in shade, and with light coming through. Enough density to feel lush, with no large flat leaf shapes. The trunk has rich painted bark, with warm and violet planes and strong form. Check aliasing in motion.
+4. **Dappled light.** `c2` has broken pools of warm sun and cool violet shadow on the near paving from the tree. Add this with light that moves slightly in the wind.
+5. **Bridge and stone.** More form: individual block masses, darker recesses between columns, a light top edge, warm lit faces and violet-grey shadows. Balustrade with real rhythm. Towers need slightly richer brackets and deeper eave shadow.
+6. **Glow.** An overall luminous morning: warm light bleeding around bright sky edges, soft atmospheric depth, warm highlights.
+7. **Framing.** View 0 should match `c2` more closely: boat larger and lower in frame, bridge a long diagonal leading to the towers, and the tree framing the left. Use views 1-8 for the slow path.
+
+Same acceptance as `docs/tasks/P0-paint-proof.md`: side by side with `c2`, at least 10 rounds, biggest difference first, checked in motion. Budget ≤ 1.2 M triangles and ≤ 40 draw calls including the reflection pass. `dist/` must load the backdrop from a sub-path. Be blunt about what still falls short.

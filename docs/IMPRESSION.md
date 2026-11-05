@@ -10,4 +10,6 @@ This replaces the photoreal, historically strict city. `docs/ART_BIBLE.md` and `
 
 **What's loose.** Real positions, distances, the 312 m avenue, the flat plain, the evidence tags. Scene-specific composition is now allowed and encouraged, including objects and dressing placed for a view.
 
+**Assets.** The client allowed painted images for sky and far distance only (`assets/backdrops/`). Everything near stays in code.
+
 **The main risk.** Real brushwork in moving 3D tends to look like a toon shader, or like a paint filter sliding over the image (the "shower door" effect). Everything must be judged in motion, not only as a still.

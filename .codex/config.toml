@@ -17,6 +17,7 @@ network_proxy = true
 "docs" = "read"
 "test" = "read"
 "refs" = "read"
+"assets" = "read"
 ".gitignore" = "read"
 "package.json" = "read"
 "package-lock.json" = "read"
