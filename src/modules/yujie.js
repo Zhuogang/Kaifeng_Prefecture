@@ -68,5 +68,12 @@ export async function build(engine) {
 
 export async function test(engine) {
   await build(engine);
-  return { views: [YUJIE_VIEWS.avenue, YUJIE_VIEWS.corridor, YUJIE_VIEWS.road, YUJIE_VIEWS.aerial, YUJIE_VIEWS.canal, YUJIE_VIEWS.funnel] };
+  // inferred: normal-perspective diagnostics along the lane at the two eye
+  // heights requested in W2A. These observe the same city and paving at all ranges.
+  // Use the uninterrupted southern reach: both the 40 m and 150 m inspection
+  // distances must remain brick lane, rather than crossing the bridge funnel.
+  const laneX=P.paving.laneTrack-3, z=P.crossings[2]+40;
+  const pavingViews=[1.6,3].map(eye=>({pos:[laneX,P.surfaceY+eye,z],
+    target:[laneX,P.surfaceY+.3,z+150],fov:40,near:.05}));
+  return { views: [YUJIE_VIEWS.avenue, YUJIE_VIEWS.corridor, YUJIE_VIEWS.road, YUJIE_VIEWS.aerial, YUJIE_VIEWS.canal, YUJIE_VIEWS.funnel,...pavingViews] };
 }

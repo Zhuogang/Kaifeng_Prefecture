@@ -81,9 +81,9 @@ export function buildCorridors(engine) {
   const shadowGeometry=shadowBatch.geometry();
   const group = instanceLods(engine, 'yujie:corridors', levels, entries, [28, 140],
     {shadowLevels:[[shadowGeometry],[shadowGeometry],[]]});
-  // inferred: subdued 碾玉装 on the official gallery's large structural brackets,
-  // kept distinct from vermilion columns so the actual rolled arms read below the eaves.
-  const paint=paintMaterial(engine,{style:'nianyu',wear:.86,tint:new THREE.Color().setRGB(1.6,1.65,1.35)}), brackets=[];
+  // inferred: the official gallery uses faded 五彩遍装: red/ochre grounds
+  // with the shared paint family's softened blue-green 叠晕 at member edges.
+  const paint=paintMaterial(engine,{style:'wucai',wear:.86}), brackets=[];
   for(const kind of ['zhutou','bujian','zhuanjiao']) {
     const sets=[];
     for(const entry of entries) for(const set of hall.layout.sets.filter(s=>s.kind===kind)) {

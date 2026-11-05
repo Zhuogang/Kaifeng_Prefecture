@@ -9,13 +9,16 @@ import { rowReaches } from './layout.js';
 export function buildPlanting(engine) {
   const materials = floraMaterials(engine), rng = engine.rng('yujie:planting');
   const treeEntries = [], lotusEntries = [], petals = Object.fromEntries(P.planting.species.map(s => [s, []]));
+  // inferred: W2's denser mixed orchard uses roughly four-fifths of the
+  // original plan interval, with interlocking crowns rather than isolated tufts.
+  const spacing=P.planting.spacing*.78, jitter=Math.min(P.planting.jitter,spacing*.13);
   for (const sign of [-1, 1]) for (const [start, end] of rowReaches) {
-    for (let z = start + P.planting.spacing / 2, i = 0; z < end - 3; z += P.planting.spacing, i++) {
-      const pz = z + rng.range(-P.planting.jitter, P.planting.jitter);
+    for (let z = start + spacing / 2, i = 0; z < end - 3; z += spacing, i++) {
+      const pz = z + rng.range(-jitter,jitter);
       if (P.crossings.some(c => Math.abs(pz - c) < P.fenceGap / 2 + 2)) continue;
       const x = sign * (P.planting.centerX + rng.range(-0.8, 0.8)), species = P.planting.species[i % 4];
-      const scale = rng.range(0.83, 1.13);
-      treeEntries.push({ species, matrix: matrix([x, P.surfaceY, pz], rng.range(0, Math.PI * 2), [scale * rng.range(0.85, 1.1), scale, scale]) });
+      const scale = rng.range(0.88, 1.13), width=rng.range(1.10,1.32);
+      treeEntries.push({ species, matrix: matrix([x, P.surfaceY, pz], rng.range(0, Math.PI * 2), [scale*width, scale, scale*width]) });
       engine.footprints.addCircle(x, pz, P.planting.height * scale * 0.035, 'yujie:tree');
       // inferred: sparse windblown petals in each crown's drip line and along the adjacent canal edge.
       for (let k = 0; k < 36; k++) {
@@ -43,7 +46,7 @@ export function buildPlanting(engine) {
     // W1: retain the best available botanical mesh through at least 80 metres.
     treeGroups.push(instanceLods(engine, 'yujie:trees:' + species,
       [model.lod0, model.lod1, model.lod2].map(geometry => [{ geometry, material: materials.surface }]),
-      treeEntries.filter(t => t.species === species), [80, 180], { depth: materials.depth, flora: true, shadow: false }));
+      treeEntries.filter(t => t.species === species), [80, 320], { depth: materials.depth, flora: true, shadow: false }));
     instancePetals(engine, petals[species], { species, materials });
   }
   // inferred: one shared public blossom silhouette supplies the four species'

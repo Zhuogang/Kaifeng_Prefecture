@@ -4,20 +4,22 @@ import { GeometryBatch, profilePrism } from './geometry.js';
 // inferred: low-relief dragon, phoenix and flying-cloud drawings reconstruct the text's
 // subject matter and jinming's raised stonework. They are not traced archaeological panels.
 // A motif is eight metres wide, centred at the origin, facing +Z; all detail is real geometry.
-function ribbon(batch, points, radius, depth, detail,kind=0) {
+function ribbon(batch, points, radius, depth, detail,kind=0,steps=0) {
   const curve=new THREE.CatmullRomCurve3(points.map(([x,y,z=0])=>new THREE.Vector3(x,y,z)));
-  const n=Math.max(5,Math.ceil(points.length*(detail?0.65:0.35))), sides=detail?4:2, pos=[],idx=[];
+  const n=steps||Math.max(5,Math.ceil(points.length*(detail?0.65:0.35))), sides=detail?(kind===7?8:4):2, pos=[],idx=[],uv=[];
   for(let i=0;i<=n;i++) {
     const p=curve.getPoint(i/n),t=curve.getTangent(i/n),a=new THREE.Vector3(-t.y,t.x,0).normalize();
     for(let j=0;j<=sides;j++) {
       const angle=Math.PI*j/sides, v=p.clone().addScaledVector(a,Math.cos(angle)*radius);
-      v.z+=Math.sin(angle)*depth;pos.push(...v.toArray());
+      v.z+=Math.sin(angle)*depth;pos.push(...v.toArray());uv.push(i/n,j/sides);
     }
   }
   for(let i=0;i<n;i++)for(let j=0;j<sides;j++) {
     const a=i*(sides+1)+j,b=a+sides+1;idx.push(a,a+1,b,a+1,b+1,b);
   }
-  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();batch.add(g,undefined,{type:kind});g.dispose();
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);g.computeVertexNormals();
+  batch.add(g,undefined,{type:kind,size:[curve.getLength(),Math.PI*radius]});g.dispose();
 }
 function silhouette(batch,points,depth) {const g=profilePrism(points,depth);g.translate(0,0,depth/2);batch.add(g);g.dispose();}
 function cloud(batch,x,y,scale,detail) {
@@ -26,7 +28,7 @@ function cloud(batch,x,y,scale,detail) {
   s.bezierCurveTo(-1.0,0.65,-0.5,1.0,-0.2,0.61);s.bezierCurveTo(0.05,1.15,0.65,0.81,0.57,0.43);
   s.bezierCurveTo(1.15,0.56,1.32,-0.06,0.82,-0.25);s.bezierCurveTo(0.25,-0.6,-0.9,-0.32,-1.9,-0.45);s.closePath();
   const g=new THREE.ExtrudeGeometry(s,{depth:0.12,bevelEnabled:detail,bevelSegments:1,bevelSize:0.12,
-    bevelThickness:0.05,curveSegments:detail?3:1,steps:1});
+    bevelThickness:0.05,curveSegments:detail?4:1,steps:1});
   g.scale(scale,scale,1);g.translate(x,y,0.03);batch.add(g);g.dispose();
   if(detail){
     const pts=[];for(let k=0;k<=12;k++){const t=k/12,a=t*Math.PI*3,r=scale*(0.58-t*0.45);pts.push([x+Math.cos(a)*r,y+Math.sin(a)*r,0.16]);}
@@ -40,7 +42,7 @@ export function reliefMotif(kind='dragon',detail=true) {
   const b=new GeometryBatch();
   if(kind==='dragon') {
     const path=[];for(let i=0;i<=20;i++){const t=i/20;path.push([-2.75+t*5.25,Math.sin(t*Math.PI*3.3)*0.48]);}
-    ribbon(b,path,0.29,0.30,detail);
+    ribbon(b,path,0.29,0.30,detail,7,detail?36:0);
     silhouette(b,[[2.35,0.25],[2.63,0.44],[2.95,0.35],[3.12,0.14],[2.86,0.12],[3.03,-0.02],[2.68,-0.1],[2.47,0.06]],0.13);
     // inferred: brows, muzzle and recessed eye give the dragon a sculpted head.
     accent(b,[2.66,0.26,0.18],[0.32,0.19,0.15],0,detail);
@@ -55,10 +57,6 @@ export function reliefMotif(kind='dragon',detail=true) {
       ribbon(b,[[x,y],[x+0.35,y+sign*0.23],[x+0.18,sign*0.70],[x+0.47,sign*0.77]],0.085,0.14,detail);
       for(let j=0;j<3;j++)ribbon(b,[[x+0.4,sign*0.73],[x+0.57+j*0.12,sign*(0.80-j*0.08)]],0.018,0.06,detail);
     }
-    if(detail)for(let i=0;i<24;i++) {
-      const t=(i+0.5)/24,x=-2.65+t*4.9,y=Math.sin(t*Math.PI*3.3)*0.48;
-      ribbon(b,[[x-0.045,y-0.10,0.29],[x+0.03,y,0.31],[x-0.045,y+0.10,0.29]],0.012,0.022,false,6);
-    }
   } else {
     ribbon(b,[[-1.2,-0.1],[-0.45,-0.28],[0.24,0.02],[0.78,0.38],[1.08,0.27]],0.19,0.22,detail);
     accent(b,[-0.45,-0.06,0.12],[0.55,0.23,0.18],0,detail);
@@ -70,7 +68,7 @@ export function reliefMotif(kind='dragon',detail=true) {
     for(let k=0;k<5;k++)ribbon(b,[[-0.6,-0.15],[-1.1-k*0.25,-0.35-k*0.08],[-2.6-k*0.12,-0.1+k*0.23],[-3.2,-0.3+k*0.20]],0.13,0.16,detail);
     for(const x of [0.02,0.36])ribbon(b,[[x,-0.02],[x-0.15,-0.53],[x+0.12,-0.66]],0.025,0.06,detail);
   }
-  for(const [x,y,r]of [[-3.1,0.48,0.21],[-1.8,-0.6,0.17],[0.15,0.68,0.18],[1.55,-0.53,0.23],[3.25,0.63,0.18]])cloud(b,x,y,r,detail);
+  for(const [x,y,r]of [[-3.1,0.48,0.38],[-1.8,-0.6,0.31],[0.15,0.68,0.32],[1.55,-0.53,0.40],[3.25,0.63,0.32]])cloud(b,x,y,r,detail);
   return b.geometry();
 }
 
@@ -84,7 +82,7 @@ export function addFrieze(group,platforms,frieze,material,lod) {
       const n=Math.max(1,Math.round(span/10.5)),length=(span-0.4)/n;
       const base=new THREE.Matrix4().makeRotationY(angle).setPosition(p.center[0]+dx,frieze.centerY,p.center[2]+dz);
       for(let i=0;i<n;i++) {
-        const m=base.clone().multiply(new THREE.Matrix4().makeTranslation(-span/2+(i+0.5)*span/n,0,0.10)).multiply(shear).scale(new THREE.Vector3(length/8,frieze.height/2.05,1));
+        const m=base.clone().multiply(new THREE.Matrix4().makeTranslation(-span/2+(i+0.5)*span/n,0,0.02-(frieze.recess??0))).multiply(shear).scale(new THREE.Vector3(length/8,frieze.height/2.05,1));
         entries[i%2].push(m);
       }
     }

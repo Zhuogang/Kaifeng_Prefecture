@@ -21,18 +21,22 @@ export function cityLayout(engine) {
     });return pieces;
   }
   function divisions(a,b,size) {
-    const n=Math.max(1,Math.round((b-a)/size)),weights=Array.from({length:n},()=>rng.range(.78,1.25));
+    const n=Math.max(1,Math.round((b-a)/size)),weights=Array.from({length:n},()=>rng.range(.65,1.4));
     const total=weights.reduce((s,v)=>s+v,0),out=[a];
     for(const v of weights)out.push(out.at(-1)+(b-a)*v/total);return out;
   }
   function fill(ax,bx,az,bz,outer) {
     blocks.push({x:(ax+bx)/2,z:(az+bz)/2,hw:(bx-ax)/2,hd:(bz-az)/2,outer});
     const rows=divisions(az,bz,outer?f.outerCourtDepth:f.courtDepth);
-    const blockYaw=rng.range(-.12,.12);
+    const blockYaw=rng.range(-.18,.18);
     for(let j=1;j<rows.length;j++) {
       const columns=divisions(ax,bx,(outer?f.outerCourtWidth:f.courtWidth)*rng.range(.88,1.17));
       for(let i=1;i<columns.length;i++) {
-        const w=columns[i]-columns[i-1],d=rows[j]-rows[j-1],cx=(columns[i]+columns[i-1])/2,cz=(rows[j]+rows[j-1])/2;
+        // inferred: occasional joined parcels form larger compounds. Their main
+        // ranges remain separate buildings rather than stretching a five-bay hall.
+        const left=columns[i-1],large=i<columns.length-1&&rng.chance(.09);
+        if(large)i++;
+        const w=columns[i]-left,d=rows[j]-rows[j-1],cx=(columns[i]+left)/2,cz=(rows[j]+rows[j-1])/2;
         const turned=rng.chance(.24),cw=turned?d:w,cd=turned?w:d;
         const yaw=blockYaw+rng.range(-.018,.018)+(turned?Math.PI/2:0),two=rng.chance(.23),height=rng.range(.9,1.13),tint=rng.range(.78,1.14);
         const north=cd*rng.range(f.northDepth-.025,f.northDepth+.025),south=cd*f.southDepth;
@@ -51,11 +55,12 @@ export function cityLayout(engine) {
           houses.push({position,scale,yaw:yaw+angle,tint:rng.range(.93,1.07)*tint,outer,two:upper,storey:upper?3.1:0,
             roofWidth:scale[0]*f.roofHalfWidth*2,roofDepth:scale[2]*f.roofHalfDepth*2});
         };
-        add(0,-cd/2+north/2,cw*f.roofFraction,north,0);
+        if(cw>34)for(const sign of [-1,1])add(sign*cw*.25,-cd/2+north/2+rng.range(-.5,.5),cw*.49,north,0);
+        else add(0,-cd/2+north/2,cw*f.roofFraction,north,0);
         add(0,cd/2-south/2,cw*f.roofFraction,south,0,rng.chance(.12));
         add(-cw/2+wing/2,(north-south)/2,depth,wing,Math.PI/2,false);
         add(cw/2-wing/2,(north-south)/2,depth,wing,Math.PI/2,rng.chance(.12));
-        courts.push({x:cx,z:cz,width:w,depth:d,outer});
+        courts.push({x:cx,z:cz,width:w,depth:d,outer,large});
         // Clumps favour occasional larger yards instead of a regular tree per lot.
         if(rng.chance(.085)) {
           const count=rng.chance(.35)?3:1;
@@ -65,16 +70,22 @@ export function cityLayout(engine) {
     }
   }
   function district(x0,x1,z0,z1,outer) {
+    // inferred: only the named cross streets continue across a district. Minor
+    // lanes terminate at staggered junctions; successive bands shift their lanes.
+    // Previously every block shared a row boundary, producing kilometre-long rows.
     for(let z=z0;z<z1;) {
-      let end=Math.min(z1,z+rng.range(85,175));
-      const cross=openings.find(v=>v>z+20&&v<end+10);if(cross!==undefined)end=cross-5;
-      if(end-z<25){z+=24;continue;}
+      let end=Math.min(z1,z+rng.range(280,480));
+      const cross=openings.find(v=>v+5>z&&v-5<end);
+      if(cross!==undefined)end=Math.max(z,cross-5);
       for(let x=x0;x<x1;) {
         const right=Math.min(x1,x+rng.range(85,185)),lane=f.lane*rng.range(.7,1.3);
-        for(const piece of available(x+lane/2,right-lane/2,z+lane/2,end-lane/2))fill(...piece,outer);
+        const rows=divisions(z,end,rng.range(85,175));
+        for(let row=1;row<rows.length;row++) {
+          for(const piece of available(x+lane/2,right-lane/2,rows[row-1]+lane/2,rows[row]-lane/2))fill(...piece,outer);
+        }
         x=right;
       }
-      z=end+(cross!==undefined&&Math.abs(end-(cross-5))<.1?10:rng.range(2.4,5.2));
+      z=cross!==undefined?cross+5:end+f.lane;
     }
   }
   district(-p.east,p.east,p.north,p.south,false);

@@ -17,6 +17,8 @@ import { addCranes } from './cranes.js';
 
 const matrix = (position, angle = 0) => new THREE.Matrix4().makeRotationY(angle).setPosition(...position);
 const rect = (x0,x1,z0,z1) => [[x0,z0],[x1,z0],[x1,z1],[x0,z1]];
+// inferred: a 0.12 m cut stone field gives the sculpted frieze a real recessed background.
+const friezeRecess=0.12;
 
 // Eight corners define battered masonry, including straight tapering gate reveals.
 function block(batch, bottom, top, y0, y1) {
@@ -31,10 +33,16 @@ function block(batch, bottom, top, y0, y1) {
   g.setIndex(idx);g.computeVertexNormals();batch.add(g);g.dispose();
 }
 
-function platform(batch, p, openings = null) {
+function platform(batch, p, openings = null, bed = batch) {
   const [x,,z]=p.center, w=p.width/2,d=p.depth/2, h=p.height,b=p.batter;
-  const corners=(y,l=-w,r=w)=>rect(x+l+(l===-w?b*y:0),x+r-(r===w?b*y:0),z-d+b*y,z+d-b*y);
-  if(!openings) { block(batch,corners(0),corners(h),0,h);return; }
+  const corners=(y,l=-w,r=w,inset=0)=>rect(x+l+(l===-w?b*y+inset:0),x+r-(r===w?b*y+inset:0),z-d+b*y+inset,z+d-b*y-inset);
+  const upper=start=>{
+    const y0=P.frieze.centerY-P.frieze.height/2,y1=P.frieze.centerY+P.frieze.height/2;
+    block(batch,corners(start),corners(y0),start,y0);
+    block(bed,corners(y0,-w,w,friezeRecess),corners(y1,-w,w,friezeRecess),y0,y1);
+    block(batch,corners(y1),corners(h),y1,h);
+  };
+  if(!openings) { upper(0);return; }
   let left=-w;
   for(let i=0;i<=openings.centers.length;i++) {
     const right=i===openings.centers.length?w:openings.centers[i]-openings.width/2;
@@ -43,7 +51,7 @@ function platform(batch, p, openings = null) {
     block(batch,corners(0,left,right),corners(openings.height,topLeft,topRight),0,openings.height);
     left=i===openings.centers.length?w:openings.centers[i]+openings.width/2;
   }
-  block(batch,corners(openings.height),corners(h),openings.height,h);
+  upper(openings.height);
 }
 
 function railing(batch,path,height=1.15,detail=true) {
@@ -154,8 +162,8 @@ function wall(batches, lod) {
 function structure(mats,lod) {
   const group=new THREE.Group();group.name=`xuande-masonry-LOD${lod}`;
   const batches=Object.fromEntries(Object.keys(mats).map(k=>[k,new GeometryBatch()]));
-  platform(batches.masonry,P.platform,P.doors);
-  for(const p of P.wingPlatforms)platform(batches.masonry,p);
+  platform(batches.masonry,P.platform,P.doors,batches.reliefBed);
+  for(const p of P.wingPlatforms)platform(batches.masonry,p,null,batches.reliefBed);
   for(const p of [P.platform,...P.wingPlatforms]) {
     batches.paving.box([p.center[0],p.height+0.018,p.center[2]],[p.width-p.batter*p.height*2,0.035,p.depth-p.batter*p.height*2]);
     // inferred: stone cap and lime course crown the battered platform.
@@ -191,13 +199,15 @@ function structure(mats,lod) {
       }
     }
     const fr=P.frieze;
-    for(const p of [P.platform,...P.wingPlatforms])for(const sign of [-1,1]) {
-      const z=p.center[2]+sign*(p.depth/2-p.batter*fr.centerY);
-      batches.reliefBed.box([p.center[0],fr.centerY,z],[p.width-2,fr.height,0.10]);
-      for(const y of [fr.centerY-fr.height/2,fr.centerY+fr.height/2])batches.carving.box([p.center[0],y,z+sign*0.04],[p.width-1.8,0.12,0.20]);
+    for(const p of [P.platform,...P.wingPlatforms])for(const y of [fr.centerY-fr.height/2,fr.centerY+fr.height/2]) {
+      const halfW=p.width/2-p.batter*y,halfD=p.depth/2-p.batter*y;
+      for(const sign of [-1,1]){
+        batches.carving.box([p.center[0],y,p.center[2]+sign*(halfD+0.025)],[halfW*2,0.12,0.16]);
+        batches.carving.box([p.center[0]+sign*(halfW+0.025),y,p.center[2]],[0.16,0.12,halfD*2]);
+      }
     }
   }
-  addFrieze(group,[P.platform,...P.wingPlatforms],P.frieze,mats.carving,lod);
+  addFrieze(group,[P.platform,...P.wingPlatforms],{...P.frieze,recess:friezeRecess},mats.carving,lod);
   for(const [name,batch]of Object.entries(batches))if(batch.indices.length)group.add(batch.mesh(mats[name],name));
   return group;
 }
@@ -220,11 +230,21 @@ function materials(engine) {
       float n=t2Fbm(cgP*3.0+t2Variation);
       t2Albedo=mix(vec3(0.19,0.185,0.165),vec3(0.34,0.325,0.28),n);
       t2Rough=0.94;t2Height=(n-0.5)*0.003;
-      float groove=step(5.5,vReliefKind);
+      float groove=step(5.5,vReliefKind)*(1.0-step(6.5,vReliefKind));
       t2Albedo*=mix(1.0,0.48,groove);t2Occlusion=mix(0.92,0.55,groove);
       t2Height+=(n-0.5)*0.001;
-    `,{vertexHead:'attribute float memberType; varying float vReliefKind;',
-      vertexPre:'vReliefKind=memberType;',head:'varying float vReliefKind;',attributes:{memberType:[0]}}),
+      if(vReliefKind>6.5){
+        // inferred: small staggered scales are incised into the body, not dark oversized
+        // ribbons floating above it. Physical coordinates follow the curved stone surface.
+        vec2 cell=vCarveUV*vCarveSize/vec2(0.09,0.07);
+        float row=floor(cell.y);vec2 q=vec2(fract(cell.x+mod(row,2.0)*0.5)-0.5,fract(cell.y)-0.1)*vec2(0.09,0.07);
+        float visible=1.0-smoothstep(0.35,1.2,max(fwidth(cell.x),fwidth(cell.y)));
+        float incision=t2Line(length(q)-0.047,0.0018)*visible;
+        t2Albedo*=1.0-incision*0.24;t2Height-=incision*0.0015;t2Occlusion-=incision*0.04;
+      }
+    `,{vertexHead:'attribute float memberType; attribute vec2 memberUV,memberSize; varying float vReliefKind; varying vec2 vCarveUV,vCarveSize;',
+      vertexPre:'vReliefKind=memberType;vCarveUV=memberUV;vCarveSize=memberSize;',
+      head:'varying float vReliefKind;varying vec2 vCarveUV,vCarveSize;',attributes:{memberType:[0],memberUV:[0.5,0.5],memberSize:[1,1]}}),
     gold:metalMaterial(engine,{wear:0.7}),iron:metalMaterial(engine,{variant:'iron'}),
     tile:tileMaterial(engine,{wear:0.7}),ridge:tileMaterial(engine,{ribbed:false,wear:0.8}),
   };

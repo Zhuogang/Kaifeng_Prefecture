@@ -25,8 +25,8 @@ export class GeometryBatch {
       v.fromBufferAttribute(n, i).applyMatrix3(normalMatrix).normalize(); this.normals.push(v.x, v.y, v.z);
       this.uvs.push(uv ? uv.getX(i) : 0, uv ? uv.getY(i) : 0);
       const tex = uv ? [uv.getX(i), uv.getY(i)] : [0.5, 0.5];
-      const defaults = { memberUV: member.uvAt ? member.uvAt(p.getX(i), p.getY(i), p.getZ(i)) : tex,
-        memberSize: member.size || [1, 0.25], memberType: [member.type || 0], memberEdge: [-1],
+      const defaults = { memberUV: member.uvAt ? member.uvAt(p.getX(i), p.getY(i), p.getZ(i), i) : tex,
+        memberSize: member.sizeAt ? member.sizeAt(i) : member.size || [1, 0.25], memberType: [member.type || 0], memberEdge: [-1],
         tileCoord: [tex[0] / 0.26, tex[1] / 0.35, 0, 0] };
       for (const [key, data] of Object.entries(this.attributes)) {
         const source = geometry.getAttribute(key);
@@ -39,7 +39,9 @@ export class GeometryBatch {
   }
   box(center, size, angle = 0, type = 0) {
     this.add(box, new THREE.Matrix4().compose(new THREE.Vector3(...center),
-      new THREE.Quaternion().setFromAxisAngle(up, angle), new THREE.Vector3(...size)), { type, size: [size[0], size[1]] });
+      new THREE.Quaternion().setFromAxisAngle(up, angle), new THREE.Vector3(...size)), { type,
+      sizeAt: i => Math.abs(box.attributes.normal.getX(i)) > 0.5 ? [size[2],size[1]] :
+        Math.abs(box.attributes.normal.getY(i)) > 0.5 ? [size[0],size[2]] : [size[0],size[1]] });
   }
   beam(a, b, width, depth = width, round = 0, capped = true) {
     const va = new THREE.Vector3(...a), vb = new THREE.Vector3(...b), delta = vb.clone().sub(va);
@@ -47,9 +49,14 @@ export class GeometryBatch {
     const q = across.lengthSq() < 1e-8 ? new THREE.Quaternion().setFromUnitVectors(up, direction)
       : new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(across.normalize(), direction,
         new THREE.Vector3().crossVectors(across, direction).normalize()));
-    this.add(round ? cylinder(round, capped) : box, new THREE.Matrix4().compose(va.add(vb).multiplyScalar(0.5), q,
+    const g=round ? cylinder(round, capped) : box;
+    this.add(g, new THREE.Matrix4().compose(va.add(vb).multiplyScalar(0.5), q,
       new THREE.Vector3(round ? width / 2 : width, delta.length(), round ? width / 2 : depth)),
-      { size: [delta.length(), depth || width], uvAt: (x, y, z) => [y + 0.5, (Math.abs(x) < 0.499 ? x : z) + 0.5] });
+      round ? {sizeAt:i=>Math.abs(g.attributes.normal.getY(i))>0.5 ? [width,width] : [Math.PI*width,delta.length()]} : {
+        sizeAt: i => Math.abs(g.attributes.normal.getY(i)) > 0.5 ? [width,depth] :
+          [delta.length(),Math.abs(g.attributes.normal.getX(i)) > 0.5 ? depth : width],
+        uvAt: (x,y,z,i) => Math.abs(g.attributes.normal.getY(i)) > 0.5 ? [x+0.5,z+0.5] :
+          [y+0.5,(Math.abs(g.attributes.normal.getX(i)) > 0.5 ? z : x)+0.5] });
   }
   geometry() {
     const g = new THREE.BufferGeometry();
@@ -73,9 +80,38 @@ export function profilePrism(points, depth) {
   const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, steps: 1, curveSegments: 1 });
   g.translate(0, 0, -depth / 2);
   g.computeBoundingBox();
-  const b = g.boundingBox, p = g.attributes.position, uv = g.attributes.uv;
-  for (let i = 0; i < p.count; i++) uv.setXY(i, (p.getX(i) - b.min.x) / Math.max(0.001, b.max.x - b.min.x),
-    (p.getY(i) - b.min.y) / Math.max(0.001, b.max.y - b.min.y));
+  const b = g.boundingBox, p = g.attributes.position, uv = g.attributes.uv, normal=g.attributes.normal;
+  const width=b.max.x-b.min.x,height=b.max.y-b.min.y,segments=[];
+  let perimeter=0;
+  for(let j=0;j<points.length;j++) {
+    const a=points[j],b=points[(j+1)%points.length],dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy);
+    if(length>1e-8){segments.push({a,dx,dy,length,start:perimeter});perimeter+=length;}
+  }
+  const sizes=new Float32Array(p.count*2);
+  for (let i = 0; i < p.count; i++) {
+    const x=p.getX(i),y=p.getY(i);
+    if(Math.abs(normal.getZ(i))>0.5) {
+      // Keep affine face coordinates: warping every contour vertex to the UV border
+      // would collapse triangles made from three curved-boundary vertices.
+      uv.setXY(i,(x-b.min.x)/Math.max(0.001,width),
+        (y-b.min.y)/Math.max(0.001,height));
+      sizes.set([width,height],i*2);
+    } else {
+      // Unwrap the narrow extrusion sides by perimeter and depth. X/Y projection collapsed
+      // their UV area to zero, making the paint shader classify whole faces as edge bands.
+      let best=Infinity,u=0;
+      for(const s of segments){
+        const t=Math.max(0,Math.min(1,((x-s.a[0])*s.dx+(y-s.a[1])*s.dy)/(s.length*s.length)));
+        const distance=Math.hypot(x-s.a[0]-t*s.dx,y-s.a[1]-t*s.dy);
+        // A corner has two candidates: choose the segment tangent to this particular face.
+        const alignment=Math.abs(normal.getX(i)*s.dx+normal.getY(i)*s.dy)/s.length;
+        const score=distance+alignment;
+        if(score<best){best=score;u=(s.start+t*s.length)/perimeter;}
+      }
+      uv.setXY(i,u,(p.getZ(i)+depth/2)/depth);sizes.set([perimeter,depth],i*2);
+    }
+  }
+  g.setAttribute('memberSize',new THREE.BufferAttribute(sizes,2));
   return g;
 }
 

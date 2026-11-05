@@ -21,6 +21,18 @@ export function houseRoof(hall,level) {
       indices.push(a,c,b,b,c,d);
     }
   }
+  if(level<3) {
+    // inferred: a modest grey capped ridge survives the middle-distance LOD.
+    // Its two lit/shadow faces join the real roof; no screen-space ridge lines.
+    const y=model.baseY+model.sectionY(0)+.10;
+    for(const side of [-1,1]) {
+      const start=pos.length/3;
+      for(const [x,dy,z] of [[-f.roofHalfWidth,0,side*.14],[f.roofHalfWidth,0,side*.14],[-f.roofHalfWidth,.18,0],[f.roofHalfWidth,.18,0]]) {
+        pos.push(x,y+dy,z);uv.push(x/.26,Math.abs(z)/.35);
+      }
+      for(const i of side>0?[0,1,2,1,3,2]:[0,2,1,1,2,3])indices.push(start+i);
+    }
+  }
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
   g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();
   const roof=colorGeometry(g,new THREE.Color().setRGB(.12,.135,.145),2);g.dispose();return roof;

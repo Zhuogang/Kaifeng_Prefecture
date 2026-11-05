@@ -23,7 +23,9 @@ export function pavingLayoutGLSL(brick = false) {
     float wheel=${brick ? `abs(across-${f(P.paving.laneTrack)})` : `min(abs(across-${f(a)}),abs(across-${f(b)}))`}-${f(P.paving.axleHalf)};
     float drain=across-${f(brick ? P.section.bank + P.paving.laneDrainOffset : P.section.road - P.paving.roadDrainInset)};
     if(across>${f(P.section.blackFence)}) { wheel=100000.0; drain=100000.0; }
-    return vec4(p.x,p.z,wheel,drain);
+    // inferred: lane courses run along the avenue, consistent with 卷十五
+    // 露道's longitudinal edge courses; the imperial slabs remain transverse.
+    return vec4(${brick ? 'p.z,p.x' : 'p.x,p.z'},wheel,drain);
   }`;
 }
 

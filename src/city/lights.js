@@ -17,12 +17,14 @@ export function cityLights(engine,layout,material) {
     fixtures.push({position:[sign*(YUJIE.corridor.centerX-p.corridorInset),floor+p.lanternHeight,z],floor,
       mountY:floor+YUJIE.corridor.columnHeight+1.4,pool:true});
   }
-  // Both real wing galleries receive the same hanging lamps and local light.
-  for(const wing of XUANDE.wings)for(const [dx,dy,dz] of p.galleryOffsets) {
-    const position=[wing.position[0]+Math.sign(wing.position[0])*dx,wing.position[1]+dy,wing.position[2]+dz];
-    fixtures.push({position,floor:wing.position[1]+.04,mountY:wing.position[1]+wing.columnHeight+bracketHeight(wing),pool:false});
+  // inferred: both real wing galleries and their forward pavilions receive
+  // permanent hanging lamps. Mount heights follow each actual hall's brackets.
+  for(const [halls,offsets,intensity]of [[XUANDE.wings,p.galleryOffsets,p.galleryIntensity],
+    [XUANDE.towers,p.pavilionOffsets,p.pavilionIntensity]])for(const hall of halls)for(const [dx,dy,dz]of offsets) {
+    const position=[hall.position[0]+Math.sign(hall.position[0])*dx,hall.position[1]+dy,hall.position[2]+dz];
+    fixtures.push({position,floor:hall.position[1]+.04,mountY:hall.position[1]+hall.columnHeight+bracketHeight(hall),pool:false});
     const light=new THREE.PointLight(0xffb16a,0,14,2);light.position.set(...position);light.castShadow=false;group.add(light);
-    light.userData.nightIntensity=p.galleryIntensity;
+    light.userData.nightIntensity=intensity;
   }
   for(const o of CITY.offices)for(const sign of [-1,1])fixtures.push({position:[o.position[0]+sign*3,CITY.surfaceY+2.8,o.position[2]+27],floor:CITY.surfaceY,mountY:CITY.surfaceY+3.4,pool:true});
   for(const f of fixtures) {

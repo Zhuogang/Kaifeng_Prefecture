@@ -223,8 +223,10 @@ export const CITY = {
     lane:3.4, roofFraction:.97, northDepth:.35, southDepth:.30, wingDepth:.33,
     roofHalfWidth:7.8808, roofHalfDepth:4.3164, cornerLift:.12},
   lighting: {corridorSpacing:16, corridorInset:1.4, lanternHeight:2.7,
-    galleryOffsets:[[-4.2,3.1,-8],[-4.2,3.1,8]],galleryIntensity:85,
-    evidence:'inferred',source:'W1 city: permanent hanging lanterns and warm gallery spill, lit only at bluehour'},
+    // inferred: one permanent lamp every two gallery bays, on both wings.
+    galleryOffsets:[-18,-6,6,18].map(z=>[-4.2,3.1,z]),galleryIntensity:55,
+    pavilionOffsets:[[-6.4,3.1,0]],pavilionIntensity:20,
+    evidence:'inferred',source:'W1/W2C city: permanent hanging lanterns and warm gallery spill, lit only at bluehour'},
   evidence: 'inferred', source: 'T8: inner city approximately x ±1400, z ±1300, outer city to 4 km; ART_BIBLE avenue/palace reservations',
   offices: [
     {name:'明堂颁朔布政府',position:[-228,0,112],halfWidth:48,halfDepth:46},
@@ -256,9 +258,12 @@ export const TIETA = {
   profile:{baseRadius:4.8,topRadius:2.1,baseHeight:.6,firstStorey:5,storey:3.5,eaveProjection:.86},
 };
 export const CITY_VIEWS = {
-  aerial:{pos:[150,300,300],target:[180,20,-350],fov:75,near:.5},
-  gallery:{pos:[47.4,13.7,25],target:[80,3,750],fov:78,near:.1,time:'bluehour'},
+  aerial:{pos:[250,170,300],target:[100,0,-150],fov:75,near:.5,time:'morning'},
+  // inferred: the actual wing walk is 12 m high. Stand beside its inner rail,
+  // clear of the forward pavilion's wall, with its eave to the left, looking
+  // slightly east of south along 御街. The centre ray passes west of the pavilion.
+  gallery:{pos:[43.35,14.1,40],target:[75,2,350],fov:82,near:.1,time:'bluehour'},
   avenue:{pos:[-120,YUJIE.surfaceY+1.6,690],target:[270,7,820],fov:62,near:.1},
   roofs:{pos:[630,200,780],target:[270,0,180],fov:57,near:.1},
-  evidence:'inferred',source:'T8: 300 m aerial and gallery validation framings; no content consumes these cameras',
+  evidence:'inferred',source:'W2C: 170 m aerial and unobstructed east gallery validation framings; no content consumes these cameras',
 };

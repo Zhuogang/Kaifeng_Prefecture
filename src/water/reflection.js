@@ -41,16 +41,60 @@ export class RiverReflection {
     this.sun=new THREE.DirectionalLight();this.scene.add(this.sun,this.sun.target);
     this.sky=engine.sky.clone();this.sky.castShadow=false;this.scene.add(this.sky);
     this.sources=[];this.dirty=true;this.materials=new Map();this.geometry=new THREE.Group();this.scene.add(this.geometry);
+    this.occlusionUniforms={reflectionDeck:{value:new THREE.Vector4(0,1,0,0)},reflectionCamber:{value:0},
+      reflectionDeckOn:{value:0},reflectionSun:{value:SUN.dir}};
     this.key='';this.renders=0;this.lastStats={calls:0,triangles:0};
   }
   register(root){this.sources.push(root);this.dirty=true;}
+  setDeckOccluder({halfWidth,halfSpan,centerZ,baseY,camber}) {
+    this.occlusionUniforms.reflectionDeck.value.set(halfWidth,halfSpan,centerZ,baseY);
+    this.occlusionUniforms.reflectionCamber.value=camber;this.occlusionUniforms.reflectionDeckOn.value=1;
+    this.key='';
+  }
   reflectionMaterial(source) {
     if(this.materials.has(source))return this.materials.get(source);
-    const material=source.clone();material.onBeforeCompile=source.onBeforeCompile;
+    const material=source.clone();
+    material.onBeforeCompile=(shader,renderer)=>{
+      source.onBeforeCompile.call(material,shader,renderer);
+      Object.assign(shader.uniforms,this.occlusionUniforms);
+      // The cheap pass has no shadow maps. Intersect the live sun ray with the actual
+      // cambered deck instead of illuminating reflected piers through solid stone.
+      shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>
+        uniform vec4 reflectionDeck;uniform float reflectionCamber,reflectionDeckOn;uniform vec3 reflectionSun;
+        float deckCornerAngle(float x,float z,float h) {
+          return atan(x*z,h*sqrt(x*x+z*z+h*h));
+        }
+        float riverDeckSkyVisibility(vec3 p) {
+          if(reflectionDeckOn<0.5||p.y>=reflectionDeck.w+reflectionCamber)return 1.0;
+          float h=max(0.015,reflectionDeck.w+reflectionCamber-p.y);
+          vec2 a=vec2(-reflectionDeck.x,-reflectionDeck.y)-vec2(p.x,p.z-reflectionDeck.z);
+          vec2 b=vec2(reflectionDeck.x,reflectionDeck.y)-vec2(p.x,p.z-reflectionDeck.z);
+          float omega=deckCornerAngle(b.x,b.y,h)-deckCornerAngle(a.x,b.y,h)
+            -deckCornerAngle(b.x,a.y,h)+deckCornerAngle(a.x,a.y,h);
+          // inferred: hemispheric fill visibility from the deck's solid angle; the
+          // reflection pass cannot rely on the main screen's ambient-occlusion pass.
+          return 1.0-0.75*clamp(omega/6.2831853,0.0,1.0);
+        }
+        float riverDeckVisibility(vec3 p) {
+          if(reflectionDeckOn<0.5||reflectionSun.y<=0.01||p.y>=reflectionDeck.w+reflectionCamber)return 1.0;
+          float t=(reflectionDeck.w+reflectionCamber-p.y)/reflectionSun.y;
+          vec3 hit=p+reflectionSun*t;
+          float u=(hit.z-reflectionDeck.z)/reflectionDeck.y;
+          float y=reflectionDeck.w+reflectionCamber*max(0.0,1.0-u*u);
+          t=(y-p.y)/reflectionSun.y;hit=p+reflectionSun*t;
+          vec2 inset=reflectionDeck.xy-abs(vec2(hit.x,hit.z-reflectionDeck.z));
+          return 1.0-smoothstep(0.0,0.04,min(inset.x,inset.y))*step(0.0,t);
+        }`)
+        .replace('#include <lights_fragment_end>',`#include <lights_fragment_end>
+          float deckVisibility=riverDeckVisibility(cgP);
+          reflectedLight.directDiffuse*=deckVisibility;reflectedLight.directSpecular*=deckVisibility;
+          float deckSky=riverDeckSkyVisibility(cgP);
+          reflectedLight.indirectDiffuse*=deckSky;reflectedLight.indirectSpecular*=deckSky;`);
+    };
     material.defaultAttributeValues=source.defaultAttributeValues;
     material.defines={...source.defines};
     for(const key of ['USE_CSM','CSM_CASCADES','CSM_FADE'])delete material.defines[key];
-    material.customProgramCacheKey=()=>`${source.userData.shaderKey||source.type}:river-reflection-no-shadows`;
+    material.customProgramCacheKey=()=>`${source.userData.shaderKey||source.type}:river-reflection-no-shadows-deck-occlusion`;
     material.needsUpdate=true;this.materials.set(source,material);return material;
   }
   bake() {

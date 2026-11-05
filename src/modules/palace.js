@@ -13,18 +13,19 @@ import { paintMaterial } from '../yingzao/paint.js';
 import { surfaceMaterial } from '../materials/shared.js';
 import { bake, placed, previewShadowProxy, PlanarLOD, roofVolume, palaceStats } from '../palace/batch.js';
 import { terrace, terraceGround, terraceCollision } from '../palace/stonework.js';
-import { courtStone, courtMist } from '../palace/surfaces.js';
+import { courtStone } from '../palace/surfaces.js';
+import { buildCourtMist } from '../palace/mist.js';
 
 function materials(engine) {
   // inferred: surface wear and deterministic material variation for a maintained palace in use.
   return {
     timber: timberMaterial(engine, { baseY: P.groundY, wear: 0.8, variation: 27 }),
-    // inferred: pale 碾玉装 on structural brackets separates their rolled edges from vermilion bearing boards.
-    bracket: paintMaterial(engine, { style: 'nianyu', wear: 0.35, variation: 27, tint:new THREE.Color(1.6,1.75,1.8) }),
+    // Use the shared painted-timber palette without the old cyan multiplier.
+    bracket: paintMaterial(engine, { style: 'wucai', wear: 0.55, variation: 27 }),
     stone: stoneMaterial(engine, { joints: 1, polished: 0.2, wear: 0.7, variation: 27, tint: 0xd7e3ef }),
     plaster: plasterMaterial(engine, { baseY: P.groundY, wear: 0.8, variation: 27 }),
-    tile: tileMaterial(engine, { wear: 0.35, variation: 27, tint: 0xb8ddd4 }),
-    ridge: tileMaterial(engine, { ribbed: false, wear: 0.35, variation: 27, tint: 0xb8ddd4 }),
+    tile: tileMaterial(engine, { wear: 0.35, variation: 27 }),
+    ridge: tileMaterial(engine, { ribbed: false, wear: 0.35, variation: 27 }),
   };
 }
 
@@ -59,19 +60,19 @@ function hallCollision(fp, model, entry) {
   }
 }
 
-function courtPaving(engine, mist) {
+function courtPaving(engine) {
   const batch=new GeometryBatch();
   // inferred: continuous service paving seven centimetres below court flags; its foundation
   // extends below the plain's relief so enclosure walls and court trees have solid ground.
   const e=P.extent,top=P.groundY-0.04;
   const base=new THREE.Mesh(new THREE.BoxGeometry(e.east-e.west,top+P.groundY,e.south-e.north),
-    mist(courtStone(engine,{service:true})));
+    courtStone(engine,{service:true}));
   base.name='palace-service-ground';
   base.position.set((e.east+e.west)/2,(top-P.groundY)/2,(e.south+e.north)/2);
   engine.add(base,{castShadow:false});
   // inferred: a continuous raised datum joins the rear of 宣德楼 to the gate and court.
   for(const p of [P.court,P.rearApron,...P.innerCourts])batch.box(p.center,[p.width,0.06,p.depth]);
-  const paving=mist(courtStone(engine));
+  const paving=courtStone(engine);
   const mesh=batch.mesh(paving,'palace-plain-courts');mesh.castShadow=false;
   mesh.userData.castShadow=false;engine.add(mesh);
   return mesh;
@@ -148,8 +149,7 @@ function innerFabric(engine, mats, gallery) {
 export async function build(engine) {
   const start=performance.now(),stages={};let last=start;
   const checkpoint=name=>{const now=performance.now();stages[name]=Math.round(now-last);last=now;};
-  const mats=materials(engine),mist=courtMist(engine,P.court),root=new THREE.Group();root.name='大庆殿与宫城';
-  Object.values(mats).forEach(mist);
+  const mats=materials(engine),root=new THREE.Group();root.name='大庆殿与宫城';
   const models=[];
   const main=hall(engine,P.hall,mats,{
     // inferred: a deeper 副阶 gives the lower structural roof a readable slope from the court.
@@ -159,7 +159,9 @@ export async function build(engine) {
   });
   addOrnaments(engine,main,mats,2.2);models.push(main);
   const hero=new PlanarLOD();hero.name='大庆殿';hero.position.set(...P.hall.position);
-  const mainLevels=[main.lod0,main.lod1,main.lod2].map((g,i)=>bake(g,'daqing-hall-LOD'+i));
+  // Low adaptive tiers may choose the final level at this district's normal aerial distance.
+  // Keep the full 举折 roof planes there, over a lightweight enclosed body, as in the other halls.
+  const mainLevels=[main.lod0,main.lod1,roofVolume(main,mats)].map((g,i)=>bake(g,'daqing-hall-LOD'+i));
   if(engine.quality.detail<1) {
     // Preserve the curved LOD1 roof beds; columns and infill use their silhouette geometry.
     const shadow=new THREE.Group();
@@ -174,7 +176,7 @@ export async function build(engine) {
 
   const court=new THREE.Group(),shadowCourt=new THREE.Group();court.name='palace-court-fabric';
   // inferred: exposed balustrade stone has cleaner, lightly polished edges than the stage wall.
-  const railMaterial=mist(stoneMaterial(engine,{wear:.45,polished:.25,variation:29}));
+  const railMaterial=stoneMaterial(engine,{wear:.45,polished:.25,variation:29});
   for(const entry of [...P.terraces,...P.towerBases]) {
     court.add(await terrace(engine,entry,mats.stone,railMaterial));
     shadowCourt.add(await terrace(engine,entry,mats.stone,mats.stone,{rails:false}));
@@ -234,7 +236,7 @@ export async function build(engine) {
   // Preserve simplified shadows and the non-casting paving through Engine.add's traversal.
   root.traverse(o=>{if(o.isMesh){o.userData.castShadow=o.castShadow;o.userData.receiveShadow=o.receiveShadow;}});
   engine.add(root);
-  const paving=courtPaving(engine,mist);
+  const paving=courtPaving(engine);
   const previous=engine.groundHeight??(()=>0);
   engine.groundHeight=(x,z)=>{
     for(const entry of [...P.terraces].reverse().concat(P.towerBases)) {
@@ -246,9 +248,9 @@ export async function build(engine) {
     return previous(x,z);
   };
   const trees=['huai','bai'].map(species=>instancePalaceTrees(engine,P.trees[species],{species,seed:'T7:'+species,height:species==='huai'?11:13}));
-  for(const tree of trees)tree.meshes.forEach(mesh=>mist(mesh.material));
+  const mist=buildCourtMist(engine,P.court);
   checkpoint('pavingTrees');
-  engine.registry.palace={root,hero,courtLOD,models,paving,trees,stats:mainLevels.map(palaceStats),stages};
+  engine.registry.palace={root,hero,courtLOD,models,paving,trees,mist,stats:mainLevels.map(palaceStats),stages};
   console.log('[palace] stages ms '+JSON.stringify({...stages,total:Math.round(performance.now()-start),hallPrototypes:hallCaches.get(engine).size}));
   console.log('[palace] main hall LOD geometry '+JSON.stringify(engine.registry.palace.stats));
   console.log('[palace] court '+JSON.stringify(palaceStats(courtMesh)));
