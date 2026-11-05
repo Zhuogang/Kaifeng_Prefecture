@@ -12,7 +12,7 @@ export function buildCourtMist(engine, court) {
   const time={value:engine.time},stepData=[],matrices=[];
   const matrix=(p,scale,rotation)=>new THREE.Matrix4().compose(new THREE.Vector3(...p),
     new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation)),new THREE.Vector3(...scale));
-  // inferred: 4 m horizontal quadrature, 0.3 m vertical quadrature, and a 1.1 m humidity scale height.
+  // inferred: 4 m horizontal quadrature, 0.3 m vertical quadrature, and a 1 m humidity scale height.
   for(const axis of ['x','z','y']) {
     const length=hi[axis]-lo[axis],n=Math.ceil(length/(axis==='y'?.3:4)),step=length/n;
     for(let i=0;i<n;i++) {
@@ -40,11 +40,11 @@ export function buildCourtMist(engine, court) {
       void main(){
         vec2 edge=min(vWorld.xz-uMin.xz,uMax.xz-vWorld.xz);
         float boundary=smoothstep(0.0,12.0,min(edge.x,edge.y));
-        float humidity=exp(-max(0.0,vWorld.y-uMin.y)/1.1);
+        float humidity=exp(-max(0.0,vWorld.y-uMin.y));
         float top=1.0-smoothstep(3.5,4.8,vWorld.y-uMin.y);
         float noise=cgVnoise3(vec3(vWorld.x*.055,vWorld.y*.13,vWorld.z*.055)+vec3(uTime*.015,0,0));
         // inferred: sparse drifting banks over cool, damp court flags; optical density is per metre.
-        float density=.009*(.2+.8*smoothstep(.2,.75,noise))*humidity*top*boundary;
+        float density=.03*(.2+.8*smoothstep(.2,.75,noise))*humidity*top*boundary;
         vec3 ray=normalize(vWorld-cameraPosition);
         float opacity=1.0-exp(-density*vStep*abs(dot(ray,vPlaneNormal)));
         if(opacity<.00001)discard;

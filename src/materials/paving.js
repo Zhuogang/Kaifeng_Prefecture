@@ -93,25 +93,28 @@ export function pavingMaterial(engine, o = {}) {
     // disappear into its mean without breaking the avenue into noisy ridges.
     float rut = t2Line(pavement.z,0.085)*t2Ruts;
     float drain = t2Line(pavement.w,0.055)*t2Drains;
-    // inferred: muted, dark fired brick / blue-grey stone. Pigment differences
-    // belong to individual bricks and courses, never to broad colour/noise fields.
-    vec3 a = ${brick ? 'vec3(0.040,0.048,0.060)' : 'vec3(0.035,0.052,0.070)'};
-    vec3 b = ${brick ? 'vec3(0.120,0.145,0.175)' : 'vec3(0.085,0.115,0.145)'};
+    // inferred: neutral grey fired brick / dressed stone, with a slight cool
+    // mineral bias. These are linear pigment reflectances; the sun supplies
+    // the warmth. Firing differences change value with very little hue shift.
+    vec3 a = ${brick ? 'vec3(0.115,0.120,0.126)' : 'vec3(0.125,0.130,0.137)'};
+    vec3 b = ${brick ? 'vec3(0.165,0.171,0.180)' : 'vec3(0.185,0.192,0.202)'};
     t2Albedo = mix(a,b,bond.y)*(.88+.24*mottle)*(0.94+0.12*rough);
-    t2Albedo *= mix(vec3(1.0),vec3(1.25,1.22,1.17),repair);
+    // inferred: replacement faces are slightly less stained, retaining the
+    // same grey pigment family instead of adding a yellow repair wash.
+    t2Albedo *= 1.0+repair*.14;
     float breakage=cgHash12(blockID+vec2(82.3,7.1));
     float split=(local.x*.75+local.y*.37-.45+.012*sin(local.y*23.0+breakage*6.283))*min(size.x,size.y);
     float fracture=t2Line(split,.0012)*step(.88,breakage)*bond.w;
     t2Albedo*=1.0-fracture*.55;
-    // inferred: traffic rounds brick arrises, exposes cooler fired faces and
+    // inferred: traffic rounds brick arrises, exposes clean fired faces and
     // presses dust into the edges of wheel tracks. Gutters collect a narrow damp
     // margin. These metre-wide bands describe use, rather than terrain height.
     float traffic=exp(-pow(pavement.z/.85,2.0))*t2Ruts;
     float trackEdge=exp(-pow((abs(pavement.z)-1.15)/.32,2.0))*t2Ruts;
     float drainDamp=exp(-pow(pavement.w/.38,2.0))*t2Drains;
-    t2Albedo = mix(t2Albedo,vec3(.008,.011,.013),bond.x*(.90-traffic*.25));
+    t2Albedo = mix(t2Albedo,vec3(.018,.019,.020),bond.x*(.90-traffic*.25));
     t2Albedo *= (1.0-rut*.18-drain*.65-trackEdge*.13-drainDamp*.22);
-    t2Albedo *= mix(vec3(1.0),vec3(.88,.96,1.03),traffic);
+    t2Albedo *= 1.0-traffic*.05;
     t2Rough = ${brick ? '.96-traffic*.14' : '.89-traffic*.12-rut*.03'}+bond.x*.04-drainDamp*.09;
     float tool = t2Wave((pavement.x+pavement.y*0.3)*170.0);
     float rutRelief=exp(-pow(pavement.z/0.10,2.0))*t2Ruts;

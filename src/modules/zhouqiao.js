@@ -84,7 +84,12 @@ export async function build(engine) {
     const points=Array.from({length:16},(_,i)=>[sign*(w/2+i*2),0.45,z+side*(half+0.40)]);
     balustrade(rails,points);
   }
-  const stone=stoneMaterial(engine,{waterline:r.waterY,polished:0.3,wear:0.9});
+  // inferred: dressed beam courses share the banks' 1.25 × 0.47 m bond. These
+  // resolved joints retain structure after fine tooling filters out at distance.
+  // Keep the lower shafts unjointed; the datum is just below the lowest beam.
+  const stone=stoneMaterial(engine,{waterline:r.waterY,polished:0.3,wear:0.9,joints:1,
+    jointBaseY:p.endY-p.deckThickness-0.35,blockSize:[1.25,0.47],
+    deckShadow:engine.registry.riverReflection?.occlusionUniforms});
   group.add(structure.mesh(stone,'stone-columns-and-beams'),rails.mesh(stone,'stone-goulan'));
   const deckMesh=paving.mesh(stoneMaterial(engine,{waterline:r.waterY,polished:0.8,wear:0.7}),'square-cambered-paving');
   deckMesh.castShadow=false;deckMesh.userData.castShadow=false;group.add(deckMesh);

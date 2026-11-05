@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { YUJIE as P } from '../world/plan.js';
+import { YUJIE as P, YUJIE_GALLERY_PLANTING as G } from '../world/plan.js';
 import { buildBlossom } from '../flora/trees.js';
 import { buildLotus, instancePetals } from '../flora/groundcover.js';
 import { floraMaterials } from '../flora/materials.js';
@@ -37,16 +37,40 @@ export function buildPlanting(engine) {
       }
     }
   }
+  // inferred: additional blossom rows on the public-lane side of BOTH galleries,
+  // rather than relocating the sourced canal orchard across the 96 m lane.
+  // Independent randomness preserves every existing canal tree and lotus colony.
+  const galleryRng=engine.rng('yujie:gallery-planting');
+  let galleryTrees=0;
+  for(const sign of [-1,1]) for(const [start,end] of rowReaches)
+    for(let z=start+G.spacing/2,i=0;z<end-3;z+=G.spacing,i++) {
+      const pz=z+galleryRng.range(-.6,.6);
+      if(P.crossStreets.some(c=>Math.abs(pz-c)<P.fenceGap/2+P.planting.height*.4))continue;
+      const x=sign*(G.centerX+galleryRng.range(-.25,.25)),species=P.planting.species[i%4];
+      // inferred: modest crown widths keep boughs clear of the deep gallery eave.
+      const scale=galleryRng.range(.92,1.06),width=galleryRng.range(.95,1.07);
+      treeEntries.push({species,gallery:true,matrix:matrix([x,P.surfaceY,pz],galleryRng.range(0,Math.PI*2),[scale*width,scale,scale*width])});
+      engine.footprints.addCircle(x,pz,P.planting.height*scale*.035,'yujie:tree');
+      galleryTrees++;
+      for(let k=0;k<24;k++) {
+        const [dx,dz]=galleryRng.disk();petals[species].push([x+dx*2.4,P.surfaceY+.008,pz+dz*2.4]);
+      }
+    }
   // A shared vertex-coloured model lets all four species share draws; their public
   // botanical models retain different flowers, bark and crown shapes.
   const treeGroups = []; let shadowModel;
+  // inferred: the additional gallery row converges to its crown silhouette at
+  // 140 m, like the gallery shells; the canal orchard keeps W2's 320 m
+  // middle LOD. Both retain LOD0 to 80 m. This bounds the extra row's cost when walking the opposite canal bank.
+  const canalLod=[80,320],galleryLod=[80,140];
   for (const species of P.planting.species) {
     const model = buildBlossom({ species, height: P.planting.height, rng: engine.rng('yujie:model:' + species) });
     shadowModel ??= model;
     // W1: retain the best available botanical mesh through at least 80 metres.
     treeGroups.push(instanceLods(engine, 'yujie:trees:' + species,
       [model.lod0, model.lod1, model.lod2].map(geometry => [{ geometry, material: materials.surface }]),
-      treeEntries.filter(t => t.species === species), [80, 320], { depth: materials.depth, flora: true, shadow: false }));
+      treeEntries.filter(t => t.species === species), item=>item.gallery?galleryLod:canalLod,
+      { depth: materials.depth, flora: true, shadow: false }));
     instancePetals(engine, petals[species], { species, materials });
   }
   // inferred: one shared public blossom silhouette supplies the four species'
@@ -72,5 +96,5 @@ export function buildPlanting(engine) {
   farLeaf.setIndex(Array.from({ length: 16 }, (_, i) => [0, i + 2, i + 1]).flat());
   const leaves = instanceLods(engine, 'yujie:lotus', [lotus.lod0, lotus.lod1, farLeaf].map(geometry =>
     [{ geometry, material: materials.surface }]), lotusEntries, [18, 80], { depth: materials.depth, flora: true, shadow: false });
-  return { treeGroups, treeShadows, leaves, trees: treeEntries.length, lotus: lotusEntries.length };
+  return { treeGroups, treeShadows, leaves, trees: treeEntries.length, galleryTrees, lotus: lotusEntries.length };
 }

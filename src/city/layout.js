@@ -93,5 +93,15 @@ export function cityLayout(engine) {
   district(p.east+12,p.outerExtent,-p.outerExtent,p.outerExtent,true);
   district(-p.east-12,p.east+12,-p.outerExtent,p.north-12,true);
   district(-p.east-12,p.east+12,p.south+12,p.outerExtent,true);
+  // inferred: mature huai clumps occupy a larger share of unroofed yards. A
+  // separate stream preserves all existing parcels, buildings and street gaps.
+  const grove=engine.rng('W4-city-court-groves');
+  for(const c of courts)if(grove.chance(c.outer?.065:.32)) {
+    const count=grove.int(2,3),radius=Math.min(c.width,c.depth)*.12;
+    for(let k=0;k<count;k++) {
+      const angle=grove.range(0,Math.PI*2),r=grove.range(.3,1)*radius;
+      trees.push([c.x+Math.cos(angle)*r,p.surfaceY,c.z+Math.sin(angle)*r]);
+    }
+  }
   return {houses,blocks,trees,courts,openings};
 }

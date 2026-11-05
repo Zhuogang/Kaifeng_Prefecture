@@ -45,7 +45,8 @@ export function buildOffices(engine,material,blocks) {
     for(const sign of [-1,1])walls.box([sign*(office.halfWidth+p.entranceWidth/2)/2,1.1,office.halfDepth],
       [office.halfWidth-p.entranceWidth/2,2.2,.36]);
     const floor=surfaces.geometry(),wall=walls.geometry();
-    const finishes=[colorGeometry(floor,new THREE.Color().setRGB(.19,.19,.175),4),colorGeometry(wall,new THREE.Color().setRGB(.39,.38,.33))];floor.dispose();wall.dispose();
+    // inferred: neutral cool-grey dressed court stone, warmed by the lighting.
+    const finishes=[colorGeometry(floor,new THREE.Color().setRGB(.235,.25,.27),4),colorGeometry(wall,new THREE.Color().setRGB(.39,.38,.33))];floor.dispose();wall.dispose();
     const finish=mergePacked(finishes);
     for(let level=0;level<3;level++) {
       const models=Object.values(prototypes).map(levels=>levels[level]),geometries=[...models,finish];
@@ -74,7 +75,9 @@ export function buildOffices(engine,material,blocks) {
         new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),building.yaw),new THREE.Vector3(size.x*.90,h,size.z*.88)));
       stats.roofArea+=size.x*size.z;stats.buildings++;
     }
-    for(const c of office.courts)trees.push([office.position[0]+c.position[0],p.surfaceY+.05,office.position[2]+c.position[2]]);
+    // inferred: three mature huai form a small grove inside each open court.
+    for(const c of office.courts)for(const [dx,dz]of [[0,0],[-3,3],[3,4]])
+      trees.push([office.position[0]+c.position[0]+dx,p.surfaceY+.05,office.position[2]+c.position[2]+dz]);
     engine.footprints.addRect(office.position[0],office.position[2],office.halfWidth,office.halfDepth,0,'city-office:'+office.name);
   }
   for(const models of Object.values(prototypes))models.forEach(g=>g.dispose());

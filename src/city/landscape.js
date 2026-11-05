@@ -79,13 +79,18 @@ export function cityGround(engine) {
   const p=CITY,r=BIANHE,palace=p.palaceReservation;
   // inferred: a raised, flat urban dirt/brick grade; it clears the plain's ±0.5 m
   // relief, while the existing palace, avenue, quays and river retain their own grade.
+  // inferred: dark low-saturation packed-earth/brick courts below grey tiled roofs.
   const material=proceduralMaterial({name:'urban-lanes-and-courts',params:{roughness:.97},color:`
     if(abs(cgP.x)<${p.avenueHalfWidth.toFixed(2)} && cgP.z>=0.0 && cgP.z<=${p.south.toFixed(2)})discard;
     if(abs(cgP.x)<${palace.halfWidth.toFixed(2)} && cgP.z>=${palace.north.toFixed(2)} && cgP.z<=${palace.south.toFixed(2)})discard;
     if(abs(cgP.z-${r.center[2].toFixed(2)})<${(r.width/2+r.quayWidth).toFixed(2)})discard;
     float dirt=cgVnoise2(cgP.xz*.06);
     float inner=1.0-smoothstep(1300.0,1550.0,max(abs(cgP.x),abs(cgP.z)));
-    diffuseColor.rgb=mix(vec3(.10,.12,.06),vec3(.115,.107,.087),inner)*(.82+.32*dirt);
+    diffuseColor.rgb=mix(vec3(.055,.07,.055),vec3(.068,.073,.077),inner)*(.82+.32*dirt);
+  `,emissive:`
+    // inferred: a cool unresolved skylight floor softens distant alley shadows.
+    float farFill=smoothstep(180.0,900.0,length(cameraPosition-cgP));
+    totalEmissiveRadiance+=vec3(.012,.016,.022)*farFill;
   `});
   const geometry=new THREE.PlaneGeometry(p.outerExtent*2,p.outerExtent*2);geometry.rotateX(-Math.PI/2);
   geometry.translate(0,p.surfaceY,0);const mesh=new THREE.Mesh(geometry,material);mesh.name='urban-grade';engine.add(mesh,{castShadow:false});

@@ -3,7 +3,14 @@ import { instancePalaceTrees } from '../flora/instances.js';
 
 /** Public flora geometry, wind and cutouts with city-distance batching. */
 export function cityTrees(engine,positions) {
-  const flora=instancePalaceTrees(engine,positions,{species:'huai',height:13,seed:'T8-courtyard-fields',collision:false});
+  // inferred: mature city crowns are dark olive/grey-green, with fixed clump
+  // variation. Public geometry and leaf cutouts remain shared with palace flora.
+  const tintRng=engine.rng('W4-city-tree-tints');
+  const entries=positions.map(position=>{
+    const shade=tintRng.range(.85,1.12);
+    return {position,tint:[.42*shade,.62*shade,.52*shade]};
+  });
+  const flora=instancePalaceTrees(engine,entries,{species:'huai',height:13,seed:'T8-courtyard-fields',collision:false});
   flora.meshes[0].geometry.dispose();flora.meshes[0].geometry=flora.meshes[1].geometry.clone();
   flora.stats.lodTriangles[0]=flora.stats.lodTriangles[1];
   // inferred: beyond 120 m the public canopy cards need only their four corners,

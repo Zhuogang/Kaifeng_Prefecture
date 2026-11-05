@@ -41,10 +41,11 @@ function bankPlanting() {
   for(const south of [false,true])for(const east of [false,true]) {
     // inferred: the north bank needs extra room around its twin towers; the
     // south row can approach the crossing beside the narrower bridge landing.
-    const clearance=bridge.dimensions.width/2+river.quayWidth*(south?1.5:2)+(south?1.5:4);
+    // Leave another quay width clear around the north towers' spreading eaves.
+    const clearance=bridge.dimensions.width/2+river.quayWidth*(south?1.5:3)+(south?1.5:4);
     const row=(PLAN.WILLOWS?.positions??[])
       .filter(p=>(p[2]>river.center[2])===south && (p[0]>river.center[0])===east)
-      .map(p=>[river.center[0]+(east?1:-1)*Math.max(clearance,Math.abs(p[0]-river.center[0])-river.quayWidth*(south?3:2)),
+      .map(p=>[river.center[0]+(east?1:-1)*Math.max(clearance,Math.abs(p[0]-river.center[0])-river.quayWidth*(south?3:1)),
         river.bankY,river.center[2]+(south?1:-1)*(river.width/2+river.quayWidth*(south?0.30:0.55))])
       .sort((a,b)=>a[0]-b[0]);
     row.forEach((p,i)=>{

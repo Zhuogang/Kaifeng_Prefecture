@@ -21,9 +21,13 @@ export function instanceHouses(engine,entries,material) {
   const hull=new THREE.InstancedMesh(hullGeometry,new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:false}),entries.length);
   hull.name='city-house-shadow-hulls';hull.castShadow=true;hull.receiveShadow=false;hull.count=0;hull.userData.receiveShadow=false;group.add(hull);
   const q=new THREE.Quaternion(),up=new THREE.Vector3(0,1,0),position=new THREE.Vector3(),scale=new THREE.Vector3();
-  const items=entries.map(e=>({...e,matrix:new THREE.Matrix4().compose(position.fromArray(e.position),q.setFromAxisAngle(up,e.yaw),scale.fromArray(e.scale)),
-    shadowMatrix:new THREE.Matrix4().compose(position.fromArray(e.position),q.setFromAxisAngle(up,e.yaw),scale.set(e.scale[0],e.scale[1]*(1+e.storey/4),e.scale[2])),
-    color:new THREE.Color().setRGB(e.tint,e.tint,e.tint)}));
+  const items=entries.map(e=>{
+    const matrix=new THREE.Matrix4().compose(position.fromArray(e.position),q.setFromAxisAngle(up,e.yaw),scale.fromArray(e.scale));
+    // Single-storey hulls have the identical transform. Share the immutable
+    // matrix instead of allocating another one for most of the 264k buildings.
+    const shadowMatrix=e.storey?new THREE.Matrix4().compose(position,q,scale.set(e.scale[0],e.scale[1]*(1+e.storey/4),e.scale[2])):matrix;
+    return {...e,matrix,shadowMatrix,color:new THREE.Color().setRGB(e.tint,e.tint,e.tint)};
+  });
   const stats={instances:entries.length,counts:[0,0,0,0],shadowInstances:0,triangles:0};let last=[];
   const frustum=new THREE.Frustum(),projection=new THREE.Matrix4(),sphere=new THREE.Sphere(new THREE.Vector3(),28);
   const update=()=>{

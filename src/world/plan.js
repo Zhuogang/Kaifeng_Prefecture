@@ -240,9 +240,29 @@ PALACE.rearPrecincts = PALACE.innerCourts.slice(12).map(court=>{
   return palaceEntry({...court,halls});
 });
 
+// inferred: dark 槐/柏 clumps in the open pockets of the inferred courts. Offsets leave
+// gateways, side passages, roofs and the great court's central processional space clear.
+const palaceClump=(x,z,offsets,scale=1)=>offsets.map(([dx,dz],i)=>({
+  position:[x+dx,PALACE.groundY+.03,z+dz],scale:scale*(.9+i*.065),width:.94,
+  tint:[.18,.35,.29],evidence:'inferred',source:'W4P / ART_BIBLE: 槐 and 柏 in palace courts; planting inferred',
+}));
+for(const p of PALACE.precincts) {
+  // The short northern compounds are already roof-filled; their entrances have no crown clearance.
+  if(p.width>70&&p.depth<60)continue;
+  const [x,,z]=p.center;
+  PALACE.trees.huai.push(...palaceClump(x,z,p.width<70?[[-8,-1],[-11,3],[-7,6]]:[[-10,0],[-6,5],[-13,8]],p.width<70?.8:.95));
+}
+for(const p of PALACE.rearPrecincts)for(const side of [-1,1]) {
+  const [x,,z]=p.center;
+  PALACE.trees.huai.push(...palaceClump(x+side*42,z,[[0,0],[-side*3,5],[side*1,-5]],.95));
+}
+for(const side of [-1,1])for(const z of [-140,-207,-272])
+  PALACE.trees.huai.push(...palaceClump(side*117,z,
+    [[0,0],[side*4,5],[-side*1,9],[-side*10,3],[-side*16,9],[-side*9,14]],1));
+
 export const PALACE_VIEWS = {
   // inferred: ref8-like frontal inspection inside the vast court, plus an eye-height long view.
-  front: { pos: [0, 2.31, -250], target: [0, 12.5, -320], fov: 62, near: 0.1 },
+  front: { pos: [0, 5.6, -258], target: [0, 12, -320], fov: 64, near: 0.1 },
   court: { pos: [8, 2.31, -115], target: [0, 9, -320], fov: 65, near: 0.1 },
   aerial: { pos: [85, 130, 90], target: [0, 12, -250], fov: 46, near: 0.1 },
   terrace: { pos: [32, 5.43, -291], target: [0, 10, -307], fov: 66, near: 0.05 },
@@ -265,7 +285,9 @@ export const CITY = {
   lighting: {corridorSpacing:16, corridorInset:1.4, lanternHeight:2.7,
     // inferred: one permanent lamp every two gallery bays, on both wings.
     galleryOffsets:[-18,-6,6,18].map(z=>[-4.2,3.1,z]),galleryIntensity:55,
-    pavilionOffsets:[[-6.4,3.1,0]],pavilionIntensity:20,
+    // inferred: lamps also hang from the forward pavilion's south eave,
+    // illuminating its actual walk and wall rather than a validation viewpoint.
+    pavilionOffsets:[[-6.4,6.5,0],[-6.4,6.5,5.2],[0,6.5,5.2],[6.4,6.5,5.2]],pavilionIntensity:35,
     officeOffsets:[[-3,2.8,5.2],[3,2.8,5.2]],
     evidence:'inferred',source:'W1/W2C city: permanent hanging lanterns and warm gallery spill, lit only at bluehour'},
   evidence: 'inferred', source: 'T8: inner city approximately x ±1400, z ±1300, outer city to 4 km; ART_BIBLE avenue/palace reservations',
@@ -324,4 +346,12 @@ export const CITY_VIEWS = {
   avenue:{pos:[-120,YUJIE.surfaceY+1.6,690],target:[270,7,820],fov:62,near:.1},
   roofs:{pos:[630,200,780],target:[270,0,180],fov:57,near:.1},
   evidence:'inferred',source:'W2C/W3C validation framings; no content consumes these cameras; lead shot 4 is defined separately in shots.js',
+};
+
+// inferred: W4A's additional avenue-side blossom rows stand clear of gallery
+// eaves and cross-street openings. The textual near-canal orchard stays intact.
+export const YUJIE_GALLERY_PLANTING = {
+  centerX: YUJIE.section.blackFence - YUJIE.planting.height * .6,
+  spacing: YUJIE.corridor.bay * 5,
+  evidence: 'inferred', source: 'W4A: corridor-side blossom rows requested for the open gallery elevations; exact position and interval reconstructed',
 };

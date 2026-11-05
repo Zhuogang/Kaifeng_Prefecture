@@ -24,6 +24,7 @@ export function bake(root) {
 
 /** Compact instances before scene traversal, so shadows see the same LOD as the camera.
  * Thresholds are physical distances, independent of any validation framing.
+ * distances may also return thresholds per entry (e.g. the two orchard rows).
  */
 export function instanceLods(engine, name, levels, entries, distances, { depth, flora = false, shadow = true, shadowLevels } = {}) {
   const group = new THREE.Group(); group.name = name;
@@ -80,7 +81,8 @@ export function instanceLods(engine, name, levels, entries, distances, { depth, 
     frustum.setFromProjectionMatrix(projection.multiplyMatrices(engine.camera.projectionMatrix,engine.camera.matrixWorldInverse));
     for (const item of items) {
       const d = item.position.distanceTo(p);
-      const l = d < distances[0] ? 0 : d < distances[1] ? 1 : 2;
+      const limits=typeof distances==='function'?distances(item):distances;
+      const l = d < limits[0] ? 0 : d < limits[1] ? 1 : 2;
       sphere.copy(bounds[l]).applyMatrix4(item.matrix);
       const castsWithoutProxy=shadow && !shadowLevels && l<2;
       const visible=levels[l].length>0 && (castsWithoutProxy || frustum.intersectsSphere(sphere));

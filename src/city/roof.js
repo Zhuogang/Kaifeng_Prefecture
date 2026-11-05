@@ -35,7 +35,8 @@ export function houseRoof(hall,level) {
   }
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
   g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();
-  const roof=colorGeometry(g,new THREE.Color().setRGB(.12,.135,.145),2);g.dispose();return roof;
+  // inferred: slightly cool grey fired clay shared by every distance tier.
+  const roof=colorGeometry(g,new THREE.Color().setRGB(.115,.145,.17),2);g.dispose();return roof;
 }
 
 export function houseBody(hall,level) {

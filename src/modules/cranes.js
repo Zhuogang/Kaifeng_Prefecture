@@ -165,10 +165,10 @@ export function addCranes(engine,settings) {
       const p=positions[i];
       if(i<18) {
         const f=flight[i],a=f.phase+t/120*TAU;
-        const r=config.radius*f.r,spread=config.spread??1.5;
-        p.set(config.center[0]+Math.cos(a)*r,config.center[1]+config.height+f.lift*spread+Math.sin(a*2)*spread*0.8+(config.orbitTilt??0)*Math.sin(a)*r*0.78,config.center[2]+Math.sin(a)*r*0.78);
-        pitch=Math.atan2(Math.cos(a*2)*spread*1.6+(config.orbitTilt??0)*Math.cos(a)*r*0.78,Math.hypot(Math.sin(a)*r,Math.cos(a)*r*0.78));
-        yaw=Math.atan2(Math.sin(a),-0.78*Math.cos(a));bank=0.13*Math.sin(a+0.5);size=f.size;phase=f.wing;
+        const r=config.radius*f.r,spread=config.spread??1.5,depth=config.orbitDepth??0.78;
+        p.set(config.center[0]+Math.cos(a)*r,config.center[1]+config.height+f.lift*spread+Math.sin(a*2)*spread*0.8+(config.orbitTilt??0)*Math.sin(a)*r*depth,config.center[2]+Math.sin(a)*r*depth);
+        pitch=Math.atan2(Math.cos(a*2)*spread*1.6+(config.orbitTilt??0)*Math.cos(a)*r*depth,Math.hypot(Math.sin(a)*r,Math.cos(a)*r*depth));
+        yaw=Math.atan2(Math.sin(a),-depth*Math.cos(a));bank=0.13*Math.sin(a+0.5);size=f.size;phase=f.wing;
       } else {
         const anchor=config.perches[i-18];p.fromArray(Array.isArray(anchor)?anchor:anchor.position);yaw=anchor.yaw??(i===18?0.4:-0.4);
       }
@@ -194,12 +194,12 @@ export async function build(engine) {
   // Prefer the ornament-tip anchors already supplied by Xuande's own builder.
   // inferred: its current 2.30 m fin-tip offset is retained as a fallback.
   const perches=existing?.settings?.perches??anchors.map(a=>[a.position[0]+base[0],a.position[1]+base[1]+2.30,a.position[2]+base[2]]);
-  const halfSpan=Math.abs(perches[1][0]-perches[0][0])/2,radius=halfSpan*0.80;
-  // inferred: birds wheel over the south eave and forecourt, with the lowest
-  // flight tier close above the ridge and a loose vertical spread. These fixed
+  const halfSpan=Math.abs(perches[1][0]-perches[0][0])/2,radius=halfSpan*1.5;
+  // inferred: birds wheel around the main roof in a circular orbit descending
+  // toward the front eave, with a loose vertical spread. These fixed
   // roof-relative paths and physical bird dimensions apply from every viewpoint.
-  const ridgeY=Math.max(...perches.map(p=>p[1])),center=[base[0],base[1],base[2]+radius*2.1];
-  return addCranes(engine,{center,radius,height:ridgeY-base[1]+2,spread:radius*0.19,orbitTilt:-0.27,perches});
+  const ridgeY=Math.max(...perches.map(p=>p[1])),center=[...base];
+  return addCranes(engine,{center,radius,height:ridgeY-base[1]+6,spread:radius*0.09,orbitDepth:1,orbitTilt:-0.18,perches});
 }
 export async function test(engine) {
   const {test}=await import('./flora.js');return test(engine);

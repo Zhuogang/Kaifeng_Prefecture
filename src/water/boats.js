@@ -58,10 +58,10 @@ export function buildBoats(engine,river) {
     }
     for(const s of [-.63,-.22,.22,.63])local.box([s*L/2,.27+sheer(s),0],[.25,.068,half(s)*1.78]);
     const hullGeometry=local.geometry();wood.add(hullGeometry,placement);hullGeometry.dispose();
-    // A low mooring block projecting from each bank provides a real stone bollard,
-    // beside the berth rather than a rope pulled three metres up the retaining wall.
+    // inferred: a low stone landing at each berth, attached to the retaining wall,
+    // gives boat users room beside the bollard. All three berths use the same detail.
     const side=Math.sign(cz-river.center[2]),bank=river.center[2]+side*(river.width/2-.95),bx=cx-L*.42;
-    addStoneBlock(stone,[bx,cy+.02,bank],[1.35,.48,1.9],number+8);
+    for(let j=0;j<4;j++)addStoneBlock(stone,[bx+(j-1.5)*.90,cy+.02,bank],[.89,.48,1.9],number*4+j+8);
     addStoneBlock(stone,[bx,cy+.56,bank-side*.35],[.32,.72,.32],number+21);
     addStoneBlock(stone,[bx,cy+.95,bank-side*.35],[.40,.16,.40],number+71);
     const tie=new THREE.Vector3(bx,cy+.76,bank-side*.35),boatTie=new THREE.Vector3(-L*.37,.42,half(-.74)*side).applyMatrix4(placement);

@@ -1,6 +1,9 @@
 import { surfaceMaterial } from '../materials/shared.js';
 import { PALACE } from '../world/plan.js';
 
+// inferred: damp dressed stone, with a neutral, slightly cool linear reflectance.
+export const COURT_STONE_MEAN = [.145,.15,.155];
+
 export function courtStone(engine, { service = false } = {}) {
   const approach=PALACE.terraces[0].stairs.map(x=>`abs(p.x-(${x.toFixed(3)}))`).reduce((a,b)=>`min(${a},${b})`);
   return surfaceMaterial(engine,service?'palace-service-stone':'palace-coursed-flags',{variation:27},`
@@ -20,13 +23,13 @@ export function courtStone(engine, { service = false } = {}) {
     float joint=1.0-(1.0-jointX)*(1.0-jointZ);
     float grain=t2Fbm(cgP*9.0+27.0);
     float block=mix(.5,cgHash12(id+27.0),resolved);
-    // inferred: restrained blue-grey pigment variation and foot polish along stair approaches.
+    // inferred: almost neutral, slightly cool stone-to-stone reflectance; warmth comes from light.
     float approach=${approach};
     float polish=1.0-smoothstep(1.4,4.0,approach);
     float damp=1.0-smoothstep(.008,.055,edge);
-    t2Albedo=mix(vec3(.185,.205,.225),vec3(.23,.245,.26),block)*(.96+grain*.08);
+    t2Albedo=mix(vec3(.12,.125,.13),vec3(.17,.175,.18),block)*(.96+grain*.08);
     t2Albedo*=1.0-damp*.08*resolved;
-    t2Albedo=mix(t2Albedo,vec3(.065,.075,.085),joint*.85);
+    t2Albedo=mix(t2Albedo,vec3(.072,.074,.076),joint*.85);
     t2Rough=.84-polish*.24-damp*.07*resolved;
     float crack=t2Line((f.x*.8+f.y*.35-.54)*size.y,.0012)*step(.95,cgHash12(id+61.0))*resolved;
     t2Albedo*=1.0-crack*.20;
@@ -35,7 +38,10 @@ export function courtStone(engine, { service = false } = {}) {
     float nearWeight=1.0-smoothstep(.018,.055,t2Footprint(cgP));
     t2Height=(t2JointRelief(edge,.0025,cgP)+(grain-.5)*.0006-crack*.0006)*nearWeight;
     t2Occlusion=1.0-joint*.06;
-  `,{head:`
+  `,{
+    // inferred: a thin dew film on the main flags reflects the live sky at grazing angles.
+    // It remains neutral under changing illumination; no blue colour is baked into the light.
+    physical:!service,params:service?{}:{ior:1.45,clearcoat:1,clearcoatRoughness:.12},head:`
     float palaceJointIntegral(float x,float period,float width){
       float cell=floor(x/period),local=x-cell*period;
       return cell*(2.0*width)+min(local,width)+max(0.0,local-period+width);

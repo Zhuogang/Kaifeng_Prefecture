@@ -34,7 +34,13 @@ export function createRiverSurface(engine, river) {
         vec4 projected=riverReflectionMatrix*vec4(p,1.0);vec2 uv=projected.xy/projected.w;
         uv+=riverNormal.xz*0.060;
         vec2 pixel=riverReflectionPixel*0.65;
-        return (texture2D(riverReflection,uv+pixel).rgb+texture2D(riverReflection,uv-pixel).rgb)*0.5;
+        // inferred: unresolved capillary waves spread the reflected radiance over
+        // a roughness cone. Preserve the reflection's mean energy, soften its
+        // dark/light stripes; the actual stone is never sampled through this filter.
+        vec3 resolved=(textureLod(riverReflection,uv+pixel,0.8).rgb
+          +textureLod(riverReflection,uv-pixel,0.8).rgb)*0.5;
+        vec3 scattered=textureLod(riverReflection,uv,2.5).rgb;
+        return mix(resolved,scattered,0.35);
       }`,
     color:`${boatCuts} float edge=riverHalfWidth-abs(cgP.z-riverCentre);
       float depth=2.2*(1.0-exp(-max(edge,0.0)*1.8));
@@ -47,8 +53,14 @@ export function createRiverSurface(engine, river) {
       diffuseColor.rgb=mix(body,bed,trans)*(0.94+0.12*cgVnoise2(cgP.xz*.38))*(1.0-riverContact(cgP)*.55);`,
     normal:`vec2 q=cgP.xz*vec2(2.4,9.0)+vec2(riverTime*0.07,riverTime*0.02);
       float fp=max(length(dFdx(q)),length(dFdy(q)));
-      float h=(cgVnoise2(q)-0.5)*0.004*(1.0-smoothstep(0.4,1.5,fp));
-      h+=(cgVnoise2(q*2.7+vec2(19.3,6.7))-0.5)*0.0009*(1.0-smoothstep(0.3,1.0,fp*2.7));
+      float h=(cgVnoise2(q)-0.5)*0.003*(1.0-smoothstep(0.4,1.5,fp));
+      h+=(cgVnoise2(q*2.7+vec2(19.3,6.7))-0.5)*0.0007*(1.0-smoothstep(0.3,1.0,fp*2.7));
+      // inferred: two low capillary wave trains with an east-west component.
+      // Cross-river noise alone barely perturbs reflection/Fresnel along the current.
+      float waveA=dot(cgP.xz,vec2(14.0,1.8))+riverTime*.8;
+      float waveB=dot(cgP.xz,vec2(25.0,-4.0))-riverTime*1.1;
+      h+=sin(waveA)*.0045*(1.0-smoothstep(1.0,3.0,fwidth(waveA)));
+      h+=sin(waveB)*.0018*(1.0-smoothstep(1.0,3.0,fwidth(waveB)));
       vec3 dx=dFdx(cgP),dy=dFdy(cgP),n=vec3(0,1,0),r1=cross(dy,n),r2=cross(n,dx);
       float det=dot(dx,r1);vec3 grad=sign(det)*(dFdx(h)*r1+dFdy(h)*r2);
       riverNormal=normalize(max(abs(det),1e-9)*n-grad);cgBump=riverNormal-n;`,

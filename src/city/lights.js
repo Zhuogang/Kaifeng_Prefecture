@@ -53,11 +53,12 @@ export function cityLights(engine,layout,material) {
   const poolMesh=new THREE.InstancedMesh(plane,poolMaterial,pools.length),matrix=new THREE.Matrix4();
   pools.forEach((pos,i)=>poolMesh.setMatrixAt(i,matrix.makeTranslation(...pos)));poolMesh.name='lantern-walkway-spill';poolMesh.castShadow=false;group.add(poolMesh);
   // Far roofs can omit their buried walls while retaining their actual window lights.
+  // inferred: 42% occupied upper bays with 2.6 x .85 m luminous lattice openings.
   const rng=engine.rng('W1-night-windows'),windows=[];
-  for(const h of layout.houses)if(rng.chance(.26)) {
+  for(const h of layout.houses)if(rng.chance(.42)) {
     const depth=CITY.houseSpec.sideBays.reduce((a,b)=>a+b,0)/2*h.scale[2],co=Math.cos(h.yaw),si=Math.sin(h.yaw);
     const pos=new THREE.Vector3(h.position[0]+si*(depth+.035),h.position[1]+(1.85+h.storey)*h.scale[1],h.position[2]+co*(depth+.035));
-    const transform=new THREE.Matrix4().compose(pos,new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),h.yaw),new THREE.Vector3(2.0*h.scale[0],.70*h.scale[1],1));
+    const transform=new THREE.Matrix4().compose(pos,new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),h.yaw),new THREE.Vector3(2.6*h.scale[0],.85*h.scale[1],1));
     windows.push({position:pos,matrix:transform});
   }
   const windowMaterial=proceduralMaterial({name:'occupied-city-windows',params:{side:THREE.DoubleSide,roughness:.8},uniforms:{cityNight:dusk},

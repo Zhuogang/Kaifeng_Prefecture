@@ -15,17 +15,22 @@ import { bake, placed, previewShadowProxy, PlanarLOD, roofVolume, palaceStats } 
 import { terrace, terraceGround, terraceCollision } from '../palace/stonework.js';
 import { courtStone } from '../palace/surfaces.js';
 import { buildCourtMist } from '../palace/mist.js';
+import { courtBounce } from '../palace/bounce.js';
+import { preparePreviewTrees } from '../palace/trees.js';
 
 function materials(engine) {
   // inferred: surface wear and deterministic material variation for a maintained palace in use.
+  // inferred: deep copper-green glaze reflectance. Use the same pigment at every LOD;
+  // the shared, weakly green base glaze turned ochre under the warm morning illuminant.
+  const glaze=new THREE.Color(.45,.9,1.15);
   return {
-    timber: timberMaterial(engine, { baseY: P.groundY, wear: 0.8, variation: 27 }),
+    timber: courtBounce(engine,timberMaterial(engine, { baseY: P.groundY, wear: 0.8, variation: 27 }),P.court),
     // Use the shared painted-timber palette without the old cyan multiplier.
-    bracket: paintMaterial(engine, { style: 'wucai', wear: 0.55, variation: 27 }),
+    bracket: courtBounce(engine,paintMaterial(engine, { style: 'wucai', wear: 0.55, variation: 27 }),P.court),
     stone: stoneMaterial(engine, { joints: 1, polished: 0.2, wear: 0.7, variation: 27, tint: 0xd7e3ef }),
     plaster: plasterMaterial(engine, { baseY: P.groundY, wear: 0.8, variation: 27 }),
-    tile: tileMaterial(engine, { wear: 0.35, variation: 27 }),
-    ridge: tileMaterial(engine, { ribbed: false, wear: 0.35, variation: 27 }),
+    tile: tileMaterial(engine, { variant:'green', tint:glaze, wear:0.35, variation:27 }),
+    ridge: tileMaterial(engine, { variant:'green', tint:glaze, ribbed:false, wear:0.35, variation:27 }),
   };
 }
 
@@ -289,6 +294,7 @@ export async function build(engine) {
     return previous(x,z);
   };
   const trees=['huai','bai'].map(species=>instancePalaceTrees(engine,P.trees[species],{species,seed:'T7:'+species,height:species==='huai'?11:13}));
+  trees.forEach(flora=>preparePreviewTrees(engine,flora));
   const mist=buildCourtMist(engine,P.court);
   checkpoint('pavingTrees');
   engine.registry.palace={root,hero,courtLOD,models,paving,trees,mist,stats:mainLevels.map(palaceStats),stages};

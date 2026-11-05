@@ -5,7 +5,7 @@ import { proceduralMaterial } from '../core/materials.js';
 // inferred: distant city surfaces share one filtered shader, so each hall's six
 // material batches can be drawn together. Hero masonry uses the shared families.
 const PALETTE = { timber: [0.09, 0.048, 0.027], bracket: [0.15, 0.078, 0.037],
-  plaster: [0.46, 0.44, 0.39], stone: [0.18, 0.19, 0.18], tile: [0.12, 0.135, 0.145], ridge: [0.10, 0.115, 0.12] };
+  plaster: [0.46, 0.44, 0.39], stone: [0.18, 0.19, 0.18], tile: [0.115, 0.145, 0.17], ridge: [0.10, 0.125, 0.145] };
 
 export function packedGeometry(group, { green = false } = {}) {
   group.updateMatrixWorld(true);
@@ -80,8 +80,8 @@ export function cityMaterial(engine) {
         diffuseColor.rgb*=1.0-.32*mortar;
       }
       if(vCityKind>1.5 && vCityKind<2.5) {
-        // inferred: 4% thatch, with a small warm/cool grey tile variation.
-        diffuseColor.rgb*=mix(vec3(.93,.97,1.02),vec3(1.08,1.01,.94),cgSeed);
+        // inferred: cool grey fired tile, with low-saturation batch variation; 4% thatch.
+        diffuseColor.rgb*=mix(vec3(.96,.98,1.0),vec3(1.04,1.02,1.0),cgSeed);
         float straw=step(0.96,cgSeed);
         diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.23,0.17,0.087),straw);
         // inferred: 0.26 x 0.35 m common tile spacing. The old 24-radian
@@ -100,6 +100,12 @@ export function cityMaterial(engine) {
       }
     `,
     emissive: `
+      // inferred: unresolved alleys and roofs retain diffuse sky fill instead of
+      // closing to black. This is a small material radiance floor, not new fog;
+      // direct sun and the true pitched normals still provide the main contrast.
+      float farFill=smoothstep(180.0,900.0,length(cameraPosition-cgP));
+      vec3 skyFill=mix(vec3(.10,.14,.20)*farFill,vec3(.055,.085,.15),cityDusk);
+      if(vCityKind<2.5 || vCityKind>3.5) totalEmissiveRadiance+=diffuseColor.rgb*skyFill;
       if(vCityKind>2.5 && vCityKind<3.5) totalEmissiveRadiance+=vec3(12.0,3.0,.42)*cityDusk;
       if(vCityKind>0.5 && vCityKind<1.5) {
         float window=cityWindow(vCityUV);

@@ -47,7 +47,9 @@ export function buildWillow({ seed = 'willow', height = 9, crownWidth = 1, rng =
     }
     boughs.forEach(p=>g.tube(p,[h*0.019,h*0.008,h*0.0012],wood,{sides:l?4:8,gnarl:0.4}));
     whips.forEach(({path,random,width,yaw},j)=>{
-      if(l && j%2)return;
+      // inferred: thin middle-distance whips by another eighth to keep the
+      // fully planted river within the world budget; close geometry is intact.
+      if(l && (j%2 || j%16===0))return;
       const normal=V(path[0].x,h*0.14,path[0].z).normalize(),ao=0.65+0.3*random,leafTint=tint(leaf,r);
       g.curtain(path,width,yaw,leafTint,{sway:0.85,random,ao,normal,kind:l?5.2:5});
       if(!l && j%6===0)g.curtain(path,width,yaw+Math.PI/2,leafTint,{sway:0.85,random,ao,normal,kind:5});

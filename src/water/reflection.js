@@ -60,7 +60,10 @@ export class RiverReflection {
       // The cheap pass has no shadow maps. Intersect the live sun ray with the actual
       // cambered deck instead of illuminating reflected piers through solid stone.
       shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>
+        #ifndef RIVER_DECK_UNIFORMS
+        #define RIVER_DECK_UNIFORMS
         uniform vec4 reflectionDeck;uniform float reflectionCamber,reflectionDeckOn;uniform vec3 reflectionSun;
+        #endif
         float deckCornerAngle(float x,float z,float h) {
           return atan(x*z,h*sqrt(x*x+z*z+h*h));
         }
@@ -86,7 +89,7 @@ export class RiverReflection {
           return 1.0-smoothstep(0.0,0.04,min(inset.x,inset.y))*step(0.0,t);
         }`)
         .replace('#include <lights_fragment_end>',`#include <lights_fragment_end>
-          float deckVisibility=riverDeckVisibility(cgP);
+          float deckVisibility=${source.userData.analyticDeckShadow?'1.0':'riverDeckVisibility(cgP)'};
           reflectedLight.directDiffuse*=deckVisibility;reflectedLight.directSpecular*=deckVisibility;
           float deckSky=riverDeckSkyVisibility(cgP);
           reflectedLight.indirectDiffuse*=deckSky;reflectedLight.indirectSpecular*=deckSky;`);
