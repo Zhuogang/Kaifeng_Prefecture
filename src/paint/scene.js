@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {stoneBlocks,beveledBox,pierShaft} from './stonework.js';
 import {willowGeometry} from './willow.js';
+import {broadleafGeometry} from './foliage.js';
 import { PaintBatch } from './batch.js';
 import { paintMaterial } from './materials.js';
 import { paintVisibility } from './visibility.js';
@@ -178,6 +179,9 @@ export function compose(engine, time, viewAt) {
   for(const t of TOWERS)tower(...t);
   for(const [x,z,scale]of MID_HALLS)
     hall([x, 3.5, z], scale);
+  // inferred: three additional source-built halls form a layered cluster
+  // left of the towers; the nearer two retain actual filtered tile rows.
+  for(const [x,y,z,scale]of [[-30,5.2,-38,.73],[-17,6.2,-50,.70],[-3,5.5,-61,.67]])hall([x,y,z],scale,false,z< -55);
   // inferred: layered low roofs fill the interval between the painted skyline
   // and the landmark towers; their silhouettes remain real parallax geometry.
   const distanceRng=engine.rng('P1-mid-distance');
@@ -309,6 +313,13 @@ export function compose(engine, time, viewAt) {
       for(let k=0;k<16;k++)crown.leaf(center.clone().add(V(...distanceRng.sphere()).multiplyScalar(h*.2)),h*.055,h*.016,V(distanceRng.range(-.4,.4),-1,.2),color,.2,a);
     }
     const wg=wood.build(),lg=crown.build();bark.add(wg,place);leaf.add(lg,place);reflected.bark.add(wg,place);reflected.leaf.add(lg,place);wg.dispose();lg.dispose();
+  }
+
+  // inferred: round tan/olive broadleaf crowns sit between the new roofs,
+  // in two warm atmospheric layers rather than another willow curtain.
+  for(const [i,p]of [[-34,4,-46,8.5],[-23,4,-53,10],[-12,4,-61,9],[-4,4,-69,11],[-40,4,-65,12],[-28,4,-78,13]].entries()){
+    const g=broadleafGeometry(engine.rng(`D4-river-grove-${i}`),{height:p[3]}),m=new THREE.Matrix4().makeTranslation(...p.slice(0,3));
+    bark.add(g.wood,m);leaf.add(g.leaves,m);reflected.leaf.add(g.leaves,m);g.wood.dispose();g.leaves.dispose();
   }
 
   for (const k of families) engine.add(keep(batches[k].mesh(paintMaterial(time, k), 'paint-' + k)), { castShadow: false, receiveShadow: false });

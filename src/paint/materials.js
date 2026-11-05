@@ -122,6 +122,30 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
       ${BRUSH}
       void main(){
         vec3 n=normalize(vN); if(!gl_FrontFacing)n=-n;
+        ${kind==='bark'?`
+          // inferred: added fine twigs and distant trunks carry a quiet brown
+          // wash; metre-scale furrow relief is neither visible nor useful here.
+          if(abs(vKind-90.)<.5){
+            float sun=smoothstep(-.15,.70,dot(n,paintSun));
+            vec3 twig=vC*mix(vec3(.57,.60,.70),vec3(1.23,1.08,.85),sun);
+            twig=mix(twig,linearColor(vec3(.76,.75,.69)),smoothstep(25.,120.,-vP.z)*.72);
+            gl_FragColor=vec4(twig,1.);return;
+          }
+        `:''}
+        ${kind==='leaf'?`
+          // Closed canopy lobes need neither cutout coverage nor the near
+          // flower brush field. Reject hidden backs before shading their wash.
+          if(abs(vKind-84.)<.5||abs(vKind-85.)<.5||abs(vKind-89.)<.5){
+            if(!gl_FrontFacing)discard;
+            float dome=smoothstep(-.45,.85,dot(n,paintSun));
+            vec3 canopy=vC*mix(vec3(.57,.65,.62),vec3(1.13,1.07,.83),dome);
+            float leafLoad=noise(vP.xz*2.1+vP.y*.7)*.70+noise(vP.xy*4.3)*.30;
+            canopy*=.84+.27*leafLoad;
+            canopy=mix(canopy,linearColor(vec3(.76,.75,.69)),smoothstep(35.,140.,-vP.z)*.68);
+            if(abs(vKind-85.)<.5)canopy=mix(canopy,linearColor(vec3(.79,.75,.64)),.35+smoothstep(15.,100.,-vP.z)*.40);
+            gl_FragColor=vec4(canopy,1.);return;
+          }
+        `:''}
         float variation=0.0, wash=0.0; ${code}
         ${kind==='roof'?`
           float rowFade=0.,rowPhase=0.;
@@ -348,7 +372,12 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             if(vKind>26.5&&vKind<27.5){
               float soil=noise(vP.xz*vec2(.15,.18));
               c=mix(linearColor(vec3(.60,.56,.46)),linearColor(vec3(.61,.63,.49)),soil);
+              // inferred: low-contrast overlapping yellow-green and olive
+              // brush tufts stay in the existing grass value family.
+              float tufts=pigmentDab(vP.xz*vec2(2.2,1.3)+3.);
               c*=.93+.10*noise(vP.xz*.55);
+              c=mix(c,c*vec3(1.10,1.08,.87),max(tufts,0.)*.75);
+              c=mix(c,c*vec3(.88,.93,.84),max(-tufts,0.)*.65);
             }
           }
           if(vKind>31.5&&vKind<32.5){
@@ -491,12 +520,16 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             // inferred: dry cinnabar scumbles follow the rail or shaft, with
             // warm worn bevels and deep red-brown soffits, never speckled cells.
             vec2 grain=abs(vKind-71.)<.5?vec2(vP.z,vP.y+vP.x*.17):vec2(vP.y,vP.x+vP.z*.37);
-            float broad=noise(grain*vec2(.45,1.8)),dry=noise(grain*vec2(.7,16.));
-            float fade=1.-smoothstep(.6,1.3,max(length(dFdx(grain*vec2(.7,16.))),length(dFdy(grain*vec2(.7,16.)))));
+            // inferred: short warped scumbles interrupt the posts; only the
+            // long rails carry lengthwise dry-brush wear, never ruled stripes.
+            vec2 wear=grain*(abs(vKind-71.)<.5?vec2(.7,12.):vec2(1.7,3.8));
+            wear+=vec2(noise(grain*.9+4.),noise(grain*1.3+7.))*1.6;
+            float broad=noise(grain*vec2(.8,1.8)),dry=noise(wear);
+            float fade=1.-smoothstep(.6,1.3,max(length(dFdx(wear)),length(dFdy(wear))));
             float beamSun=max(smoothstep(.30,.88,dot(n,paintSun)),max(n.y,0.)*.65);
             c=mix(linearColor(vec3(.42,.20,.18)),linearColor(vec3(.79,.40,.28)),beamSun)*(.92+broad*.15);
             c=mix(c,linearColor(vec3(.87,.57,.39)),smoothstep(.56,.76,dry)*fade*(.10+.16*beamSun));
-            c*=1.+pigmentDab(grain*vec2(.5,6.))*.28;
+            c*=1.+pigmentDab(wear*vec2(.8,1.1))*.31;
             c*=1.-max(-n.y,0.)*.34;
           }
           if(abs(vKind-21.)<.5){
@@ -579,15 +612,25 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             float quayYaw=${Math.atan(.884).toFixed(6)};
             vec2 local=mat2(cos(quayYaw),sin(quayYaw),-sin(quayYaw),cos(quayYaw))*(vP.xz-vec2(-13.81,0.));
             vec2 stoneQ=vec2(local.y,vP.y),stoneSize=vec2(1.65,.68);
+            vec3 undappled=c;${dappleGLSL(dapple)}c=undappled;
+            if(abs(vKind-73.)<.5||abs(vKind-75.)<.5){
+              // D4: mid-tone worn stone faces and warmer lit tops, crossed by
+              // the same projected leaf shade as the paving and moored boat.
+              vec3 face=linearColor(vec3(.659,.604,.518)),top=linearColor(vec3(.847,.784,.659));
+              c=mix(face*.67,face,sun);c=mix(c,top,max(n.y,0.));
+              c*=mix(vec3(.61,.63,.77),vec3(1.03,1.00,.95),dapple);
+            }
             if(abs(vKind-75.)<.5){stoneQ=vec2(q.x,vP.y-${(MOORING.position[1]-.10).toFixed(6)});stoneSize=vec2(.62,.63);}
-            if(abs(vKind-73.)<.5){stoneSize=vec2(1.2,.36);c*=1.+max(n.y,0.)*.15;}
+            if(abs(vKind-73.)<.5)stoneSize=vec2(1.2,.36);
             if(abs(vKind-70.)<.5){
-              c=linearColor(vec3(.61,.56,.52));${dappleGLSL(dapple)}
               c=mix(linearColor(vec3(.46,.45,.53)),linearColor(vec3(.85,.70,.59)),dapple);
               stoneQ=local;stoneSize=vec2(2.15,1.65);
             }
-            ${reflection?'c*=1.+(noise(stoneQ*.5)-.5)*.10;':`float joints=(abs(vKind-73.)<.5||abs(vKind-75.)<.5)?0.:.35;
-            c=paintedStone(c,stoneQ,stoneSize,vec4(joints,.14,.64,.15),vec2(.006,.022));`}
+            ${reflection?'c*=1.+(noise(stoneQ*.5)-.5)*.10;':`float joints=(abs(vKind-73.)<.5||abs(vKind-75.)<.5)?0.:abs(vKind-70.)<.5?.66:.35;
+            // The approved ashlar wall retains its D3 finish; D4's stronger
+            // wear and joints apply only to the coping, mooring and paving.
+            bool wall=abs(vKind-74.)<.5;
+            c=paintedStone(c,stoneQ,stoneSize,vec4(joints,.14,wall?.64:.80,.15),wall?vec2(.006,.022):vec2(.009,.026));`}
             float moss=(1.-smoothstep(.08,.62,vP.y))*smoothstep(.38,.70,noise(vP.xz*vec2(1.3,.9)));
             c=mix(c,linearColor(vec3(.30,.37,.25)),moss*.58);
             float canopyShade=(1.-smoothstep(.65,1.5,abs(vP.x+14.)))*smoothstep(-19.,-16.,vP.z)*(1.-smoothstep(-5.,-3.,vP.z));
@@ -601,6 +644,12 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
           }
         `:''}
         ${kind==='plaster'&&profile==='zhouqiao'?`if(abs(vKind-66.)<.5)c=linearColor(vec3(.77,.69,.56))*(.93+.10*noise(q*.45));`:''}
+        ${kind==='leaf'?`
+          // inferred: willow leaves keep three coherent whip values; closed
+          // crowns receive soft directional light instead of cutout noise.
+          if(abs(vKind-83.)<.5)c=vC*mix(vec3(.72,.79,.72),vec3(1.10,1.07,.85),light)*(.82+.18*vData.x);
+          if(abs(vKind-86.)<.5||abs(vKind-87.)<.5||abs(vKind-88.)<.5)c=vC*(.78+.32*light);
+        `:''}
         // inferred: painted aerial wash, deliberately independent of view direction.
         float haze=smoothstep(35.0,140.0,-vP.z)*.68;
         c=mix(c,linearColor(vec3(.76,.75,.69)),haze);
@@ -628,6 +677,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             coverage=smoothstep(.10,.58,facing+(feather-.5)*.20)*smoothstep(.22-fa,.56+fa,feather);
             c*=.80+feather*.30;
           }
+          if(vKind>83.5&&vKind<89.5)coverage=1.;
           if(abs(vKind-81.)<.5){c=vC*(.83+.30*light);coverage=1.;}
           if(abs(vKind-80.)<.5){c=linearColor(vec3(.32,.28,.36));coverage=(1.-smoothstep(.12,1.,length((vUv-.5)*2.)))*.30;}
         ` : ''}

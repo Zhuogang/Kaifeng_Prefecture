@@ -3,10 +3,11 @@ import {PaintBatch} from './batch.js';
 import {paintMaterial} from './materials.js';
 import {paintVisibility} from './visibility.js';
 import {paintedHalls} from './halls.js';
-import {blossomGeometry,scatteredPetals,groundPetals} from './blossom.js';
+import {blossomGeometry,distantBlossomGeometry,scatteredPetals,groundPetals} from './blossom.js';
 import {beveledBox} from './stonework.js';
 import {Geometry,V} from '../flora/geometry.js';
 import {buildCrane} from '../modules/cranes.js';
+import {broadleafGeometry} from './foliage.js';
 // inferred: all composed dimensions/placements and wear fields here follow c1,
 // not a surveyed site. Hall members, roof profile and brackets use yingzao.
 export function composeXuande(engine,time,viewAt){
@@ -97,20 +98,41 @@ export function composeXuande(engine,time,viewAt){
  both('stone',[-70,-.30,0],[80,.70,240],'#969c72',1,false,27);
  both('stone',[54,-.30,0],[70,.70,240],'#969c72',1,false,27);
  both('stone',[-29.8,-.30,39],[1.2,.70,82],'#9b9478',1,false,27);
+ // inferred: enclosed far halls stand on the grove ground; only their
+ // quiet roof hints emerge, without tiny ornaments or floating open posts.
  const horizonRng=engine.rng('S2-xuande-horizon');
  for(let layer=0;layer<2;layer++)for(let i=0;i<17;i++){
   const x=-100+i*13+horizonRng.range(-3,3),z=-55-layer*29-horizonRng.range(0,12);
-  halls.hall([x,8.5+layer*.5,z],horizonRng.range(.55,.85),false,true);
+  halls.hall([x,.05,z],horizonRng.range(.55,.85),false,true,{bayFill:'wall',ornaments:false});
  }
- const horizon=new Geometry();
- for(const sign of [-1,1])for(let i=0;i<13;i++){
-  const x=sign*horizonRng.range(42,105),z=horizonRng.range(-95,-35),h=horizonRng.range(10,18);
-  for(let j=0;j<8;j++)horizon.card(V(x+Math.cos(j*2.4)*h*.18,h*(.62+.10*Math.sin(j)),z+Math.sin(j*2.4)*h*.15),h*.55,h*.50,V(.15,0,1),new THREE.Color(horizonRng.pick(['#a8a98a','#9c9d82','#b7ac89','#a5aa98'])),{kind:28,sway:.04,roll:Math.sin(j)*.15,segments:2});
+ // inferred: the former overlapping rectangular cards made pale unreadable
+ // blocks. Closed round lobes now reveal warm haze and real roofs between them.
+ for(const sign of [-1,1])for(let i=0;i<12;i++){
+  const x=sign*horizonRng.range(45,108),z=horizonRng.range(-100,-36),h=horizonRng.range(10,17);
+  const g=broadleafGeometry(engine.rng(`D4-xuande-grove-${sign}-${i}`),{height:h}),m=new THREE.Matrix4().makeTranslation(x,0,z);
+  bark.add(g.wood,m);leaf.add(g.leaves,m);reflected.leaf.add(g.leaves,m);g.wood.dispose();g.leaves.dispose();
  }
- const hg=horizon.build();leaf.add(hg);reflected.leaf.add(hg);hg.dispose();
- function tree(x,z,h,white=false,hero=false){const g=blossomGeometry(engine.rng(`S1-blossom-${x}-${z}`),{height:h,hero,white}),m=new THREE.Matrix4().makeTranslation(x,0,z);bark.add(g.wood,m,'#ffffff',hero?.78:1);leaf.add(g.flowers,m);reflected.bark.add(g.wood,m);reflected.leaf.add(g.reflectionFlowers||g.flowers,m);g.wood.dispose();g.flowers.dispose();g.reflectionFlowers?.dispose();}
+ function tree(x,z,h,white=false,hero=false,far=false){const options={height:h,hero,white,detailRng:engine.rng(`D4-blossom-details-${x}-${z}`)},seed=engine.rng(`S1-blossom-${x}-${z}`),g=far?distantBlossomGeometry(seed,options):blossomGeometry(seed,options),m=new THREE.Matrix4().makeTranslation(x,0,z);bark.add(g.wood,m,'#ffffff',hero?.78:1);leaf.add(g.flowers,m);reflected.bark.add(g.wood,m);reflected.leaf.add(g.reflectionFlowers||g.flowers,m);g.wood.dispose();g.flowers.dispose();g.reflectionFlowers?.dispose();}
  tree(-22,48,22,false,true);tree(-34,23,12.5,true);
  for(let i=0;i<12;i++){tree(-34+rng.range(-4,4),5+i*4.2,rng.range(5.7,9.5),i%3===0);tree(29+rng.range(-2,5),3+i*4,rng.range(5,8),i%3===1);}
+ // inferred: smaller blossom rows recede along both banks beyond the
+ // existing grove, with a few higher crowns outside the side platforms.
+ const gardenRng=engine.rng('D4-xuande-garden');
+ for(const sign of [-1,1])for(let i=0;i<4;i++){
+  const x=sign<0?-43-i*3:46+i*3,z=-8-i*8;
+  tree(x,z,10.5+i*.5,i%3===0,false,true);
+ }
+ // inferred: sparse three-blade tufts and fallen petals dress the existing
+ // olive ground without changing its broad value or drawing attention.
+ const grass=new Geometry();
+ for(const [x0,x1]of [[-46,-31],[25,47]])for(let i=0;i<280;i++){
+  const p=V(gardenRng.range(x0,x1),.065,gardenRng.range(-12,62)),a=gardenRng.range(0,Math.PI*2),c=new THREE.Color(gardenRng.pick(['#a4a572','#919a62','#b1af78','#87915e']));
+  for(let j=0;j<3;j++)grass.blade(p,gardenRng.range(.14,.34),gardenRng.range(.035,.075),V(Math.cos(a+j)*.5,1,Math.sin(a+j)*.5),c,.025,a+j);
+ }
+ const gg=grass.build();leaf.add(gg,undefined,'#ffffff',1,0,88);gg.dispose();
+ for(const x of [[-43,-31],[25,43]]){
+  const g=scatteredPetals(gardenRng,{count:160,x,z:[-8,60],scale:1});leaf.add(g);g.dispose();
+ }
  const ground=groundPetals(engine.rng('S1-lying-petals'),{count:18,x:[-9,8],z:[45,56],scale:2.5});leaf.add(ground.petals);ground.petals.dispose();
  const petalShadows=new PaintBatch();petalShadows.add(ground.shadows);ground.shadows.dispose();
  const petals=scatteredPetals(rng,{count:650,x:[-13,22],z:[1,44],scale:1.25});leaf.add(petals);petals.dispose();

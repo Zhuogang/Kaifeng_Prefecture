@@ -1,12 +1,12 @@
 // Completed per-pass wall time through the real scroll route. Read one pixel
 // after every draw so driver batching cannot hide work in the next pass.
-// node tools/paint/perf-passes.mjs [--out out/D1b/passes.json] [--frames 6]
+// node tools/paint/perf-passes.mjs [--out out/D4/passes.json] [--frames 6]
 import fs from 'node:fs';
 import {launchBrowser, observeErrors} from '../browser.mjs';
 import {startServer} from '../serve.mjs';
 const option=(n,d)=>{const i=process.argv.indexOf('--'+n);return i<0?d:process.argv[i+1];};
-const out=option('out','out/D1b/passes.json'), frames=+option('frames',6);
-fs.mkdirSync('out/D1b',{recursive:true});
+const out=option('out','out/D4/passes.json'), frames=+option('frames',6);
+fs.mkdirSync('out/D4',{recursive:true});
 const server=await startServer(0),browser=await launchBrowser({width:1280,height:720}),results={};
 try {
  for(const scene of [0,1]){

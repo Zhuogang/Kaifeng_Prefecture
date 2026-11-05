@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {Geometry,V} from '../flora/geometry.js';
 import {barkRelief} from './bark.js';
+import {crownLobe} from './foliage.js';
 // inferred: peach/plum-like branching and pigment clusters compose c1; five
 // rounded petals, small leaves, and irregular lit clumps replace spherical crowns.
 function flower(g,p,r,normal,color,rng,hero){
@@ -16,8 +17,8 @@ function flower(g,p,r,normal,color,rng,hero){
  }
  const core=new THREE.Color('#c99a4e');g.flower(p.clone().addScaledVector(n,.008),r*.13,n,core,.13,0,0);
 }
-export function blossomGeometry(rng,{height=7,hero=false,white=false}={}){
- const wood=new Geometry(),bloom=new Geometry(),h=height;
+export function blossomGeometry(rng,{height=7,hero=false,white=false,detailRng=null}={}){
+ const wood=new Geometry(),bloom=new Geometry(),h=height,clusters=[];
  if(hero){bloom.reflectionProxy=new Geometry();bloom.reflectionIndex=0;}
  const trunk=hero?[V(-1,-1,0),V(-.5,h*.21,-.6),V(1.3,h*.43,-1.6),V(6.2,h*.65,-2.1),V(13.2,h*.80,-2.8),V(21.2,h*.84,-3.2)]:[V(),V(.16,h*.18,0),V(-.2,h*.32,-.2),V(.2,h*.47,0)];
  wood.tube(trunk,hero?[1.95,1.65,1.14,.75,.40,.06]:[h*.034,h*.027,h*.019,h*.008],new THREE.Color('#48423c'),{sides:hero?16:8,gnarl:hero?.35:.75,smooth:5});
@@ -28,10 +29,11 @@ export function blossomGeometry(rng,{height=7,hero=false,white=false}={}){
   const mid=from.clone().lerp(tip,.6).add(V(.1,.6,0));wood.tube([from,mid,tip],[hero?.14:h*.02,hero?.075:h*.010,.012],new THREE.Color('#52453e'),{sides:6,gnarl:.6,smooth:3});
   for(let j=0;j<(hero?9:5);j++){
    const base=mid.clone().lerp(tip,rng.range(.25,1)),end=base.clone().add(V(rng.range(-.65,.65),rng.range(.1,.9),rng.range(-.65,.65)));
+   clusters.push({base,end});
    wood.tube([base,end],[.027,.005],new THREE.Color('#483b39'),{sides:4,smooth:1});
    for(let k=0;k<(hero?12:8);k++){
     const p=end.clone().add(V(...rng.sphere()).multiplyScalar(rng.range(.06,hero?.72:.76)));
-    const color=new THREE.Color(rng.pick(colors)).lerp(new THREE.Color(white?'#b59a9d':'#a65370'),hero?(p.y<end.y?.30:.08):(p.y<end.y?.36:.08)).multiplyScalar(.91+.13*THREE.MathUtils.clamp((p.y/h-.35)/.6,0,1));
+    const color=new THREE.Color(rng.pick(colors)).lerp(new THREE.Color(white?'#b59a9d':'#a65370'),hero?(p.y<end.y||p.z<end.z-.15?.46:.08):(p.y<end.y?.42:.08)).multiplyScalar(.91+.13*THREE.MathUtils.clamp((p.y/h-.35)/.6,0,1));
     const normal=V(rng.range(-.75,.75),rng.range(-.2,.8),rng.range(.3,1)).normalize();
     flower(bloom,p,hero?rng.range(.22,.37):rng.range(.14,.25),normal,color,rng,hero);
     if(k===0&&(!hero||rng.chance(.45)))bloom.leaf(p,hero?.36:.20,hero?.17:.10,V(.3,.5,.1),new THREE.Color('#6e8261'),.1,a,1);
@@ -51,6 +53,23 @@ export function blossomGeometry(rng,{height=7,hero=false,white=false}={}){
  if(hero)for(let j=0;j<16;j++){
   const f=j/15*(trunk.length-2)+1,index=Math.min(trunk.length-2,Math.floor(f)),center=trunk[index].clone().lerp(trunk[index+1],f-index).add(V(rng.range(-.8,.8),rng.range(.2,1.8),rng.range(-1,1)));
   for(let k=0;k<38;k++){const p=center.clone().add(V(...rng.sphere()).multiplyScalar(rng.range(.2,1.15)));flower(bloom,p,rng.range(.24,.40),V(rng.range(-.6,.6),rng.range(-.1,.7),1),new THREE.Color(rng.pick(colors)),rng,true);}
+ }
+ // inferred: a separate detail seed leaves the accepted flowers in place.
+ // Short crossing twigs thread existing clusters, with buds and fresh leaves
+ // on their tips; no additional sheets of flowers or alpha cards.
+ if(detailRng){
+  const count=hero?36:3;
+  for(let i=0;i<count;i++){
+   const host=clusters[Math.floor(i*clusters.length/count)],from=host.base.clone().lerp(host.end,.55);
+   const tip=host.end.clone().add(V(detailRng.range(-.45,.45),detailRng.range(.10,.60),detailRng.range(-.50,.25)));
+   const mid=from.clone().lerp(tip,.60).add(V(.1,.10,0));
+   wood.tube([from,mid,tip],[hero?.024:.016,.012,.003],new THREE.Color('#62483d'),{sides:4,smooth:2,kind:90});
+   for(let j=0;j<3;j++){
+    const p=mid.clone().lerp(tip,(j+1)/3),r=detailRng.range(.035,.070)*(hero?1:.75);
+    bloom.ellipsoid(p,V(r*.75,r,r*.75),new THREE.Color(j%2?'#bb6380':'#d88798'),{detail:-1,kind:86,sway:.08});
+    if(j!==1)bloom.leaf(p,hero?.19:.13,hero?.085:.06,V(detailRng.range(-.6,.6),.5,.3),new THREE.Color(i%2?'#849b52':'#a5ad63'),.08,i*2.4,87);
+   }
+  }
  }
  if(hero)for(let i=0;i<wood.p.length/3;i++){
   const relief=(barkRelief(wood.uv[i*2],wood.uv[i*2+1])-.5)*.10;
@@ -87,4 +106,22 @@ export function groundPetals(rng,{count,x,z,scale=1}={}){
   shadows.tri(ids[0],ids[2],ids[1]);shadows.tri(ids[0],ids[3],ids[2]);
  }
  const g=petals.build();g.computeVertexNormals();return {petals:g,shadows:shadows.build()};
+}
+
+// inferred: the added distant bank rows use sparse real flowers on forked
+// branches. Their reflection needs only a closed pink crown silhouette.
+export function distantBlossomGeometry(rng,{height=9,white=false}={}){
+ const wood=new Geometry(),flowers=new Geometry(),proxy=new Geometry(),h=height;
+ wood.tube([V(),V(.1,h*.34,0),V(-.2,h*.58,0)],[h*.035,h*.024,h*.010],new THREE.Color('#655448'),{sides:5,smooth:1,kind:90});
+ for(let i=0;i<12;i++){
+  const a=i*2.399,r=h*rng.range(.10,.31),center=V(Math.cos(a)*r,h*(.68+rng.range(-.10,.12)),Math.sin(a)*r);
+  const color=new THREE.Color(white?'#cfb5a7':'#be8a97');
+  crownLobe(proxy,center,V(h*.13,h*.14,h*.13),color,i,{kind:89,detail:0,sway:0});
+  wood.tube([V(0,h*.36,0),center],[h*.015,.008],new THREE.Color('#6a504a'),{sides:4,smooth:1,kind:90});
+  for(let j=0;j<12;j++){
+   const p=center.clone().add(V(...rng.sphere()).multiplyScalar(h*rng.range(.08,.15)));
+   flowers.flower(p,rng.range(.15,.24),V(.2,.4,1),new THREE.Color(rng.pick(white?['#ead3b9','#e7c7b4','#c7aab0']:['#e7a7aa','#f1beb0','#ce8e9e'])),.03,0,5);
+  }
+ }
+ return {wood:wood.build(),flowers:flowers.build(),reflectionFlowers:proxy.build()};
 }
