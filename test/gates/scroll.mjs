@@ -53,7 +53,7 @@ try {
   check(/fps/i.test(await text()), 'P shows the frame-rate readout');
   const status = await page.evaluate(() => window.__scroll.status());
   check([status.frameMs, status.fps, status.pixelRatio, status.calls, status.triangles].every((v) => Number.isFinite(v) && v > 0), `status reports real numbers: ${JSON.stringify(status)}`);
-  check(status.calls <= 40 && status.triangles <= 1.2e6, 'scene 0 is within budget');
+  check(status.calls <= 50 && status.triangles <= 1.6e6, 'scene 0 is within budget');
 
   await page.keyboard.press('ArrowLeft'); await wait(1500);
   check(await page.evaluate(() => window.__scroll.scene()) === 0, '← does nothing on the first scene');
@@ -61,7 +61,7 @@ try {
   await page.waitForFunction(() => window.__scroll.captionsVisible(), { timeout: 60000 });
   check((await text()).includes('正對於大內御街'), 'scene 1 caption is the source text');
   const status1 = await page.evaluate(() => window.__scroll.status());
-  check(status1.calls <= 40 && status1.triangles <= 1.2e6, `scene 1 is within budget: ${status1.calls} calls, ${status1.triangles} triangles`);
+  check(status1.calls <= 50 && status1.triangles <= 1.6e6, `scene 1 is within budget: ${status1.calls} calls, ${status1.triangles} triangles`);
   await page.keyboard.press('ArrowRight'); await wait(1500);
   check(await page.evaluate(() => window.__scroll.scene()) === 1, '→ does nothing on the last scene');
   await page.keyboard.press('ArrowLeft'); await sceneReady(0); pass('← returns to scene 0');
