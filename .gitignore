@@ -3,3 +3,4 @@ out/
 /generated/
 *.log
 .DS_Store
+/dist/
