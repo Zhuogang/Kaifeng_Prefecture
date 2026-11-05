@@ -9,19 +9,20 @@ export const QUALITY = {
     detail: 0.5,          // geometric detail multiplier (segments, sculpt resolution)
     // AO costs one half-resolution pass; its bilateral compose shares accumulation.
     // inferred: extra samples and soft sun shadows are accumulated only after stopping.
-    cloudSteps: 16, bloom: true, settleLtm: true, ao: true, aoSamples: 12, aoSettleSamples: 24, aoStrength: 0.65,
+    // inferred: stronger contact darkening at both moving and settled sample counts.
+    cloudSteps: 16, bloom: true, settleLtm: true, ao: true, aoSamples: 12, aoSettleSamples: 24, aoStrength: 0.9,
   },
   high: {
     name: 'high', spp: 12, msaa: 4,
     shadowMapSize: 4096, cascades: 4, shadowMaxFar: 2400, softShadows: true,
     terrainRes: 1.0, density: 1.0, detail: 1.0,
-    cloudSteps: 32, bloom: true, ao: true, aoSamples: 24, aoSettleSamples: 32, aoStrength: 0.65,
+    cloudSteps: 32, bloom: true, ao: true, aoSamples: 24, aoSettleSamples: 32, aoStrength: 0.9,
   },
   ultra: {
     name: 'ultra', spp: 48, msaa: 4,
     shadowMapSize: 4096, cascades: 4, shadowMaxFar: 3200, softShadows: true,
     terrainRes: 1.0, density: 1.0, detail: 1.0,
-    cloudSteps: 64, bloom: true, ao: true, aoSamples: 32, aoSettleSamples: 32, aoStrength: 0.65,
+    cloudSteps: 64, bloom: true, ao: true, aoSamples: 32, aoSettleSamples: 32, aoStrength: 0.9,
   },
 };
 

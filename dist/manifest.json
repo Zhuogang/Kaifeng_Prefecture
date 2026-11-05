@@ -112,8 +112,8 @@
     },
     {
       "path": "src/core/quality.js",
-      "bytes": 1503,
-      "sha256": "863a239518babb3fa61adacab3555dc9ff1c930e0359cd81512e612031e6891e"
+      "bytes": 1586,
+      "sha256": "58ed8783b10a66584101f67e5b61d59a9f5a004b85a01c3bd7f4d1b3ee28f15c"
     },
     {
       "path": "src/core/rng.js",
@@ -342,8 +342,8 @@
     },
     {
       "path": "src/world/looks.js",
-      "bytes": 6406,
-      "sha256": "f57113544e57e3b1ed5607e98c729a329c695a42b10bc62e907c8c6356ab4680"
+      "bytes": 6728,
+      "sha256": "8655d770febd145f28b888ba34016e9b9febb0884309430ed7111b450ce1187e"
     },
     {
       "path": "src/world/plan.js",
