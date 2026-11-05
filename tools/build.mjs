@@ -1,4 +1,4 @@
-// Self-contained ES-module delivery. No bundler, network, assets or source-tree mutations.
+// Self-contained ES-module delivery, including the approved local backdrop assets.
 // Serve with tools/serve.mjs at /dist/index.html, or startServer(port, absoluteDistPath).
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -78,14 +78,20 @@ try {
     await write(path.relative(root, source), await fs.readFile(source)); baked++;
   }
 } catch (error) { if (error.code !== 'ENOENT') throw error; }
+let assetFiles = 0;
+try {
+  for (const source of await walk(path.join(root, 'assets'))) {
+    await write(path.relative(root, source), await fs.readFile(source)); assetFiles++;
+  }
+} catch (error) { if (error.code !== 'ENOENT') throw error; }
 const html = (await fs.readFile(path.join(root, 'index.html'), 'utf8'))
   .replaceAll('./node_modules/three/', './vendor/three/');
 if (html.includes('/node_modules/')) throw new Error('Unresolved node_modules path in delivery HTML');
 await write('index.html', html);
-const manifest = { files: files.sort((a, b) => a.path.localeCompare(b.path)), bakedFiles: baked };
+const manifest = { files: files.sort((a, b) => a.path.localeCompare(b.path)), bakedFiles: baked, assetFiles };
 await write('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
 const bytes = files.reduce((sum, file) => sum + file.bytes, 0);
-console.log(`[build] dist/: ${files.length} files, ${(bytes / 1e6).toFixed(2)} MB, ${baked} baked files, ${Math.round(performance.now() - started)} ms`);
+console.log(`[build] dist/: ${files.length} files, ${(bytes / 1e6).toFixed(2)} MB, ${baked} baked files, ${assetFiles} asset files, ${Math.round(performance.now() - started)} ms`);
 console.log('[build] Serve /dist/index.html with node tools/serve.mjs, or host dist/ at any URL prefix.');
 console.log('[build] LEAD NOTE: add dist/ to .gitignore. The implementer may not edit .gitignore.');
 if (!baked) console.log('[build] No bake inputs found. World modules must expose versioned loadOrBuild hooks before baking can reduce construction time.');

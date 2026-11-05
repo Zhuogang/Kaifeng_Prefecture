@@ -13,9 +13,10 @@ export async function build(engine) {
   installPaintOutput(engine);
   const time = { value: engine.time };
   engine.onUpdate(t => { time.value = t; });
-  paintedSky(engine);
-  paintedWater(engine, time);
-  compose(engine, time);
+  const backdrop = await paintedSky(engine);
+  const reflectionScene = compose(engine, time);
+  reflectionScene.add(backdrop.clone());
+  paintedWater(engine, time, reflectionScene);
   engine.registry.paint.views = [paintView(), ...Array.from({ length: 8 }, (_, i) => paintView(i / 7, i * 2))];
   if (engine.params.get('drift') === '1') {
     const render = engine.renderInteractive.bind(engine);
