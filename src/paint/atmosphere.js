@@ -76,8 +76,10 @@ export function paintedWater(engine,time,reflectionScene,{width=1536,height=864,
         // finer on the image toward the bridge without a camera-locked texture.
         float depth=clamp((p.y+20.)/34.,0.,1.);
         float phase=1.8*p.y+10.2*(34.*(pow(depth,3.)-.5*pow(depth,4.))+max(p.y-14.,0.));
-        vec2 q=vec2(p.x*mix(2.6,1.15,front),phase);
-        q.x+=noise(p*.21)*1.9;
+        // inferred: 10:1 growth of depth frequency against cross-river
+        // frequency keeps even the distant marks long and horizontal.
+        vec2 q=vec2(p.x*${river?'mix(.18,1.15,front)':'mix(2.6,1.15,front)'},phase);
+        q.x+=noise(p*.21)*1.9*${river?'front':'1.'};
         q.y+=noise(p*vec2(.36,1.1))*.8+sin(p.x*.6+paintTime*.55)*.15;
         float footprint=max(length(dFdx(q)),length(dFdy(q)));
         float broad=mix(.5,noise(q),1.-smoothstep(.65,1.75,footprint));
@@ -114,15 +116,16 @@ export function paintedWater(engine,time,reflectionScene,{width=1536,height=864,
         reflected=mix(reflected,linearColor(vec3(.64,.59,.46)),warmStone*.16);
         float warmReflection=smoothstep(.05,.26,reflected.r-reflected.b);
         reflected*=mix(vec3(1.),vec3(1.18,1.04,.82),warmReflection*.25);
-        float mirror=${river?'(.46+.22*strokes)*(1.-smoothstep(1.,18.,p.y)*.55)':'.40+.20*strokes'};
+        float calm=${river?'1.-smoothstep(-14.,-2.,p.y)':'0.'};
+        float mirror=${river?'mix((.46+.22*strokes)*(1.-smoothstep(1.,18.,p.y)*.55),.86,calm)':'.40+.20*strokes'};
         vec3 c=mix(body,reflected,mirror);
-        c+=linearColor(vec3(.68,.65,.50))*(1.-strokes)*.055;
+        c+=linearColor(vec3(.68,.65,.50))*(1.-strokes)*mix(.055,.015,calm);
         float glint=smoothstep(.74,.94,fine)*smoothstep(.45,.74,noise(p*vec2(.37,3.7)+8.));
-        c+=linearColor(vec3(.73,.75,.62))*glint*.055;
+        c+=linearColor(vec3(.73,.75,.62))*glint*mix(.055,.015,calm);
         // inferred: independent horizontal pigment loads follow the same
         // depth-scaled river coordinates as the reflection strokes.
-        c=brokenColor(c,q,${river?'vec2(.70,.45),mix(2.8,.75,front)':'vec2(.35,.25),2.8'},vec3(1.40,1.08,.55),vec3(.60,1.02,1.50),vec3(.72,1.12,1.08),vec3(1.35,1.10,.68));
-        ${river?'c*=1.+pigmentDab(q*vec2(.8,.55)+5.)*mix(1.4,.05,front);':''}
+        c=brokenColor(c,q,${river?'vec2(.70,.45),mix(mix(2.8,.75,front),.12,calm)':'vec2(.35,.25),2.8'},vec3(1.40,1.08,.55),vec3(.60,1.02,1.50),vec3(.72,1.12,1.08),vec3(1.35,1.10,.68));
+        ${river?'c*=1.+pigmentDab(q*vec2(.8,.55)+5.)*mix(mix(1.4,.05,front),.06,calm);':''}
         float bankEdge=(${QUAY.intercept.toFixed(6)})+p.y*${QUAY.slope.toFixed(6)};
         float bankShade=exp(-max(0.,p.x-bankEdge)*.8)*smoothstep(-13.,0.,p.y);
         float hullHalf=${(BOAT.width*.5).toFixed(6)}*(1.-.72*pow(min(abs(along),1.),3.))*.70;

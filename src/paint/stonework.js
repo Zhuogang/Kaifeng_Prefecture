@@ -3,10 +3,10 @@ import * as THREE from 'three';
 // inferred: quiet warm stone palette, tiny construction variation and chipped
 // post corners. Shared construction helpers accept another scene's dimensions.
 export function stoneBlocks(stone,reflected,rng,{palette=['#cbb997','#c8b694','#cebc9a','#c9b795'],copingColor='#c7b99f'}={}){
-  return (p,s,ao=1,yaw=0,coping=false,pigmentOverride)=>{
+  return (p,s,ao=1,yaw=0,coping=false,pigmentOverride,paintKind=null)=>{
     const pos=p.map(v=>v+rng.range(-.018,.018)),pigment=rng.pick(palette),angle=yaw+rng.range(-.007,.007);
     const color=pigmentOverride||(coping?new THREE.Color(copingColor).multiplyScalar(rng.range(.88,1.06)):pigment);
-    stone.box(pos,s,color,ao,angle,coping||s[1]>.3);reflected.box(pos,s,color,ao,angle);
+    stone.box(pos,s,color,ao,angle,coping||s[1]>.3||paintKind===37,paintKind);reflected.box(pos,s,color,ao,angle,false,paintKind);
   };
 }
 

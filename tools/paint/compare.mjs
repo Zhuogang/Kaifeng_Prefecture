@@ -1,9 +1,9 @@
-// Focused S3 landmarks/region validation. This tool never changes world content.
+// Focused S4 landmarks/region validation. This tool never changes world content.
 import fs from 'node:fs';
 import path from 'node:path';
 import {PNG} from 'pngjs';
-const input=process.argv[2]||'out/S3/xuande/view0.png', label=process.argv[3]||'', scene=process.argv[4]||'xuande';
-const out='out/S3'+(scene==='zhouqiao'?'/zhouqiao':'');
+const input=process.argv[2]||'out/S4/xuande/view0.png', label=process.argv[3]||'', scene=process.argv[4]||'xuande';
+const out='out/S4'+(scene==='zhouqiao'?'/zhouqiao':'');
 const reference=scene==='zhouqiao'?'c2':'c1';
 const target=PNG.sync.read(fs.readFileSync(`refs/style/${reference}.png`));
 const render=PNG.sync.read(fs.readFileSync(input));
@@ -15,15 +15,15 @@ fs.mkdirSync(out,{recursive:true});
 for(const [name,img]of [['compare',pair],['overlay',overlay]]){fs.writeFileSync(`${out}/${name}.png`,PNG.sync.write(img));if(label)fs.writeFileSync(`${out}/${name}${label}.png`,PNG.sync.write(img));}
 {
  const dir=`${out}/crops`;fs.mkdirSync(dir,{recursive:true});
- // Native c1 dimensions: never shrink the reference crop. Renders at another
+ // Native target dimensions: never shrink the reference crop. Renders at another
  // resolution are registered to the same image extent before cutting.
  const registered=resized(render,target.width,target.height);
- const crops=scene==='xuande'?{bark:[0,.12,.26,.52],water:[0,.68,.35,1],paving:[.22,.69,.99,.99],wall:[.28,.44,.78,.68],hall:[.28,.20,.78,.465],avenue:[.22,.69,.99,.99],hero_tree:[0,0,.38,.52],groves:[.76,.45,1,.74],rail:[.05,.76,.32,1],canal:[0,.68,.35,1]}:{bark:[0,.40,.24,.86],hall:[.48,.15,1,.49],water:[.40,.56,1,1],paving:[0,.79,.28,1],boat:[.20,.69,.60,.92]};
+ const crops=scene==='xuande'?{doors:[.34,.55,.73,.68],bark:[0,.12,.26,.52],water:[0,.68,.35,1],paving:[.22,.69,.99,.99],wall:[.28,.44,.78,.68],hall:[.28,.20,.78,.465],avenue:[.22,.69,.99,.99],hero_tree:[0,0,.38,.52],groves:[.76,.45,1,.74],rail:[.05,.76,.32,1],canal:[0,.68,.35,1]}:{far_water:[.24,.55,.98,.73],near_quay:[.07,.46,.20,.60],bark:[0,.40,.24,.86],hall:[.48,.15,1,.49],water:[.40,.56,1,1],paving:[0,.79,.28,1],boat:[.20,.69,.60,.92]};
  for(const [name,r]of Object.entries(crops)){
   const x=Math.floor(r[0]*target.width),y=Math.floor(r[1]*target.height),cw=Math.floor((r[2]-r[0])*target.width),ch=Math.floor((r[3]-r[1])*target.height),crop=new PNG({width:cw*2,height:ch});
   PNG.bitblt(target,crop,x,y,cw,ch,0,0);PNG.bitblt(registered,crop,x,y,cw,ch,cw,0);
   fs.writeFileSync(`${dir}/${name}${label}.png`,PNG.sync.write(crop));fs.writeFileSync(`${dir}/${name}.png`,PNG.sync.write(crop));
  }
- fs.writeFileSync(`${dir}/registration${label}.json`,JSON.stringify({reference:[target.width,target.height],render:[render.width,render.height],crops,left:reference+' native pixels',right:'render registered to c1 extent; no crop shrinking'},null,2)+'\n');
+ fs.writeFileSync(`${dir}/registration${label}.json`,JSON.stringify({reference:[target.width,target.height],render:[render.width,render.height],crops,left:reference+' native pixels',right:'render registered to '+reference+' extent; no crop shrinking'},null,2)+'\n');
  console.log('PASS: compare, overlay and native crop pairs for '+reference);process.exit(0);
 }

@@ -29,7 +29,8 @@ export function compose(engine, time) {
     // inferred: one continuous stone shaft per member of each paired bent.
     // Quiet course marks belong to its surface, rather than alternating cubes.
     block([x,1.43*stretch,z+BRIDGE.skew*x+BRIDGE.offset],[1.22,3.10*stretch,1.04],.94);
-    block(bridgePoint([x, 2.9, z]), [1.2, .28, 1.1], .86);
+    // inferred: capital tops sit in the deck shadow; rounded arrises soften their square silhouette.
+    block(bridgePoint([x, 2.9, z]), [1.2, .28, 1.1], .86,0,false,undefined,37);
   }
   for (let x = BRIDGE.start-1; x < BRIDGE.end; x += 1.35) {
     const camber = .18 * Math.max(0, 1 - (x / 30) ** 2);
@@ -113,22 +114,23 @@ export function compose(engine, time) {
   for(let iz=0;iz<48;iz++){
     const z=-13+iz*step,edge=QUAY.intercept+QUAY.slope*z;
     for(let row=0;row<2;row++)block([edge-.14,.34+row*.62,z],[.75,.60,quayLength-.025],row?1:.70,quayYaw);
-    block([edge,1.40,z],[.66,.21,quayLength-.02],1,quayYaw,true);
+    block([edge,1.40,z],[.66,.21,quayLength-.02],1,quayYaw,true,undefined,36);
   }
+  const pavingRng=engine.rng('S4-quay-stone-pigments');
   for(let ix=0;ix<24;ix++){
     const inset=.67+ix*.65;
     for(let z=-13+(ix%2)*.3;z<25;){
       const length=rng.range(.5,.8),dz=length*Math.cos(quayYaw),center=z+dz*.5;
       const edge=QUAY.intercept+QUAY.slope*center;
       block([edge-inset*Math.cos(quayYaw),1.20,center+inset*Math.sin(quayYaw)],
-        [rng.range(.61,.64),.19,length-.012],.95,quayYaw,false,'#98958e');
+        [rng.range(.61,.64),.19,length-.012],.95,quayYaw,false,pavingRng.pick(['#99958e','#a1988c','#a09287','#93918e']),36);
       z+=dz;
     }
   }
   for(let iz=0;iz<12;iz++){
     const z=-17+iz*1.12;
     for(let row=0;row<3;row++)block([-14.0,.33+row*.62,z],[1.0,.61,1.10],row?.96:.65);
-    block([-14.0,2.0,z],[1.15,.22,1.11],1,0,true);
+    block([-14.0,2.0,z],[1.15,.22,1.11],1,0,true,undefined,36);
   }
   // Source-based post/rail cadence, with a quieter strip below its coping.
   for(let i=0;i<7;i++){

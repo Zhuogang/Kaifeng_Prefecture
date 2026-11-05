@@ -45,6 +45,14 @@ vec3 brokenColor(vec3 c,vec2 q,vec2 scale,float amount,vec3 warm,vec3 cool,vec3 
 vec3 brokenColor(vec3 c,vec2 q,vec2 scale,float amount,vec3 warm,vec3 cool){
   return brokenColor(c,q,scale,amount,warm,cool,vec3(.91,1.06,.84),vec3(1.20,.94,1.12));
 }
+// inferred: paving keeps its per-stone vertex pigment. Sunlit variation stays
+// among ochre/rose/warm grey; only the existing cast shade receives violet.
+vec3 stonePigment(vec3 c,vec2 q,float sunlight){
+  float wash=noise(q*vec2(.65,.85));
+  vec3 warm=mix(vec3(1.06,1.01,.95),vec3(.99,.98,.97),wash);
+  vec3 shade=mix(vec3(.98,.97,1.04),vec3(1.03,.99,.96),wash);
+  return c*mix(shade,warm,sunlight)*(1.+pigmentDab(q*vec2(1.2,1.6))*.16);
+}
 `;
 
 // inferred: soft moving leaf shade, projected along the source sun direction.
@@ -101,6 +109,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao'}={
         vec3 n=normalize(vN); if(!gl_FrontFacing)n=-n;
         float variation=0.0, wash=0.0; ${code}
         float light=smoothstep(-.15,.70,dot(n,paintSun));
+        ${kind==='stone'?'float pigmentSun=light;':''}
         ${kind === 'leaf' ? 'light=.26+.28*abs(dot(n,paintSun))+.28*noise(vP.xz*.45);' : ''}
         vec3 shadow=vC*vec3(.38,.48,.74)+linearColor(vec3(.20,.17,.29))*.35;
         ${kind==='timber'?'if(vP.z<0.)shadow=vC*vec3(.60,.66,.82)+linearColor(vec3(.29,.23,.27))*.30;':''}
@@ -239,7 +248,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao'}={
           if(vP.z>-7. && n.y>.5){
             ${dappleGLSL(dapple)}
             float grey=dot(c,vec3(.2126,.7152,.0722));c=mix(vec3(grey),c,.64);
-            c=brokenColor(c,q,vec2(.8,1.1),3.0,vec3(1.45,1.0,.63),vec3(.72,.98,1.43));
+            pigmentSun=dapple;
           }` : ''}
         ${profile==='zhouqiao'&&['timber','plaster'].includes(kind) ? TOWERS.map(([x,z,s]) => `{
           vec3 p=(vP-vec3(${x.toFixed(6)},3.6,${z.toFixed(6)}))/${s.toFixed(6)};
@@ -273,36 +282,38 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao'}={
           // seepage are attached to masonry; faint courses show through near its foot.
           if(vKind>19.5){
           vec2 wallQ=vec2(vP.x+vP.z*.23,vP.y);
-          // inferred: slow translucent ochre wash; no thresholded blobs or
-          // high-frequency pigment. End planes shade from their true normals.
-          float broadWash=noise(wallQ*vec2(.085,.095))-.5;
-          float rain=noise(wallQ*vec2(.62,.028))-.5;
-          c=linearColor(vec3(.83,.69,.49))*(1.+broadWash*.16+rain*.080+(noise(wallQ*vec2(.32,.18))-.5)*.09);
-          // inferred: soft overlapping broad brush washes, all the same
-          // warm pigment. Gaussian coverage has no thresholded camouflage cells.
-          vec2 brushQ=wallQ*vec2(.43,.35),cell=floor(brushQ);float softWash=0.;
-          for(int iy=-1;iy<=1;iy++)for(int ix=-1;ix<=1;ix++){
-            vec2 id=cell+vec2(float(ix),float(iy)),r=brushQ-id-.5;
-            r+=vec2(hash21(id+3.),hash21(id+9.))*.22-.11;
-            softWash+=exp(-dot(r*vec2(.9,1.6),r*vec2(.9,1.6))*4.)*(hash21(id)-.5);
-          }
-          c*=1.+softWash*.18;
-          // inferred: rose-ochre plaster breaks into loaded brush marks;
-          // the lower courses show through the thinner plaster by the doors.
-          c*=1.+pigmentDab(wallQ*vec2(.75,1.1))*.30+pigmentDab(wallQ*vec2(2.2,2.8)+11.)*.55;
-          float row=vP.y/.85,block=(vP.x+mod(floor(row),2.)*.95)/1.9;
+          // inferred: quiet rose-ochre plaster and 2–6 m washes, with
+          // isolated upper olive-grey clusters rather than all-over dabs.
+          float broadWash=noise(wallQ*vec2(.20,.24)+8.)-.5;
+          float rain=noise(wallQ*vec2(.48,.045)+19.);
+          vec3 plaster=mix(vec3(.83,.66,.49),vec3(.84,.69,.49),smoothstep(3.,10.,vP.y));
+          c=linearColor(plaster)*(1.+broadWash*.13);
+          float cluster=smoothstep(.51,.71,noise(wallQ*vec2(.19,.27)+17.));
+          float upper=smoothstep(6.,10.,vP.y);
+          float lichen=cluster*(.60+.40*noise(wallQ*vec2(.48,.62)+5.))*upper;
+          c=mix(c,linearColor(vec3(.64,.63,.53)),lichen*.34);
+          c*=1.+pigmentDab(wallQ*vec2(.38,.52)+11.)*cluster*.15;
+          // A few large lower stones show where the plaster has thinned.
+          float row=vP.y/1.25,block=(vP.x+mod(floor(row),2.)*1.6)/3.2;
           vec2 edge=min(fract(vec2(block,row)),1.-fract(vec2(block,row)));
           vec2 aa=max(fwidth(vec2(block,row)),vec2(.003));
-          float joint=max(1.-smoothstep(.01-aa.x,.035+aa.x,edge.x),1.-smoothstep(.01-aa.y,.035+aa.y,edge.y));
-          float lower=1.-smoothstep(2.8,4.8,vP.y);
-          c*=1.-joint*lower*.10;
-          c*=1.+(hash21(floor(vec2(block,row)))-.5)*lower*.11;
-          float lichen=smoothstep(.52,.76,noise(wallQ*vec2(.55,.85)+19.))*smoothstep(6.8,10.,vP.y);
-          c=mix(c,linearColor(vec3(.62,.59,.46)),lichen*.18);
-          vec2 canopy=vP.xz+(24.-vP.y)*paintSun.xz/paintSun.y;
-          float leafShade=smoothstep(.46,.63,noise(canopy*vec2(.55,.43))*.7+noise(canopy*1.8)*.3);
-          float shadowReach=(1.-smoothstep(-10.,9.,vP.x))*smoothstep(4.,8.,vP.y);
-          c=mix(c,c*vec3(.66,.64,.78),leafShade*shadowReach*.38);
+          float joint=max(1.-smoothstep(.01-aa.x,.03+aa.x,edge.x),1.-smoothstep(.01-aa.y,.03+aa.y,edge.y));
+          float lower=1.-smoothstep(2.6,4.5,vP.y);
+          float exposed=smoothstep(.68,.91,hash21(floor(vec2(block,row))+8.))*lower;
+          c=mix(c,linearColor(vec3(.73,.63,.53)),exposed*.18);
+          c*=1.-joint*exposed*.10;
+          c*=1.-smoothstep(.56,.80,rain)*exp(-max(0.,12.-vP.y)*.22)*.13;
+          // inferred: a few narrow top-down rain runs sit inside the broad
+          // weathered clusters, leaving most of the plaster unmarked.
+          float run=smoothstep(.76,.88,noise(vec2(wallQ.x*2.4,5.)));
+          c*=1.-run*cluster*exp(-max(0.,12.-vP.y)*.40)*.14;
+          // inferred: an authored world-fixed canopy-shadow proxy on the wall
+          // makes the foreground hero's upper-left dapple legible in c1's pose.
+          float canopy=1.-smoothstep(.42,1.05,length(vec2((vP.x+15.)/20.,(vP.y-12.)/6.)));
+          float leaves=noise(wallQ*vec2(.55,.70))*.65+noise(wallQ*vec2(1.6,1.9)+3.)*.20+noise(wallQ*vec2(3.4,3.8)+8.)*.15;
+          float penumbra=max(.035,fwidth(leaves)*1.2);
+          float leafShade=smoothstep(.42-penumbra,.58+penumbra,leaves);
+          c=mix(c,linearColor(vec3(.50,.48,.55))*(.95+broadWash*.10),canopy*leafShade*.78);
           float foot=exp(-max(vP.y,0.)*.95),top=exp(-abs(vP.y-11.8)*2.1);
           c*=1.-foot*.12-top*.13;
           float returnPlane=pow(abs(n.x),3.);
@@ -319,18 +330,18 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao'}={
             canopy+=vec2(sin(paintTime*.55+vP.z*.3),cos(paintTime*.43+vP.x*.4))*.08;
             float shadeField=noise(canopy*vec2(.30,.2333))*.55+noise(canopy*vec2(1.18,.9333))*.32+noise(canopy*vec2(3.,2.1667))*.13;
             float penumbra=max(.045,fwidth(shadeField)*1.8);
-            float pool=smoothstep(.44-penumbra,.62+penumbra,shadeField);
+            float pool=smoothstep(.55-penumbra*.55,.70+penumbra*.45,shadeField);
             float washTone=noise(vP.xz*vec2(.52,.39));
-            vec3 shade=mix(linearColor(vec3(.44,.43,.48)),linearColor(vec3(.50,.47,.50)),washTone);
-            vec3 sun=mix(linearColor(vec3(.85,.70,.60)),linearColor(vec3(.89,.75,.64)),washTone);
+            vec3 shade=mix(linearColor(vec3(.46,.46,.53)),linearColor(vec3(.50,.49,.54)),washTone);
+            vec3 sun=mix(linearColor(vec3(.85,.70,.60)),linearColor(vec3(.87,.73,.62)),washTone);
             c=mix(shade,sun,pool);
-            c*=.97+.03*clamp(dot(vC,vec3(.2126,.7152,.0722))/.45,.7,1.3);
+            c*=.91+.09*clamp(dot(vC,vec3(.2126,.7152,.0722))/.45,.7,1.3);
             float row=(vP.z-1.)/2.2,cell=(vP.x+11.8-mod(floor(row+.5),2.)*1.55)/3.1;
             vec2 edge=min(fract(vec2(cell,row)+.5),1.-fract(vec2(cell,row)+.5));
             vec2 aa=max(fwidth(vec2(cell,row)),vec2(.001));
             vec2 joints=1.-smoothstep(vec2(.001)-aa,vec2(.016)+aa,edge);
             c*=1.-max(joints.x,joints.y)*.12;
-            c=brokenColor(c,vP.xz,vec2(.30,.42),.8,vec3(1.4,.98,.7),vec3(.78,.98,1.3));
+            pigmentSun=pool;
             if(vKind>26.5&&vKind<27.5){
               float soil=noise(vP.xz*vec2(.15,.18));
               c=mix(linearColor(vec3(.60,.56,.46)),linearColor(vec3(.61,.63,.49)),soil);
@@ -382,7 +393,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao'}={
             c+=linearColor(vec3(.55,.35,.26))*max(0.,dab(vP.xz*vec2(11.,2.)))*max(n.y,0.)*.45;
           }
           if(vKind>20.5&&vKind<21.5){
-            c=linearColor(vec3(.82,.45,.33))*(.94+.08*noise(vP.xy*vec2(2.1,.55)));
+            c=linearColor(vec3(.78,.37,.26))*(.94+.08*noise(vP.xy*vec2(2.1,.55)));
             float board=1.-smoothstep(.01,.04,abs(mod(vP.x,.72)-.36));c*=1.-board*.085;
             c*=1.-smoothstep(4.9,5.8,vP.y)*.22;
           }
@@ -393,11 +404,14 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao'}={
           `:''}
         `:''}
         ${['stone','plaster','timber','roof'].includes(kind)?`
+          ${kind==='plaster'&&profile==='xuande'?'if(vKind<19.5)':''}
+          ${kind==='stone'?`if(${profile==='xuande'?'((vP.y<.2&&abs(vKind-27.)>.5)||abs(vKind-32.)<.5)':'abs(vKind-36.)<.5'})c=stonePigment(c,q,pigmentSun);else`:''}
           c=brokenColor(c,q,${({stone:'vec2(2.1,3.)',plaster:profile==='xuande'?'vec2(.8,1.05)':'vec2(1.25,1.8)',timber:profile==='xuande'?'(vKind>20.5&&vKind<22.5?vec2(.7,1.3):vec2(1.4,4.))':'vec2(1.4,4.)',roof:'vec2(2.6,1.3)'})[kind]},${({stone:'1.5',plaster:profile==='xuande'?'.85':'1.0',timber:profile==='xuande'?'(vKind>20.5&&vKind<21.5?.40:1.0)':'(vKind>8.5&&vKind<9.5?3.5:1.0)',roof:'.55'})[kind]},
             ${kind==='roof'?'vec3(1.20,1.06,.74),vec3(.77,.98,1.35)':kind==='timber'?'vec3(1.38,1.04,.64),vec3(.76,.98,1.35)':'vec3(1.45,1.00,.63),vec3(.72,.98,1.43)'});
         `:''}
         ${kind==='roof'&&profile==='xuande'?'c=mix(vec3(dot(c,vec3(.2126,.7152,.0722))),c,.90)+linearColor(vec3(.14,.10,.05))*.15;':''}
         ${kind==='timber'&&profile==='xuande'?'if(vKind>34.5&&vKind<35.5)c=mix(linearColor(vec3(.48,.29,.09)),linearColor(vec3(.88,.67,.30)),.40+.60*light);':''}
+        ${kind==='stone'&&profile==='zhouqiao'?'if(abs(vKind-37.)<.5)c*=1.-smoothstep(.15,.75,n.y)*.45;':''}
         // inferred: painted aerial wash, deliberately independent of view direction.
         float haze=smoothstep(35.0,140.0,-vP.z)*.68;
         c=mix(c,linearColor(vec3(.76,.75,.69)),haze);
