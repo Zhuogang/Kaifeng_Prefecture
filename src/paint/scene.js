@@ -75,8 +75,8 @@ export function compose(engine, time) {
   function tower(x, z, scale) {
     const m = new THREE.Matrix4().makeScale(scale, scale, scale); m.setPosition(x, 3.6, z);
     const box = (batch, p, s, c, ao = 1) => {
-      const g = new THREE.BoxGeometry(...s); g.translate(...p); batch.add(g, m, c, ao);
-      const family=Object.keys(batches).find(k=>batches[k]===batch);reflected[family].add(g,m,c,ao);g.dispose();
+      const g = new THREE.BoxGeometry(...s); g.translate(...p); batch.add(g,m,c,ao,0,batch===plaster?11:null);
+      const family=Object.keys(batches).find(k=>batches[k]===batch);reflected[family].add(g,m,c,ao,0,batch===plaster?11:null);g.dispose();
     };
     for (const sign of [-1, 1]) {
       box(stone, [sign * 4.8, .25, 0], [3.1, .5, 7.8], '#c6bba5');
@@ -121,7 +121,7 @@ export function compose(engine, time) {
       const length=rng.range(.5,.8),dz=length*Math.cos(quayYaw),center=z+dz*.5;
       const edge=QUAY.intercept+QUAY.slope*center;
       block([edge-inset*Math.cos(quayYaw),1.20,center+inset*Math.sin(quayYaw)],
-        [rng.range(.61,.64),.19,length-.012],.95,quayYaw,false,'#96928c');
+        [rng.range(.61,.64),.19,length-.012],.95,quayYaw,false,'#9d8d78');
       z+=dz;
     }
   }
@@ -143,7 +143,7 @@ export function compose(engine, time) {
     boats: [BOAT] });
   boat.updateMatrixWorld(true);
   boat.traverse(o => {
-    if (o.name === 'solid-plank-hulls') {timber.add(o.geometry,o.matrixWorld,'#92704c',.85);reflected.timber.add(o.geometry,o.matrixWorld,'#92704c',.85);}
+    if (o.name === 'solid-plank-hulls') {timber.add(o.geometry,o.matrixWorld,'#756a59',.80,0,9);reflected.timber.add(o.geometry,o.matrixWorld,'#756a59',.80,0,9);}
   });
   engine.scene.remove(boat);
   boat.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
@@ -158,7 +158,21 @@ export function compose(engine, time) {
   lining.closePath();
   const liner=new THREE.ShapeGeometry(lining).rotateX(-Math.PI/2).translate(0,-.265,0);
   const boatMatrix=new THREE.Matrix4().makeRotationY(BOAT.yaw);boatMatrix.setPosition(...BOAT.position);
-  timber.add(liner,boatMatrix,'#3e3326',.65);reflected.timber.add(liner,boatMatrix,'#3e3326',.65);liner.dispose();
+  timber.add(liner,boatMatrix,'#3e3326',.65,0,9);reflected.timber.add(liner,boatMatrix,'#3e3326',.65,0,9);liner.dispose();
+  // inferred: thicker weathered thwarts and curved ribs cover the source's
+  // very slim members, while preserving the accepted hull and berth placement.
+  for(const s of [-.63,-.22,.22,.63]){
+    const width=BOAT.width*(1-.72*Math.abs(s)**3)*.89;
+    const seat=new THREE.BoxGeometry(.30,.145,width).translate(s*BOAT.length/2,.27+.18*Math.abs(s)**3,0);
+    timber.add(seat,boatMatrix,'#82715a',.85,0,9);reflected.timber.add(seat,boatMatrix,'#82715a',.85,0,9);seat.dispose();
+  }
+  const ribs=new Geometry();
+  for(let i=-3;i<=3;i++)for(const side of [-1,1]){
+    const s=i/4,x=s*BOAT.length/2,w=BOAT.width*.5*(1-.72*Math.abs(s)**3),y=.18*Math.abs(s)**3;
+    ribs.tube([V(x,-.18+y,0),V(x,-.15+y,side*w*.55),V(x,.38+y,side*w*.94)],
+      [.055,.06,.04],new THREE.Color('#77634e'),{sides:5,smooth:2});
+  }
+  const ribGeometry=ribs.build();timber.add(ribGeometry,boatMatrix,'#ffffff',.76,0,9);reflected.timber.add(ribGeometry,boatMatrix,'#ffffff',.76,0,9);ribGeometry.dispose();
   const [mx,my,mz]=MOORING.position;
   const post=chippedPost({...MOORING,rng});
   const postMatrix=new THREE.Matrix4().makeTranslation(mx,my,mz);
@@ -173,11 +187,11 @@ export function compose(engine, time) {
     wrap.push(V(mx+Math.cos(a)*r,my+.60+i/80*.12,mz+Math.sin(a)*r));
   }
   const wrapG=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(wrap),96,.033,5,false);
-  timber.add(wrapG,undefined,'#a58c59');wrapG.dispose();
+  timber.add(wrapG,undefined,'#826e51',1,0,10);wrapG.dispose();
   const ropeStart=V(mx+.3,my+.70,mz-.12),sag=ropeStart.clone().lerp(tie,.5);sag.y=.62;
   const rope=new THREE.CatmullRomCurve3([ropeStart,sag,tie]);
   const ropeG = new THREE.TubeGeometry(rope, 20, .047, 5, false);
-  timber.add(ropeG, undefined, '#bfaa72'); ropeG.dispose();
+  timber.add(ropeG,undefined,'#826e51',1,0,10); ropeG.dispose();
 
   function addWillow(x,z,height,hero=false){
     const rng=engine.rng(`P2-willow-${x}-${z}`),place=new THREE.Matrix4().makeTranslation(x,hero?HERO_WILLOW.position[1]:3.7,z);
@@ -186,8 +200,8 @@ export function compose(engine, time) {
     if(!hero){
       const crown=new Geometry();
       for(let j=0;j<9;j++){
-        const a=j*2.399;crown.ellipsoid(V(Math.cos(a)*height*.19,height*(.58+.06*Math.sin(j)),Math.sin(a)*height*.19),
-          V(height*.16,height*.27,height*.16),new THREE.Color(j%2?'#829267':'#a6a76c'),{sway:.2});
+        const a=j*2.399;crown.ellipsoid(V(Math.cos(a)*height*.19,height*(.48+.06*Math.sin(j)),Math.sin(a)*height*.19),
+          V(height*.20,height*.40,height*.20),new THREE.Color(j%2?'#829267':'#a6a76c'),{sway:.2});
       }
       const cg=crown.build();reflected.leaf.add(cg,place);cg.dispose();
     }

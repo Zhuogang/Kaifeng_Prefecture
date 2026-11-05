@@ -26,11 +26,11 @@ export function paintedHalls(engine,batches,reflected,{timberColor='#bd6236',orn
     visibleHall.traverse(o => {
       if (!o.isMesh) return;
       const k = o.material.name;
-      batches[matFamily[k]].add(o.geometry, placement.clone().multiply(o.matrixWorld), matColor[k], k === 'window' ? .72 : 1);
+      batches[matFamily[k]].add(o.geometry, placement.clone().multiply(o.matrixWorld), matColor[k],k==='window'?.72:1,0,k==='tile'?13:null);
     });
     h.lod2.updateMatrixWorld(true);
     h.lod2.traverse(o=>{
-      if(o.isMesh){const k=o.material.name;reflected[matFamily[k]].add(o.geometry,placement.clone().multiply(o.matrixWorld),matColor[k],k==='window'?.72:1);}
+      if(o.isMesh){const k=o.material.name;reflected[matFamily[k]].add(o.geometry,placement.clone().multiply(o.matrixWorld),matColor[k],k==='window'?.72:1,0,k==='tile'?13:null);}
     });
     if (hero) for (const s of h.layout.sets) {
       const g = bracketGeometry(h.layout.spec, s.kind);

@@ -1,4 +1,4 @@
-// Verify P2's delivered backdrop beneath a hosting prefix, with no source-tree
+// Verify P3's delivered backdrop beneath a hosting prefix, with no source-tree
 // or node_modules fallback. Run tools/build.mjs first, from the repository root.
 import http from 'node:http';
 import fs from 'node:fs';
@@ -11,7 +11,7 @@ let lock;
 for(;;){
   for(let i=0;i<Number(process.env.GPU_SLOTS||2);i++){
     const candidate=path.resolve(`out/.gpu.lock.${i}`);
-    try{const fd=fs.openSync(candidate,'wx');fs.writeSync(fd,JSON.stringify({pid:process.pid,args:'P2 dist proof'}));fs.closeSync(fd);lock=candidate;break;}
+    try{const fd=fs.openSync(candidate,'wx');fs.writeSync(fd,JSON.stringify({pid:process.pid,args:'P3 dist proof'}));fs.closeSync(fd);lock=candidate;break;}
     catch(error){if(error.code!=='EEXIST')throw error;try{process.kill(JSON.parse(fs.readFileSync(candidate)).pid,0);}catch{fs.rmSync(candidate,{force:true});}}
   }
   if(lock)break;
@@ -45,14 +45,14 @@ try{
   const sum=file=>createHash('sha256').update(fs.readFileSync(file)).digest('hex');
   const identical=sum('assets/backdrops/bd1.jpg')===sum('dist/assets/backdrops/bd1.jpg');
   if(bad.length||!identical||!backdrop.width||!new URL(backdrop.source).pathname.startsWith(prefix+'assets/backdrops/'))
-    throw new Error('P2 sub-path delivery failed: '+JSON.stringify({bad,identical,backdrop}));
+    throw new Error('P3 sub-path delivery failed: '+JSON.stringify({bad,identical,backdrop}));
   if(requests.some(r=>r.path.includes('node_modules')||r.path.includes('/refs/')))
-    throw new Error('P2 delivery requested a source dependency or reference image');
-  fs.mkdirSync('out/P2',{recursive:true});
-  fs.writeFileSync('out/P2/dist.png',Buffer.from(image.split(',')[1],'base64'));
+    throw new Error('P3 delivery requested a source dependency or reference image');
+  fs.mkdirSync('out/P3',{recursive:true});
+  fs.writeFileSync('out/P3/dist.png',Buffer.from(image.split(',')[1],'base64'));
   const report={milliseconds:Math.round(performance.now()-start),backdrop,identical,stats,requests};
-  fs.writeFileSync('out/P2/dist-proof.json',JSON.stringify(report,null,2)+'\n');
-  console.log('[P2 dist] PASS',JSON.stringify({milliseconds:report.milliseconds,backdrop,identical,calls:stats.calls,triangles:stats.triangles,requests:requests.length}));
+  fs.writeFileSync('out/P3/dist-proof.json',JSON.stringify(report,null,2)+'\n');
+  console.log('[P3 dist] PASS',JSON.stringify({milliseconds:report.milliseconds,backdrop,identical,calls:stats.calls,triangles:stats.triangles,requests:requests.length}));
 }finally{
   if(browser){await Promise.race([browser.close().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,1500))]);try{browser.process()?.kill('SIGKILL');}catch{}}
   await new Promise(resolve=>{server.close(resolve);server.closeAllConnections?.();});

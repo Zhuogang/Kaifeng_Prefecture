@@ -1,4 +1,4 @@
-// P2's focused visual validation. Uses the same browser/server as tools/render.mjs;
+// P3's focused visual validation. Uses the same browser/server as tools/render.mjs;
 // approved backdrop, motion and pass budgets; no test changes. Run from the repository root.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -7,7 +7,7 @@ import { PNG } from 'pngjs';
 import { launchBrowser, observeErrors } from '../browser.mjs';
 import { startServer } from '../serve.mjs';
 
-const out = path.resolve('out/P2');
+const out = path.resolve('out/P3');
 fs.mkdirSync(out, { recursive: true });
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 let lock;
@@ -16,7 +16,7 @@ for (;;) {
     const candidate = path.resolve(`out/.gpu.lock.${i}`);
     try {
       const fd = fs.openSync(candidate, 'wx');
-      fs.writeSync(fd, JSON.stringify({ pid: process.pid, args: 'P2 capture' })); fs.closeSync(fd);
+      fs.writeSync(fd, JSON.stringify({ pid: process.pid, args: 'P3 capture' })); fs.closeSync(fd);
       lock = candidate; break;
     } catch (error) {
       if (error.code !== 'EEXIST') throw error;
@@ -44,7 +44,7 @@ try {
   if (error) throw new Error(error);
   clean();
   metrics.gpu = await page.evaluate(() => window.__GPU_INFO);
-  console.log('[P2] ready:', metrics.gpu);
+  console.log('[P3] ready:', metrics.gpu);
   const save = (name, data) => {
     const buffer = Buffer.from(data.split(',')[1], 'base64');
     fs.writeFileSync(path.join(out, name), buffer); return buffer;
@@ -52,7 +52,7 @@ try {
   const capture = async (view, spp, name) => {
     const start = performance.now();
     const { image, stats } = await page.evaluate(async (index, samples) => {
-      engine.applyShot({ id: `P2-${index}`, ...engine.registry.paint.views[index] });
+      engine.applyShot({ id: `P3-${index}`, ...engine.registry.paint.views[index] });
       const image = await engine.renderStill(samples);
       const reflection=engine.registry.paint.reflection;
       return { image, stats: {...window.__STATS,reflection:{...reflection.lastStats,width:reflection.width,height:reflection.height}} };
@@ -60,7 +60,7 @@ try {
     clean();
     const buffer = save(name, image);
     metrics.views.push({ view, name, ...stats, wallMs: Math.round(performance.now() - start) });
-    console.log('[P2]', name, JSON.stringify(stats));
+    console.log('[P3]', name, JSON.stringify(stats));
     return buffer;
   };
   await capture(0, 4, 'view0.png');
@@ -69,10 +69,10 @@ try {
   const after = await capture(0, 1, 'repeat.png');
   const digest = b => createHash('sha256').update(b).digest('hex');
   metrics.determinism = { identical: before.equals(after), before: digest(before), after: digest(after) };
-  if (!metrics.determinism.identical) throw new Error('P2 repeated frame differs');
+  if (!metrics.determinism.identical) throw new Error('P3 repeated frame differs');
 
   metrics.passTiming = await page.evaluate(async () => {
-    engine.applyShot({ id: 'P2-profile', ...engine.registry.paint.views[0] });
+    engine.applyShot({ id: 'P3-profile', ...engine.registry.paint.views[0] });
     const renderer = engine.renderer, gl = renderer.getContext(), pipeline=engine.pipeline;
     const samples = { reflection:[], scene: [], accumulation: [], glowDown:[], glowBlur:[], output: [] };
     const reflection=engine.registry.paint.reflection,water=reflection.water,hook=water.onBeforeRender;
@@ -80,7 +80,7 @@ try {
       let status;
       do {
         status = gl.clientWaitSync(sync, 0, 0);
-        if(status===gl.WAIT_FAILED)throw new Error('P2 timing fence failed');
+        if(status===gl.WAIT_FAILED)throw new Error('P3 timing fence failed');
         if(status===gl.TIMEOUT_EXPIRED)await new Promise(resolve=>setTimeout(resolve,2));
       } while(status===gl.TIMEOUT_EXPIRED);
       gl.deleteSync(sync);
@@ -138,20 +138,22 @@ try {
   await page.waitForFunction('window.engine?.time > .4', { timeout: 60000 });
   metrics.drift = await page.evaluate(async () => {
     const {paintView}=await import('/src/modules/paint_zhouqiao.js');
-    const fraction=.5-.5*Math.cos(engine.time*Math.PI/24), expected=paintView(fraction).pos;
+    const fraction=.5-.5*Math.cos(engine.time*Math.PI/24),view=paintView(fraction),expected=view.pos;
+    const THREE=await import('three'),direction=engine.camera.getWorldDirection(new THREE.Vector3());
+    const authoredDirection=new THREE.Vector3(...view.target).sub(new THREE.Vector3(...expected)).normalize();
     const position=engine.camera.position.toArray();
     return { time: engine.time, position, cameraError:Math.max(...position.map((v,i)=>Math.abs(v-expected[i]))),
-      ao:engine.quality.ao, samplesPerFrame: engine.pipeline.count, passes: engine.registry.paint.passes,reflection:engine.registry.paint.reflection.lastStats,
+      directionError:direction.distanceTo(authoredDirection),ao:engine.quality.ao, samplesPerFrame: engine.pipeline.count, passes: engine.registry.paint.passes,reflection:engine.registry.paint.reflection.lastStats,
       calls: engine.renderer.info.render.calls, triangles: engine.renderer.info.render.triangles };
   });
-  if(metrics.drift.cameraError>1e-6 || metrics.drift.ao || metrics.drift.samplesPerFrame!==1)
-    throw new Error('P2 interactive playback changed the authored camera or pass budget');
+  if(metrics.drift.cameraError>1e-6 || metrics.drift.directionError>1e-6 || metrics.drift.ao || metrics.drift.samplesPerFrame!==1)
+    throw new Error('P3 interactive playback changed the authored camera or pass budget');
   if(metrics.views.some(v=>v.calls>40||v.triangles>1200000)||metrics.drift.calls>40||metrics.drift.triangles>1200000)
-    throw new Error('P2 exceeds its moving frame budget, including reflection');
+    throw new Error('P3 exceeds its moving frame budget, including reflection');
   save('drift.png', await page.evaluate(() => engine.canvas.toDataURL('image/png')));
   clean();
   fs.writeFileSync(path.join(out, 'metrics.json'), JSON.stringify(metrics, null, 2) + '\n');
-  console.log('[P2] deterministic:', metrics.determinism.identical, 'passes:', JSON.stringify(metrics.passTiming), 'drift:', JSON.stringify(metrics.drift));
+  console.log('[P3] deterministic:', metrics.determinism.identical, 'passes:', JSON.stringify(metrics.passTiming), 'drift:', JSON.stringify(metrics.drift));
 } finally {
   if (browser) {
     await Promise.race([browser.close().catch(() => {}), sleep(1500)]);

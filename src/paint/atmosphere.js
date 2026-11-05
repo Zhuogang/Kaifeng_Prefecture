@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { BRUSH } from './materials.js';
-import { BOAT, QUAY } from './composition.js';
+import { BOAT, QUAY, BRIDGE } from './composition.js';
 
 // inferred: finite curved cyclorama, horizon height and colour wash compose bd1
 // with this river. Its ends are beyond both sides of the entire camera path.
@@ -48,7 +48,7 @@ export async function paintedSky(engine,{shiftU=0}={}) {
   return mesh;
 }
 
-export function paintedWater(engine,time,reflectionScene,{width=768,height=432,distortion=.48}={}) {
+export function paintedWater(engine,time,reflectionScene,{width=1536,height=864,distortion=.48}={}) {
   // inferred: a reduced-resolution linear-HDR reflection. Only explicit low-detail
   // proxies and the cyclorama enter it; no water, detailed leaves or shadow pass.
   const shader = {
@@ -88,10 +88,23 @@ export function paintedWater(engine,time,reflectionScene,{width=768,height=432,d
         vec4 projected=textureMatrix*vec4(shifted.x,-shifted.y,0.,1.);
         vec2 reflectedUV=projected.xy/projected.w;
         reflectedUV=clamp(reflectedUV,vec2(.004),vec2(.996));
-        vec3 reflected=texture2D(tDiffuse,reflectedUV).rgb;
+        // inferred: a sub-texel horizontal footprint softens the reflected edge
+        // without quantising its continuous world-space stroke displacement.
+        vec2 texel=vec2(${(1/width).toFixed(9)},${(1/height).toFixed(9)});
+        vec3 reflected=texture2D(tDiffuse,reflectedUV).rgb*.4;
+        reflected+=(texture2D(tDiffuse,reflectedUV+vec2(texel.x*.8,0.)).rgb+texture2D(tDiffuse,reflectedUV-vec2(texel.x*.8,0.)).rgb)*.15;
+        reflected+=(texture2D(tDiffuse,reflectedUV+vec2(0.,texel.y*.65)).rgb+texture2D(tDiffuse,reflectedUV-vec2(0.,texel.y*.65)).rgb)*.15;
+        float reach=mix(.12,.34,front);
+        vec4 pa=textureMatrix*vec4(shifted.x,-(shifted.y+reach),0.,1.);
+        vec4 pb=textureMatrix*vec4(shifted.x,-(shifted.y-reach),0.,1.);
+        reflected=reflected*.72+(texture2D(tDiffuse,pa.xy/pa.w).rgb+texture2D(tDiffuse,pb.xy/pb.w).rgb)*.14;
         float warmth=smoothstep(-.025,.10,reflected.r-reflected.b);
         reflected*=mix(vec3(.77,1.00,.83),vec3(1.13,1.01,.78),warmth);
         vec3 body=mix(linearColor(vec3(.40,.55,.48)),linearColor(vec3(.63,.68,.54)),noise(p*.18));
+        // inferred: soft world-space bridge shade, with no hard water edge.
+        float bridgeZ=p.y-(${BRIDGE.skew.toFixed(6)})*p.x-(${BRIDGE.offset.toFixed(6)});
+        float shade=exp(-pow((bridgeZ+12.)/13.,2.));
+        body=mix(body,linearColor(vec3(.20,.39,.33)),shade*.83);
         float vermilion=smoothstep(1.25,1.7,reflected.r/max(.001,reflected.g));
         float mirror=mix(.40+.26*strokes,.72+.20*strokes,vermilion);
         mirror=mix(.76,mirror,smoothstep(-21.,-14.,p.y));
@@ -99,6 +112,10 @@ export function paintedWater(engine,time,reflectionScene,{width=768,height=432,d
         float nearFade=smoothstep(1.,12.,p.y);
         body=mix(body,frontBody,nearFade);
         mirror*=1.-nearFade*.50;
+        // inferred: murky jade remains visible through very dark reflected
+        // surfaces, so the broad deck soffit cannot become an opaque hard bar.
+        float reflectedValue=dot(reflected,vec3(.2126,.7152,.0722));
+        mirror*=mix(.22,1.,smoothstep(.012,.12,reflectedValue));
         vec3 c=mix(body,reflected,mirror);
         // Transparent cream pigment catches the same warm sky between strokes.
         c+=linearColor(vec3(.66,.61,.43))*(1.-strokes)*.10;
@@ -107,21 +124,22 @@ export function paintedWater(engine,time,reflectionScene,{width=768,height=432,d
         c+=linearColor(vec3(.73,.76,.61))*glint*.12;
         float bankEdge=(${QUAY.intercept.toFixed(6)})+p.y*${QUAY.slope.toFixed(6)};
         float bankShade=exp(-max(0.,p.x-bankEdge)*.8)*smoothstep(-13.,0.,p.y);
-        float boatShade=exp(-pow(along/.97,4.)-pow((across-.25)/1.75,4.));
-        c=mix(c,c*vec3(.45,.62,.62),max(bankShade*.70,boatShade*.65));
+        float hullHalf=${(BOAT.width*.5).toFixed(6)}*(1.-.72*pow(min(abs(along),1.),3.))*.70;
+        float boatShade=exp(-pow(along/1.01,8.))*exp(-abs(abs(across)-hullHalf)*4.0);
+        c=mix(c,c*vec3(.45,.62,.62),max(bankShade*.70,boatShade*.55));
         gl_FragColor=vec4(c,1.0);
       }`,
   };
   const water = new Reflector(new THREE.PlaneGeometry(300, 250), {
-    shader, textureWidth: width, textureHeight: height, multisample: 0, clipBias: .002,
+    shader, textureWidth: width, textureHeight: height, multisample: 4, clipBias: .002,
   });
   water.rotation.x = -Math.PI / 2;
   water.material.uniforms.paintTime = time;
   water.material.userData.noPatch = true; water.userData.noPatch = true;
   water.name = 'world-brushed-planar-water';
   const target = water.getRenderTarget();
-  target.texture.generateMipmaps = false;
-  target.texture.minFilter = THREE.LinearFilter;
+  target.texture.generateMipmaps = true;
+  target.texture.minFilter = THREE.LinearMipmapLinearFilter;
   const renderReflection = water.onBeforeRender;
   const state = { width, height, scene: reflectionScene, target, water, lastStats: { calls: 0, triangles: 0 } };
   water.onBeforeRender = function(renderer, scene, camera) {

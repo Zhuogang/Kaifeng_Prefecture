@@ -5,7 +5,7 @@ import * as THREE from 'three';
 export function stoneBlocks(stone,reflected,rng,{palette=['#cbb997','#c8b694','#cebc9a','#c9b795'],copingColor='#c7b99f'}={}){
   return (p,s,ao=1,yaw=0,coping=false,pigmentOverride)=>{
     const pos=p.map(v=>v+rng.range(-.018,.018)),pigment=rng.pick(palette),angle=yaw+rng.range(-.007,.007);
-    const color=pigmentOverride||(coping?copingColor:pigment);
+    const color=pigmentOverride||(coping?new THREE.Color(copingColor).multiplyScalar(rng.range(.88,1.06)):pigment);
     stone.box(pos,s,color,ao,angle,coping||s[1]>.3);reflected.box(pos,s,color,ao,angle);
   };
 }

@@ -7,7 +7,7 @@ import { compose } from '../paint/scene.js';
 // inferred: a 3.6 metre composed dolly, matching c2's low riverside viewpoint.
 export function paintView(fraction = 0, time = 0) {
   return { pos: CAMERA.pos.map((v,i)=>v+fraction*CAMERA.travel[i]),
-    target:CAMERA.target.map((v,i)=>v+fraction*(i===0?.4:i===1?-.4:0)), fov:CAMERA.fov, time, near: .15, far: 900 };
+    target:CAMERA.target.map((v,i)=>v+fraction*(i===0?.4+CAMERA.pan:i===1?-.4:0)), fov:CAMERA.fov, time, near: .15, far: 900 };
 }
 
 export async function build(engine) {
