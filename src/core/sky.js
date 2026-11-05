@@ -24,6 +24,9 @@ export const SKY = {
   uSkyAureole: { value: new THREE.Vector3(0.3, 0.7, 4.0) }, // broad glow, mid glow, tight glow around the sun
   // inferred: twilight afterglow, confined to the horizon around the actual setting sun.
   uTwilight: { value: new THREE.Vector3(0, 0, 0) },
+  // inferred: diffuse afterglow around the horizon, with the strongest glow
+  // still toward the physical sun. Zero retains the directional daytime glow.
+  uTwilightSpread: { value: 0 },
   uGround: { value: new THREE.Color(0.36, 0.30, 0.22) },  // radiance below the horizon (env map bounce: warm sunlit ground → warm shadows)
   uSunDisk: { value: 1600.0 },     // radiance multiplier of the solar disk
   uSunSize: { value: 0.0048 },     // angular radius (rad), real sun ≈ 0.0046
@@ -113,6 +116,7 @@ uniform vec3 uSkyLower;
 uniform float uSkyHorizonWidth;
 uniform vec3 uSkyAureole;
 uniform vec3 uTwilight;
+uniform float uTwilightSpread;
 uniform vec3 uGround;
 uniform float uSunDiskMode;
 uniform vec3 uSunDiskDir;
@@ -137,7 +141,10 @@ vec3 cgSkyGradient(vec3 d){
   // Mie aureole (warm) around the sun, strongest near the horizon where the light path is long
   float m = max(mu, 0.0);
   col += uSunColor * (uSkyAureole.x * pow(m, 6.0) * (0.35 + 0.65 * t) + uSkyAureole.y * pow(m, 40.0) + uSkyAureole.z * pow(m, 600.0));
-  col += uTwilight * exp(-pow((h - 0.015) / 0.085, 2.0)) * pow(m, 4.0);
+  vec2 solarAzimuth = uSunDir.xz / max(length(uSunDir.xz), 1e-4);
+  float sunsetSide = max(dot(d.xz, solarAzimuth), 0.0);
+  float afterglow = mix(pow(m, 4.0), 0.45 + 0.55 * sunsetSide * sunsetSide, clamp(uTwilightSpread, 0.0, 1.0));
+  col += uTwilight * exp(-pow((h - 0.015) / 0.085, 2.0)) * afterglow;
   return col;
 }
 #endif
@@ -335,7 +342,7 @@ void main() {
     col = mix(col, cir, clamp(a, 0.0, 0.85));
   }
   float Tc = 1.0;
-  if (uCloudReady > 0.5 && d.y > -0.02) {
+  if (uCloudReady > 0.5 && uCloudCover > 0.0 && d.y > -0.02) {
     float steps = uEnvPass > 0.5 ? max(8.0, floor(uCloudSteps * 0.5)) : uCloudSteps;
     float dist;
     vec3 rd = normalize(vec3(d.x, max(d.y, 0.0005), d.z));

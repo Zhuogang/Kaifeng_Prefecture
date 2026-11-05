@@ -26,12 +26,12 @@ export function paintHook(style = 'wucai') {
       float member = vT2MemberType;
       // inferred: faded mineral pigments and fine timber fibres, in physical metres.
       // World-space mottle varies the wear amount, never selects red/green paint patches.
-      float mottle = t2Fbm(cgP*vec3(1.2,0.7,1.2)+t2Variation);
+      float mottle = t2Fbm(cgP*vec3(0.55,0.35,0.55)+t2Variation);
       bool vertical=size.y>size.x;
       vec2 grainUV=vertical?uv.yx*size.yx:uv*size;
       float flakes = t2Noise(vec3(grainUV*vec2(1.4,65.0),t2Variation+cgSeed*17.0));
       float fade=t2Wear*(0.65+0.28*mottle);
-      float wear=(1.0-smoothstep(0.001,0.010,edge))*smoothstep(0.28,0.72,flakes)*t2Wear;
+      float wear=(1.0-smoothstep(0.001,0.020,edge))*smoothstep(0.28,0.72,flakes)*t2Wear;
       vec3 red=vec3(0.30,0.135,0.085), blue=vec3(0.105,0.155,0.165), green=vec3(0.145,0.185,0.145);
       vec3 chalk=vec3(0.46,0.435,0.37), ochre=vec3(0.34,0.235,0.13);
       float underside = max(-cgN.y,0.0);
@@ -44,13 +44,18 @@ export function paintHook(style = 'wucai') {
       // 碾玉 retains its blue/green layer; weathering exposes the warm wood/ground below it.
       // Wucai blocks no longer switch their entire field to green by member class.
       vec3 field = ${style === 'nianyu' ? 'mix(mix(blue,green,smoothstep(0.15,0.85,uv.y)),warmGround,fade)' : 'mix(red,warmGround,fade)'};
+      // inferred: worn ochre/chalk primer returns diffuse sky light under the eave. It is
+      // an albedo layer on the same timber, with no added light or emission in the shade.
+      float chalking=smoothstep(0.36,0.66,mottle)*t2Wear;
+      field=mix(field,vec3(0.43,0.32,0.21),chalking*0.75);
+      border=mix(border,chalk,chalking*0.65);
       t2Albedo = mix(field,border,(1.0-inner)*(0.88-fade*0.12));
       ${style === 'danfen' ? `
         // 卷十四: 1/8 member height, bounded by 五分..一寸 (0.0156..0.0312 m).
         float whiteWidth = clamp(size.y/8.0,0.0156,0.0312);
         float white = 1.0-smoothstep(whiteWidth-aa,whiteWidth+aa,
           vT2MemberEdge >= 0.0 ? vT2MemberEdge : uv.y*size.y);
-        t2Albedo = mix(red,chalk,white);
+        t2Albedo = mix(mix(red,vec3(0.43,0.32,0.21),chalking*0.75),chalk,white);
         t2Albedo = mix(t2Albedo,ochre,max(-cgN.y,0.0)*0.6);
       ` : `
         float units = max(1.0,floor(size.x/0.48));
@@ -75,9 +80,10 @@ export function paintHook(style = 'wucai') {
       t2Albedo *= 0.88+mottle*0.22;
       // inferred: contact dirt belongs at joins; broad arm faces should still return sky fill.
       float contact=(1.0-smoothstep(0.004,0.028,edge))*t2Visible(t2Footprint(cgP)*2.0);
+      t2Albedo*=1.0-contact*t2Wear*0.12;
       t2Occlusion = 0.98-underside*0.04-contact*0.08;
       t2Albedo = mix(t2Albedo,vec3(0.235,0.165,0.10)*(0.85+flakes*0.30),wear);
-      t2Rough=0.77+fade*0.10+wear*0.06;
+      t2Rough=0.77+fade*0.10+wear*0.06+chalking*0.07;
       t2Height=(flakes-0.5)*0.0004-wear*0.0007;
     `,
   };

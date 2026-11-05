@@ -31,13 +31,40 @@ function bankReflection(engine,batches) {
   reflection.register(group);return group;
 }
 
+// inferred: use the reserved bank rows as anchors, bringing roots onto each
+// quay. Keep the bridge approaches and tower foundations open, and
+// interpolate long gaps into a continuous river planting at at most eight quay
+// widths. These world-space offsets apply along both banks, in every view.
+function bankPlanting() {
+  const river=PLAN.BIANHE,bridge=PLAN.ZHOUQIAO;
+  const positions=[];
+  for(const south of [false,true])for(const east of [false,true]) {
+    // inferred: the north bank needs extra room around its twin towers; the
+    // south row can approach the crossing beside the narrower bridge landing.
+    const clearance=bridge.dimensions.width/2+river.quayWidth*(south?1.5:2)+(south?1.5:4);
+    const row=(PLAN.WILLOWS?.positions??[])
+      .filter(p=>(p[2]>river.center[2])===south && (p[0]>river.center[0])===east)
+      .map(p=>[river.center[0]+(east?1:-1)*Math.max(clearance,Math.abs(p[0]-river.center[0])-river.quayWidth*(south?3:2)),
+        river.bankY,river.center[2]+(south?1:-1)*(river.width/2+river.quayWidth*(south?0.30:0.55))])
+      .sort((a,b)=>a[0]-b[0]);
+    row.forEach((p,i)=>{
+      if(i) {
+        const previous=row[i-1],steps=Math.ceil((p[0]-previous[0])/(river.quayWidth*8));
+        for(let k=1;k<steps;k++)positions.push([THREE.MathUtils.lerp(previous[0],p[0],k/steps),p[1],p[2]]);
+      }
+      positions.push(p);
+    });
+  }
+  return positions;
+}
+
 /** Plant reserved banks and reuse court planting already built by their owners. */
 export async function build(engine) {
   if(engine.registry.flora?.built)return engine.registry.flora;
-  const materials=floraMaterials(engine),trees=[],banks=PLAN.WILLOWS?.positions??[];
+  const materials=floraMaterials(engine),trees=[],banks=bankPlanting();
   // inferred: old willows beside the bridge have taller, wider crowns than
   // distant bank trees, with branches extending naturally above the river.
-  // Roots use the supplied reservations, and do not intrude into its approaches.
+  // Roots follow the reserved rows with the quay offsets above.
   for(const near of [true,false])for(const south of [false,true]) {
     const positions=banks.filter(p=>(Math.abs(p[0]-PLAN.BIANHE.center[0])<100)===near && (p[2]>PLAN.BIANHE.center[2])===south);
     if(positions.length)trees.push(instanceTrees(engine,'willow',positions,{seed:`bianhe:${south?'south':'north'}:${near?'old':'row'}`,height:near?14:11,crownWidth:near?1.85:1,materials}));

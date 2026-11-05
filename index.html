@@ -29,6 +29,17 @@
       padding: 10px 14px; color: #e8e2d4; background: #101617d9; border: 1px solid #d8c39b44; font: 12px/1.7 system-ui, sans-serif; }
     #controls-hint button { margin-left: 12px; border: 1px solid #d8c39b66; background: transparent; color: inherit; cursor: pointer; font: inherit; }
     button:focus-visible { outline: 2px solid #d9846a; outline-offset: 3px; }
+    #evidence-toggle, #evidence-panel { position: fixed; z-index: 3; right: 16px; color: #ded6c5;
+      background: #141b1cee; border: 1px solid #a98c6255; font: 12px/1.7 system-ui, sans-serif; }
+    #evidence-toggle { bottom: 16px; padding: 8px 12px; cursor: pointer; }
+    #evidence-panel { top: 16px; width: min(320px, calc(100vw - 64px)); padding: 18px 20px; }
+    #evidence-panel h2 { color: #d9846a; font: 400 15px/1.7 system-ui, sans-serif; letter-spacing: .18em; margin: 0 0 12px; }
+    #evidence-close { float: right; color: #ded6c5; background: transparent; border: 1px solid #a98c6255; cursor: pointer; font: inherit; }
+    #evidence-key { margin: 0; padding: 0; list-style: none; }
+    #evidence-key li { display: flex; align-items: center; gap: 10px; margin: 5px 0; }
+    #evidence-key span { display: inline-block; width: 12px; height: 12px; border: 1px solid #ded6c555; }
+    #evidence-panel p { margin: 12px 0 0; color: #b5b2a4; font-size: 11px; }
+    #evidence-source { border-top: 1px solid #a98c6255; padding-top: 12px; overflow-wrap: anywhere; }
     @media (prefers-reduced-motion: reduce) { progress::-webkit-progress-value { transition: none; } }
   </style>
   <script type="importmap">
@@ -52,7 +63,15 @@
       <noscript>This city requires JavaScript and a browser with WebGL2.</noscript>
     </div>
   </div>
-  <div id="controls-hint" hidden>Click to look · WASD move · F walk / fly · E / Q rise / descend · Shift faster · T time of day · R quality · Esc release <button type="button" aria-label="Dismiss controls hint">Dismiss</button></div>
+  <div id="controls-hint" hidden>Click to look · WASD move · F walk / fly · E / Q rise / descend · Shift faster · T time of day · R quality · V evidence · Esc release <button type="button" aria-label="Dismiss controls hint">Dismiss</button></div>
+  <button id="evidence-toggle" type="button" aria-pressed="false" aria-controls="evidence-panel">V · 证据 / Evidence</button>
+  <aside id="evidence-panel" aria-label="Historical evidence legend" hidden>
+    <button id="evidence-close" type="button" aria-label="Restore normal view">×</button>
+    <h2>史料 · Evidence</h2>
+    <ul id="evidence-key"></ul>
+    <p>颜色表示形制依据，非每一处尺寸与位置皆有实证。<br>Colours identify supporting evidence; dimensions and placement may be inferred.</p>
+    <p id="evidence-source" role="status" aria-live="polite"></p>
+  </aside>
   <script type="module">
     const fail = message => {
       window.__RENDER_ERROR = message;

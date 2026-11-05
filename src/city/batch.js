@@ -70,6 +70,15 @@ export function cityMaterial(engine) {
     color: `
       float grain=cgVnoise3(cgP*0.31);
       diffuseColor.rgb*=0.86+0.28*grain;
+      if(vCityKind>3.5) {
+        // inferred: coursed grey court paving, filtered to its area-average
+        // mortar fraction once individual joints are smaller than a pixel.
+        vec2 q=cgP.xz/vec2(.75,.45);q.x+=mod(floor(q.y),2.0)*.5;
+        vec2 edge=min(fract(q),1.0-fract(q)),aa=max(fwidth(q),vec2(.0001));
+        vec2 joint=1.0-smoothstep(vec2(.018)-aa,vec2(.018)+aa,edge);
+        float mortar=mix(max(joint.x,joint.y),.071,smoothstep(.2,.9,max(aa.x,aa.y)));
+        diffuseColor.rgb*=1.0-.32*mortar;
+      }
       if(vCityKind>1.5 && vCityKind<2.5) {
         // inferred: 4% thatch, with a small warm/cool grey tile variation.
         diffuseColor.rgb*=mix(vec3(.93,.97,1.02),vec3(1.08,1.01,.94),cgSeed);
@@ -91,11 +100,16 @@ export function cityMaterial(engine) {
       }
     `,
     emissive: `
-      if(vCityKind>2.5) totalEmissiveRadiance+=vec3(12.0,3.0,.42)*cityDusk;
+      if(vCityKind>2.5 && vCityKind<3.5) totalEmissiveRadiance+=vec3(12.0,3.0,.42)*cityDusk;
       if(vCityKind>0.5 && vCityKind<1.5) {
         float window=cityWindow(vCityUV);
         float bars=mix(step(.14,fract(vCityUV.x*23.0)),.86,smoothstep(.2,1.0,fwidth(vCityUV.x*23.0)));
-        totalEmissiveRadiance+=vec3(2.4,.65,.1)*window*bars*cityDusk*step(.65,cgSeed);
+        float occupied=cgSeed;
+        #ifndef USE_INSTANCING
+        // inferred: occupied office bays follow fixed room-sized world cells.
+        occupied=cgHash12(floor(cgP.xz/8.0));
+        #endif
+        totalEmissiveRadiance+=vec3(2.4,.65,.1)*window*bars*cityDusk*step(.65,occupied);
       }
     `,
   });

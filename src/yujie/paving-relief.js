@@ -31,7 +31,7 @@ export function addPavingRelief(engine) {
   const geometry = dressedTop(), matrix = new THREE.Matrix4();
   const meshes = [false, true].map(brick => {
     const mesh = new THREE.InstancedMesh(geometry, pavingMaterial(engine, {
-      variant: brick ? 'brick' : 'bluestone', layout: pavingLayoutGLSL(brick), ruts: 1, drains: 1,
+      variant: brick ? 'brick' : 'bluestone', layout: pavingLayoutGLSL(brick), ruts: 1, drains: 1, repairs: 1,
     }), 3000);
     mesh.count = 0; group.add(mesh); return mesh;
   });

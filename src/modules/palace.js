@@ -71,7 +71,7 @@ function courtPaving(engine) {
   base.position.set((e.east+e.west)/2,(top-P.groundY)/2,(e.south+e.north)/2);
   engine.add(base,{castShadow:false});
   // inferred: a continuous raised datum joins the rear of 宣德楼 to the gate and court.
-  for(const p of [P.court,P.rearApron,...P.innerCourts])batch.box(p.center,[p.width,0.06,p.depth]);
+  for(const p of [P.court,P.rearApron,...P.innerCourts,...P.serviceCourts])batch.box(p.center,[p.width,0.06,p.depth]);
   const paving=courtStone(engine);
   const mesh=batch.mesh(paving,'palace-plain-courts');mesh.castShadow=false;
   mesh.userData.castShadow=false;engine.add(mesh);
@@ -101,7 +101,7 @@ function innerFabric(engine, mats, gallery) {
   const e=P.extent;
   addWall([e.west,0],[e.west,e.north],5.2);addWall([e.west,e.north],[e.east,e.north],5.2);
   addWall([e.east,e.north],[e.east,0],5.2);
-  for(const court of P.innerCourts) {
+  for(const court of [...P.innerCourts,...P.serviceCourts]) {
     const [x,,z]=court.center,w=court.width/2,d=court.depth/2;
     for(const side of [-1,1]) {
       // inferred: plain enclosure walls, with 8 m side openings into service lanes.
@@ -130,6 +130,47 @@ function innerFabric(engine, mats, gallery) {
     levels.forEach((g,l)=>g.add(placed(l===0?model.lod1.clone():l===1?far:roofShadow(model),entry)));
     engine.footprints.addRect(entry.position[0],entry.position[2],model.footprint.hw,model.footprint.hd,0,'palace-inner-hall');
   }
+  // inferred: repeated inner-office compounds, with a seven-bay hall, two roofed wings and
+  // a three-bay open gateway. Geometry prototypes and their curved roof buffers are shared.
+  const precinctSpecs={
+    hall:{frontBays:Array(7).fill(5.2),sideBays:[7,7],columnHeight:5.4,caiGrade:3,tiao:2,eaves:1},
+    wing:{frontBays:Array(5).fill(6.6),sideBays:[8.4],columnHeight:3.8,caiGrade:4,tiao:1,eaves:1},
+    longWing:{frontBays:Array(7).fill(6),sideBays:[8.4],columnHeight:4.2,caiGrade:3,tiao:1,eaves:1},
+    shortWing:{frontBays:Array(3).fill(3.2),sideBays:[5.4],columnHeight:3.6,caiGrade:6,tiao:1,eaves:1},
+    porch:{frontBays:Array(3).fill(4),sideBays:[3.2],columnHeight:3.5,caiGrade:6,tiao:1,eaves:1},
+    annex:{frontBays:Array(3).fill(4.8),sideBays:[3.6,3.6],columnHeight:4.2,caiGrade:6,tiao:1,eaves:1},
+    gate:{frontBays:Array(3).fill(4),sideBays:[4.8],columnHeight:3.8,caiGrade:6,tiao:1,eaves:1},
+  };
+  const precinctModels=new Map();
+  const precincts=[...P.precincts,...P.rearPrecincts];
+  for(const precinct of precincts) {
+    for(const entry of precinct.halls) {
+      if(!precinctModels.has(entry.kind)) {
+        const wing=entry.kind.endsWith('Wing')||entry.kind==='wing'||entry.kind==='porch',gate=entry.kind==='gate';
+        const fill=gate?{south:['wall','open','wall'],north:['wall','open','wall'],east:'wall',west:'wall'}:
+          wing?{south:'open',north:'wall',east:'open',west:'open'}:
+          {south:entry.kind==='annex'?['lattice','door','lattice']:['lattice','lattice','lattice','door','lattice','lattice','lattice'],
+            north:'wall',east:'wall',west:'wall'};
+        const model=hall(engine,precinctSpecs[entry.kind],mats,{klass:'tingtang',roof:wing?'xuanshan':'wudian',
+          roofClass:wing?'tongwa_langwu':'tongwa_tingtang',rafterDiameter:.0936,bayFill:fill});
+        precinctModels.set(entry.kind,{model,far:roofVolume(model,mats),shadow:roofShadow(model)});
+      }
+      const {model,far,shadow}=precinctModels.get(entry.kind);
+      levels.forEach((g,l)=>g.add(placed((l===0?model.lod1:l===1?far:shadow).clone(),entry)));
+      hallCollision(engine.footprints,model,entry);
+    }
+    const [x,,z]=precinct.center,w=precinct.width/2,d=precinct.depth/2;
+    addWall([x-w,z-d],[x+w,z-d]);
+    // Side passages connect the small courts to the district's transverse service lanes.
+    for(const s of [-1,1]) {
+      if(!P.rearPrecincts.includes(precinct)) {
+        addWall([x+s*w,z-d],[x+s*w,z-4]);addWall([x+s*w,z+4],[x+s*w,z+d]);
+      }
+      addWall([x+s*2,z+d],[x+s*w,z+d]);
+    }
+  }
+  console.log('[palace] office compounds '+JSON.stringify({courts:precincts.length,
+    roofs:precincts.reduce((n,p)=>n+p.halls.length,0),prototypes:precinctModels.size}));
   const walls=new THREE.Group();
   walls.add(plaster.mesh(mats.plaster,'palace-white-walls'));
   walls.add(brick.mesh(masonryMaterial(engine,{topY:3.88,wear:0.8,variation:27}),'palace-wall-footings'));
@@ -242,7 +283,7 @@ export async function build(engine) {
     for(const entry of [...P.terraces].reverse().concat(P.towerBases)) {
       const y=terraceGround(entry,x,z);if(y!==null)return y;
     }
-    for(const p of [P.court,P.rearApron,...P.innerCourts])
+    for(const p of [P.court,P.rearApron,...P.innerCourts,...P.serviceCourts])
       if(Math.abs(x-p.center[0])<=p.width/2&&Math.abs(z-p.center[2])<=p.depth/2)return p.center[1]+0.03;
     if(x>=P.extent.west&&x<=P.extent.east&&z>=P.extent.north&&z<=P.extent.south)return P.groundY-0.04;
     return previous(x,z);

@@ -35,8 +35,8 @@ function buildPaving(engine) {
     [southEnd, southShoulder, P.bridgeHalfWidth, P.width / 2]]) {
     apron(road, -w0, w0, z0, z1, -w1, w1);
   }
-  engine.add(road.mesh(pavingMaterial(engine, { layout: pavingLayoutGLSL(), ruts: 1, drains: 1 }), 'yujie:coursed-imperial-road'), { castShadow: false });
-  engine.add(lanes.mesh(pavingMaterial(engine, { variant: 'brick', layout: pavingLayoutGLSL(true) }), 'yujie:brick-lanes'), { castShadow: false });
+  engine.add(road.mesh(pavingMaterial(engine, { layout: pavingLayoutGLSL(), ruts: 1, drains: 1, repairs: 1 }), 'yujie:coursed-imperial-road'), { castShadow: false });
+  engine.add(lanes.mesh(pavingMaterial(engine, { variant: 'brick', layout: pavingLayoutGLSL(true), repairs: 1 }), 'yujie:brick-lanes'), { castShadow: false });
   engine.add(banks.mesh(proceduralMaterial({ name: 'yujie:orchard-soil', params: { roughness: 0.95 },
     // inferred: compacted pale silt with sparse grass, never a continuous lawn.
     color: `float s=cgVnoise2(cgP.xz*2.0); float soilPatch=cgVnoise2(cgP.xz*.37);

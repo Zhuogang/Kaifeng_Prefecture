@@ -37,10 +37,12 @@ export const TIME_PRESETS = {
       uZenith: [0.015, 0.105, 0.2], uSkyFalloff: 5.0,
       uSkyLower: [1.4, 1.8, 2.6], uSkyHorizonWidth: 0.06,
       uGround: [0.5, 0.46, 0.42], uEnvScale: 0.45, uEnvBlue: 0.1,
-      uCloudCover: 0.22, uCloudScale: 4.0, uCloudBase: 2300, uCloudThick: 1000,
-      uCloudSigma: 0.016, uCloudBright: 2.2, uCloudAmbient: 0.85, uCloudErode: 0.6,
+      // inferred: optically thinner, softly sunlit low cumulus; the high veil
+      // darkened the bright lower sky into broad grey smudges.
+      uCloudCover: 0.26, uCloudScale: 4.0, uCloudBase: 2300, uCloudThick: 800,
+      uCloudSigma: 0.004, uCloudBright: 4.0, uCloudAmbient: 1.2, uCloudErode: 0.6,
       uCloudClearRadius: 12500,
-      uCirrus: [0.06, 7500, 0.6],
+      uCirrus: [0, 7500, 0.6],
     },
     atmo: { ...MORNING_ATMO, uHazeColor: [1.2, 0.95, 0.75] },
     grade: { ...MORNING_GRADE, uExposure: 0.5, uContrast: 2.0, uPivot: 0.55, uToe: 0.8,
@@ -58,13 +60,17 @@ export const TIME_PRESETS = {
   },
   bluehour: {
     sun: { azimuth: 275, elevation: -4, color: [1, 0.35, 0.16], intensity: 0 },
-    sky: { ...MORNING_SKY, uZenith: [0.008, 0.022, 0.075], uSkyFalloff: 2.4,
-      uSkyAureole: [0.06, 0.0, 0.0], uTwilight: [0.65, 0.15, 0.035], uSunDisk: 0, uGround: [0.018, 0.024, 0.045],
-      uEnvScale: 2.0, uEnvBlue: 0.1, uCloudAmbient: 0.45, uCloudCover: 0.28, uCloudSigma: 0.012 },
-    atmo: { ...MORNING_ATMO, uHazeColor: [0.08, 0.065, 0.13], uMistColor: [0.06, 0.08, 0.14],
+    // inferred: clear blue-hour air with thin high ice clouds, rather than an
+    // unlit, opaque cumulus layer. The warm horizon is world-wide afterglow.
+    sky: { ...MORNING_SKY, uZenith: [0.012, 0.03, 0.12], uSkyFalloff: 3.5,
+      uSkyLower: [0.12, 0.18, 0.36], uSkyHorizonWidth: 0.08,
+      uSkyAureole: [0.06, 0.0, 0.0], uTwilight: [1.4, 0.38, 0.07], uTwilightSpread: 1,
+      uSunDisk: 0, uGround: [0.018, 0.024, 0.045], uCirrus: [0.06, 8000, 0.6],
+      uEnvScale: 2.0, uEnvBlue: 0.1, uCloudCover: 0 },
+    atmo: { ...MORNING_ATMO, uHazeColor: [0.12, 0.09, 0.12], uMistColor: [0.06, 0.08, 0.14],
       uMie: [0.68, 0.1, 0] },
-    grade: { ...MORNING_GRADE, uExposure: 1.1, uContrast: 1.25,
-      uLift: [0.006, 0.009, 0.018], uSaturation: 0.9 },
+    grade: { ...MORNING_GRADE, uExposure: 1.35, uContrast: 1.3,
+      uLift: [0.012, 0.014, 0.022], uSaturation: 1.0 },
   },
 };
 export const TIME_NAMES = Object.freeze(Object.keys(TIME_PRESETS));

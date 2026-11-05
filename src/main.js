@@ -3,6 +3,7 @@ import { getQuality } from './core/quality.js';
 import { Explore } from './core/explore.js';
 import { LoadingScreen, loadWorld, installModuleCulling } from './core/loader.js';
 import { TierController, TIERS } from './core/tiers.js';
+import { EvidenceView } from './core/evidence.js';
 import { SHOTS } from './world/shots.js';
 import { installTimePresets, TIME_NAMES } from './world/looks.js';
 
@@ -90,6 +91,8 @@ async function boot() {
   await engine.renderer.compileAsync(engine.scene, engine.camera);
   const compileMs = Math.round(performance.now() - tc);
   console.log(`[main] shaders compiled in ${compileMs} ms`);
+  engine.evidence = new EvidenceView(engine);
+  if (P.get('evidence') === '1') engine.evidence.setEnabled(true);
   await loading.show('东京梦华 · Ready', delivery.total, delivery.total, 'The city is ready');
   if (interactive) startInteractive(engine, tiers);
   if (contextLost) return;

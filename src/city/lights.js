@@ -4,6 +4,7 @@ import { GeometryBatch } from '../yingzao/geometry.js';
 import { proceduralMaterial } from '../core/materials.js';
 import { bracketHeight } from '../yingzao/brackets.js';
 import { colorGeometry, mergePacked } from './batch.js';
+import { officeLayout } from './offices.js';
 
 /** Permanent fixtures, not camera dressing. Only emission/intensity follows time. */
 export function cityLights(engine,layout,material) {
@@ -26,7 +27,13 @@ export function cityLights(engine,layout,material) {
     const light=new THREE.PointLight(0xffb16a,0,14,2);light.position.set(...position);light.castShadow=false;group.add(light);
     light.userData.nightIntensity=intensity;
   }
-  for(const o of CITY.offices)for(const sign of [-1,1])fixtures.push({position:[o.position[0]+sign*3,CITY.surfaceY+2.8,o.position[2]+27],floor:CITY.surfaceY,mountY:CITY.surfaceY+3.4,pool:true});
+  // inferred: each actual entrance hall has two lamps under its front eave.
+  // These follow the compound layout, including the gates between its courts.
+  const gate=CITY.officeModels.gate,base=CITY.officeFabric.surfaceY;
+  for(const office of officeLayout())for(const building of office.buildings)if(building.kind==='gate')for(const [dx,dy,dz]of p.officeOffsets) {
+    fixtures.push({position:[office.position[0]+building.position[0]+dx,base+gate.platform.height+dy,office.position[2]+building.position[2]+dz],
+      floor:base+.05,mountY:base+gate.platform.height+gate.columnHeight+bracketHeight(gate),pool:true});
+  }
   for(const f of fixtures) {
     const [x,y,z]=f.position;
     frames.box([x,(y+.25+f.mountY)/2,z],[.035,Math.max(.1,f.mountY-y-.25),.035]);
