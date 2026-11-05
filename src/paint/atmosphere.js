@@ -116,6 +116,13 @@ export function paintedWater(engine,time,reflectionScene,{distortion=.48,bounds=
         // lowers bright ones through mixing, never by scaling the mirror dark.
         vec3 body=mix(linearColor(vec3(.34,.51,.45)),linearColor(vec3(.53,.65,.52)),noise(p*.18));
         ${river?'body=mix(body,linearColor(vec3(.26,.48,.47)),smoothstep(1.,18.,p.y)*.45);':''}
+        ${river?`
+        // inferred: the water newly exposed beyond the bridge is pale jade,
+        // with a quieter mirror so sky shapes do not fill the pier openings.
+        float beyondBridge=(1.-smoothstep(-35.,-26.,p.y-(${BRIDGE.skew.toFixed(6)})*p.x-(${BRIDGE.offset.toFixed(6)})));
+        beyondBridge*=smoothstep(${(BRIDGE.start-3).toFixed(6)},${(BRIDGE.start-1).toFixed(6)},p.x)*(1.-smoothstep(${(BRIDGE.end+1).toFixed(6)},${(BRIDGE.end+3).toFixed(6)},p.x));
+        body=mix(body,linearColor(vec3(.60,.70,.61)),beyondBridge*.75);
+        `:''}
         float skyOpening=smoothstep(.008,.13,reflected.b-reflected.r);
         // Actual blue/cream sky exposed in the two open tower passages caused
         // the teal-white patches after the former tint. Neutralise its chroma.
@@ -126,6 +133,7 @@ export function paintedWater(engine,time,reflectionScene,{distortion=.48,bounds=
         reflected*=mix(vec3(1.),vec3(1.18,1.04,.82),warmReflection*.25);
         float calm=${river?'1.-smoothstep(-14.,-2.,p.y)':'0.'};
         float mirror=${river?'mix((.46+.22*strokes)*(1.-smoothstep(1.,18.,p.y)*.55),.86,calm)':'.40+.20*strokes'};
+        ${river?'mirror=mix(mirror,.36,beyondBridge);':''}
         vec3 c=mix(body,reflected,mirror);
         c+=linearColor(vec3(.68,.65,.50))*(1.-strokes)*mix(.055,.015,calm);
         float glint=smoothstep(.74,.94,fine)*smoothstep(.45,.74,noise(p*vec2(.37,3.7)+8.));

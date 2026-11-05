@@ -22,10 +22,18 @@ export function compose(engine, time, viewAt) {
   const { stone, timber, plaster, roof, bark, leaf } = batches;
   const block=stoneBlocks(stone,reflected.stone,rng);
   const timberColor='#c98257';
-  const halls=paintedHalls(engine,batches,reflected,{timberColor,time}),hall=halls.hall;
+  const halls=paintedHalls(engine,batches,reflected,{timberColor,time,view0:viewAt(0,0)}),hall=halls.hall;
 
   // Closely set bluestone columns below a low, nearly level bridge. No arches.
   const bridgePoint=([x,y,z])=>[x,y+BRIDGE.fall*x,z+BRIDGE.skew*x+BRIDGE.offset];
+  const masonryRng=engine.rng('D2b-masonry-values');
+  // inferred: individual rose/ochre/grey stone loads replace the small
+  // confetti field. Preserve the original construction RNG's draw order.
+  const masonryColor=color=>new THREE.Color(color).multiply(new THREE.Color(masonryRng.pick(['#fff3df','#eee9dd','#f4e0d2','#e6e7db']))).multiplyScalar(masonryRng.range(.80,1.22));
+  const masonry=(p,s,ao=1,yaw=0,coping=false,kind=60)=>{
+    const {pos,color,angle}=block.sample(p,s,ao,yaw,coping),pigment=masonryColor(color);
+    stone.box(pos,s,pigment,ao,angle,coping||s[1]>.3,kind);reflected.stone.box(pos,s,pigment,ao,angle,false,kind);
+  };
   const pierRng=engine.rng('D2-pier-courses'),courses=Array.from({length:4},(_,i)=>pierCourse(i));
   for (let x = BRIDGE.start; x <= BRIDGE.end; x += 2.6) for (const z of [-17.0, -22.5]) {
     const stretch=1+BRIDGE.fall*x/3;
@@ -35,21 +43,23 @@ export function compose(engine, time, viewAt) {
     // inferred: the rear member is narrower and staggered, exposing paired
     // shafts rather than a continuous tan band. Five real courses per shaft.
     const rear=z< -20,xx=x+(rear?.80:0),rise=1+BRIDGE.fall*xx/3,width=rear?.56:1.10;
+    const camber=.18*Math.max(0,1-(xx/30)**2),weights=Array.from({length:5},()=>pierRng.range(.84,1.16)),unit=(3.10*rise+camber)/weights.reduce((a,b)=>a+b,0);
+    let courseY=-.12*rise+original.pos[1]-1.43*stretch;
     for(let row=0;row<5;row++){
-      const h=3.10*rise/5,p=[xx+original.pos[0]-x,-.12*rise+(row+.5)*h+original.pos[1]-1.43*stretch,z+BRIDGE.skew*xx+BRIDGE.offset];
-      const size=[width*pierRng.range(.97,1.02),h-.026,1.04*pierRng.range(.97,1.02)];
-      const color=new THREE.Color(original.color).multiplyScalar(pierRng.range(.96,1.04));
+      const h=weights[row]*unit,p=[xx+original.pos[0]-x,courseY+h/2,z+BRIDGE.skew*xx+BRIDGE.offset];courseY+=h;
+      const size=[width*pierRng.range(.97,1.02),h-.042,1.04*pierRng.range(.97,1.02)];
+      const color=masonryColor(original.color);
       const m=new THREE.Matrix4().compose(new THREE.Vector3(...p),new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),original.angle),new THREE.Vector3(...size));
       stone.add(courses[row%4],m,color,.94,0,52);reflected.stone.box(p,size,color,.94,original.angle,false,52);
     }
     // inferred: capital tops sit in the deck shadow; rounded arrises soften their square silhouette.
-    block(bridgePoint([xx, 2.9, z]), [rear?.75:1.2, .28, 1.1], .86,0,false,undefined,37);
+    masonry(bridgePoint([xx, 2.9+camber, z]), [rear?.75:1.2, .28, 1.1], .86,0,false,37);
   }
   courses.forEach(g=>g.dispose());
   for (let x = BRIDGE.start-1; x < BRIDGE.end; x += 1.35) {
     const camber = .18 * Math.max(0, 1 - (x / 30) ** 2);
-    block(bridgePoint([x, 3.18 + camber, -19.6]), [1.34, .48, 6.6], .92);
-    block(bridgePoint([x, 3.52 + camber, -19.6]), [1.34, .18, 6.9],1,0,true);
+    masonry(bridgePoint([x, 3.18 + camber, -19.6]), [1.31, .48, 6.6], .92,0,false,61);
+    masonry(bridgePoint([x, 3.52 + camber, -19.6]), [1.31, .18, 6.9],1,0,true,62);
   }
   for(let x=BRIDGE.start-1;x<BRIDGE.end;x+=2.65)for(const z of [-16.14,-23.05]){
     const length=Math.min(2.65,BRIDGE.end-x),camber=.18*Math.max(0,1-(x/30)**2);
@@ -57,11 +67,11 @@ export function compose(engine, time, viewAt) {
     // makes the existing two deck-beam courses legible at river level.
     for(const [y,h,depth,color,kind]of [[3.65,.12,.34,'#cbbca0',53],[3.43,.055,.20,'#716d62',56]]){
       const p=bridgePoint([x+length/2,y+camber,z]),size=[length-.025,h,depth];
-      stone.box(p,size,color,1,0,false,kind);reflected.stone.box(p,size,color,1,0,false,kind);
+      const pigment=masonryColor(color);stone.box(p,size,pigment,1,0,false,kind);reflected.stone.box(p,size,pigment,1,0,false,kind);
     }
   }
   function railing(x0, x1, z, y, spacing = 2.65, detailed = false) {
-    const railBlock=detailed?(p,s,ao=1)=>reflected.stone.box(bridgePoint(p),s,'#c6b89d',ao):block;
+    const railBlock=detailed?(p,s,ao=1)=>reflected.stone.box(bridgePoint(p),s,'#c6b89d',ao,0,false,64):block;
     for (let x = x0; x <= x1; x += spacing) {
       railBlock([x, y + .55, z], [.24, 1.1, .25]);
       railBlock([x, y + 1.11, z], [.33, .14, .34]);
@@ -84,9 +94,10 @@ export function compose(engine, time, viewAt) {
         for(let i=0;i<(o.isInstancedMesh?o.count:1);i++){
           const m=new THREE.Matrix4();if(o.isInstancedMesh)o.getMatrixAt(i,m);
           const world=o.matrixWorld.clone().multiply(m);
-          stone.add(o.geometry,world,o.name==='wangzhu'?'#c0b5a3':'#b7ad9c');
+          const pigment=masonryColor(o.name==='wangzhu'?'#c0b5a3':'#b7ad9c');
+          stone.add(o.geometry,world,pigment,1,0,64);
           if(o.name==='wangzhu')for(const g of [square,cap]){
-            stone.add(g,world,'#c0b5a3');reflected.stone.add(g,world,'#c0b5a3');
+            const kind=g===cap?63:64;stone.add(g,world,pigment,1,0,kind);reflected.stone.add(g,world,pigment,1,0,kind);
           }
         }
       });
@@ -99,7 +110,7 @@ export function compose(engine, time, viewAt) {
         for(let i=0;i<g.attributes.position.count;i++)uv.push(size[0],size[1]);
         g.setAttribute('memberSize',new THREE.Float32BufferAttribute(uv,2));
         const m=new THREE.Matrix4().makeTranslation(...p);
-        stone.add(g,m,'#c5b99f',1,0,54);reflected.stone.add(g,m,'#c5b99f',1,0,54);g.dispose();
+        const pigment=masonryColor('#c5b99f');stone.add(g,m,pigment,1,0,54);reflected.stone.add(g,m,pigment,1,0,54);g.dispose();
       }
     }
   }
@@ -107,15 +118,21 @@ export function compose(engine, time, viewAt) {
   railing(BRIDGE.start-1, BRIDGE.end, -23, 3.64,2.65,true);
 
   // Far bank stone courses and its warm upper promenade.
-  plaster.box([0, 1.5, -48], [170, 3.0, 24], '#c5ad87');
-  reflected.plaster.box([0, 1.5, -48], [170, 3.0, 24], '#c5ad87');
+  // inferred: a low bank recessed behind the span exposes the intervening
+  // water. Keep the full-height promenade to either side of this sightline.
+  for(const [x,width,height,z,depth]of [[-54.5,61,3,-42.8,24],[60.5,49,3,-42.8,24],[6,60,.9,-72,24]]){
+    const g=new THREE.BoxGeometry(width,height,depth),p=g.attributes.position;
+    for(let i=0;i<p.count;i++){
+      const xx=p.getX(i)+x;p.setXYZ(i,xx,p.getY(i)+height/2,p.getZ(i)+z+(height>1?BRIDGE.skew*xx:0));
+    }
+    // inferred: the full-height body follows the ashlar's slanted bank line,
+    // keeping the right-hand courses in front of the promenade volume.
+    g.computeVertexNormals();plaster.add(g,undefined,'#c5ad87',1,0,66);reflected.plaster.add(g,undefined,'#c5ad87',1,0,66);g.dispose();
+  }
   for (let row = 0; row < 5; row++) for (let i = 0; i < 62; i++) {
     const x = -80 + i * 2.65 + (row % 2) * 1.325;
-    // inferred: under the span the facing meets the actual promenade at z=-36.
-    // Removing its former 5 m projection exposes real water through the piers;
-    // the existing bank and all buildings stay where they were.
-    const setback=x>BRIDGE.start-1&&x<BRIDGE.end+1?5.3:0;
-    block([x, .4 + row * .66, -30.2-setback+BRIDGE.skew*x], [2.61, .64, 1.1], row === 0 ? .68 : 1);
+    const underSpan=x>BRIDGE.start-3&&x<BRIDGE.end+3;
+    masonry([x, underSpan?.10+row*.18:.4+row*.66, (underSpan?-60:-30.2)+BRIDGE.skew*x], [2.61,underSpan?.16:.64,1.1], row===0?.68:1,0,false,65);
   }
 
 

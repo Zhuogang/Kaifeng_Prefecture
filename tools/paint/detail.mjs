@@ -5,7 +5,7 @@ import {launchBrowser,observeErrors} from '../browser.mjs';
 import {startServer} from '../serve.mjs';
 const option=(n,d)=>{const i=process.argv.indexOf('--'+n);return i<0?d:process.argv[i+1];};
 const label=option('label','after'),w=+option('w',1920),h=+option('h',1080),spp=+option('spp',4),frames=+option('frames',0);
-const out=`out/D2/${label}`;fs.mkdirSync(out,{recursive:true});
+const out=option('out',`out/D2/${label}`);fs.mkdirSync(out,{recursive:true});
 const server=await startServer(0),browser=await launchBrowser({width:w,height:h}),results={};
 try{for(const [scene,prefix]of [[0,'x'],[1,'v']]){
  const page=await browser.newPage(),clean=observeErrors(page);

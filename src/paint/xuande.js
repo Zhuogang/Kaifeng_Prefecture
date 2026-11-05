@@ -42,14 +42,17 @@ export function composeXuande(engine,time,viewAt){
  // Side towers and joining galleries.
  wall(-38,-27,-5,12.0,1.8);wall(34,46,-5,12.0,1.8);
  wall(-27,-18,-6,10.4,1.2);wall(25,34,-6,10.4,1.2);
- const halls=paintedHalls(engine,batches,reflected,{time,profile:'xuande',timberColor:'#9e513d',ornamentHeight:3.1,smallOrnamentScale:.55,tileProfile:true,ornamentProfile:'fishTail',smallPaint:{roofStretch:1.4},heroPaint:{bracketScale:[1.85,1.0,1.0],roofStretch:1.18},
+ const halls=paintedHalls(engine,batches,reflected,{time,view0:viewAt(0,0),profile:'xuande',timberColor:'#9e513d',ornamentHeight:3.1,smallOrnamentScale:.55,tileProfile:true,ornamentProfile:'fishTail',smallPaint:{roofStretch:1.4},heroPaint:{roofStretch:1.18},
   heroSpec:{frontBays:[4.4,4.6,4.6,5.2,4.6,4.6,4.4],sideBays:[4.6,4.6],columnHeight:4.5,caiGrade:2,tiao:3,bayFill:'open'},
   smallSpec:{frontBays:[2.5,2.8,2.5],sideBays:[1.3,1.3],columnHeight:5.3,caiGrade:4,tiao:2,bayFill:'open'},
   palette:{bracket:'#a4644d',plaster:'#584a40',window:'#7a6351'}});
  halls.hall([3.3,12.2,-4.5],1.22,true);
  // inferred: recessed rear interior in the open hall, with a warm floor bounce.
  both('timber',[3.3,16.1,-8.4],[40,7.8,.25],'#4d382f',1,false,24);
- for(let i=0;i<7;i++)both('timber',[-14.0+i*5.8,14.7,-7.8],[.24,5.0,.22],'#6c4232',.85);
+ for(let i=0;i<7;i++){
+  const g=new THREE.CylinderGeometry(.11,.12,4.0,16),m=new THREE.Matrix4().makeTranslation(-14.0+i*5.8,14.3,-7.8);
+  timber.add(g,m,'#6c4232',.7,0,59);reflected.timber.add(g,m,'#6c4232',.7,0,59);g.dispose();
+ }
  halls.hall([-35.5,12.2,-5],1,false);halls.hall([40,12.2,-5],1,false);
  for(const x of [-35.5,40])both('timber',[x,14.8,-6.1],[8.8,5.2,.20],'#543b31',1,false,24);
  for(const [x,width]of [[-26.3,15.2],[29.7,11.5]])halls.hall([x,10.5,-5],1,false,false,{frontBays:[width/3,width/3,width/3],sideBays:[1.4],columnHeight:2.6,caiGrade:6,tiao:1,roof:'xuanshan',klass:'tingtang',bayFill:'open',ornaments:false});

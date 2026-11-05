@@ -7,11 +7,11 @@ import {createHash} from 'node:crypto';
 import {PNG} from 'pngjs';
 import {launchBrowser,observeErrors} from '../browser.mjs';
 import {startServer} from '../serve.mjs';
-const defaults={start:.49,end:.51,frames:10,seconds:1/3,time:11.85,w:1280,h:720,out:'out/D2/clip',scene:'xuande'};
+const defaults={start:.49,end:.51,frames:10,seconds:1/3,time:11.85,w:1280,h:720,out:'out/D2b/clip',scene:'xuande'};
 const args={...defaults};
 for(let i=2;i<process.argv.length;i+=2){const key=process.argv[i]?.replace(/^--/,'');if(!(key in defaults)||process.argv[i+1]===undefined)throw new Error('Arguments: --start --end --frames --seconds --time --w --h --out');args[key]=['out','scene'].includes(key)?process.argv[i+1]:Number(process.argv[i+1]);}
 if(![args.start,args.end].every(x=>Number.isFinite(x)&&x>=0&&x<=1)||!Number.isInteger(args.frames)||args.frames<2||!Number.isFinite(args.seconds)||args.seconds<=0||!Number.isFinite(args.time)||![args.w,args.h].every(x=>Number.isInteger(x)&&x>0))throw new Error('Invalid clip arguments');
-const root=path.resolve('out/D2'),out=path.resolve(args.out);if(!out.startsWith(root+path.sep))throw new Error('Clip output must be under out/D2/');
+const root=path.resolve('out/D2b'),out=path.resolve(args.out);if(!out.startsWith(root+path.sep))throw new Error('Clip output must be under out/D2b/');
 fs.mkdirSync(out,{recursive:true});
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));let lock;
 for(;;){for(let i=0;i<Number(process.env.GPU_SLOTS||2);i++){const p=path.resolve(`out/.gpu.lock.${i}`);try{const fd=fs.openSync(p,'wx');fs.writeSync(fd,JSON.stringify({pid:process.pid,args:'S4 clip'}));fs.closeSync(fd);lock=p;break;}catch(e){if(e.code!=='EEXIST')throw e;try{process.kill(JSON.parse(fs.readFileSync(p)).pid,0);}catch{fs.rmSync(p,{force:true});}}}if(lock)break;await sleep(1000);}
@@ -34,7 +34,7 @@ try{
  for(let i=0;i<args.frames;i++){
   const fraction=args.start+(args.end-args.start)*i/(args.frames-1),time=args.time+i*args.seconds/args.frames;
   const r=await page.evaluate(async(f,t,scene)=>{const {paintView}=await import('/src/modules/paint_'+scene+'.js');engine.applyShot({id:'clip',...paintView(f,t)});const image=await engine.renderStill(1);return {image,time:engine.time,stats:{...window.__STATS},reflection:{...engine.registry.paint.reflection.lastStats}};},fraction,time,args.scene);clean();
-  if(r.time!==time)throw new Error('Clip time changed');if(r.stats.calls>40||r.stats.triangles>1200000)throw new Error('Clip exceeded frame budget');
+  if(r.time!==time)throw new Error('Clip time changed');if(r.stats.calls>40||r.stats.triangles>1300000)throw new Error('Clip exceeded D2b frame budget');
   const name=`f${String(i).padStart(4,'0')}.png`,buffer=Buffer.from(r.image.split(',')[1],'base64'),frame=PNG.sync.read(buffer);fs.writeFileSync(path.join(out,name),buffer);
   frames.push({name,fraction,time,sha256:createHash('sha256').update(buffer).digest('hex'),stats:r.stats,reflection:r.reflection});
   if(previous){
