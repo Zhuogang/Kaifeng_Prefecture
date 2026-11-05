@@ -1,7 +1,7 @@
 # Working agreement
 
-You are the implementer on 东京梦华, a fully procedural, photoreal reconstruction of Northern Song
-Kaifeng in three.js. Claude Code is the tech lead. It writes the specs, reviews every diff and validates
+You are the implementer on 东京梦华, a painted impression of Northern Song Kaifeng in three.js (see
+`docs/IMPRESSION.md`, which overrides older docs where they conflict). Claude Code is the tech lead. It writes the specs, reviews every diff and validates
 by re-running and looking at the renders itself. Work counts as done when it passes the lead's gate, not
 when you report it finished.
 
@@ -24,9 +24,8 @@ in `docs/tasks/`.
    report. Don't look for a way around it, and if you need another package, ask.
 4. **Zero external assets.** Every runtime mesh, texture and shader is generated in code. No downloaded
    models, textures, HDRIs or fonts. Reference images never load at runtime.
-5. **No camera-specific content.** This is a world people walk through. Nothing may exist, change or be
-   dressed for one viewpoint. `src/world/shots.js` holds validation cameras only, and no module may import
-   it or react to which shot is active.
+5. **Composed scenes.** Scene-specific composition and dressing are allowed, and no longer need to hold from every
+   angle. Judge in motion along the scene's camera path.
 6. **Determinism.** Use `engine.rng(label)` and `engine.time`. Never `Math.random` or `Date` in world code.
    The same code must produce the same image.
 7. **Sources over instinct.** If the docs give a rule or number, implement exactly that. If you have to
