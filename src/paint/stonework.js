@@ -60,6 +60,35 @@ export function beveledBox(size,bevel=.035,seed=0){
   flat.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));flat.setAttribute('paintUV',new THREE.Float32BufferAttribute(paint,2));return flat;
 }
 
+// inferred: close quay blocks have small missing chips along their arrises,
+// with broad dressed faces between them. Extra edge samples are confined to
+// the kerb and mooring blocks; the shared masonry geometry remains unchanged.
+export function chippedQuayBlock(size,seed=0){
+  const [w,h,d]=size,b=Math.min(.035,h*.12),outline=[[-w/2,-d/2+b],[-w/2+b,-d/2],[w/2-b,-d/2],[w/2,-d/2+b],[w/2,d/2-b],[w/2-b,d/2],[-w/2+b,d/2],[-w/2,d/2-b]],ring=[];
+  for(let i=0;i<outline.length;i++){
+    const a=outline[i],z=outline[(i+1)%outline.length],steps=Math.max(1,Math.ceil(Math.hypot(z[0]-a[0],z[1]-a[1])/.22));
+    for(let j=0;j<steps;j++)ring.push([THREE.MathUtils.lerp(a[0],z[0],j/steps),THREE.MathUtils.lerp(a[1],z[1],j/steps)]);
+  }
+  const p=[],indices=[],count=ring.length;
+  for(let row=0;row<4;row++)for(const [x,z]of ring){
+    const chip=.008+.024*(.5+.5*Math.sin(x*53.7+z*41.3+seed*7.1+row*2.9));
+    const inset=row===0||row===3?b+chip:chip*.20;
+    p.push(x-Math.sign(x)*inset*Math.pow(Math.abs(x)/(w/2),6),
+      [-h/2,-h/2+b,h/2-b,h/2][row]-(row===3?chip*.45:0),
+      z-Math.sign(z)*inset*Math.pow(Math.abs(z)/(d/2),6));
+  }
+  for(let row=0;row<3;row++)for(let i=0;i<count;i++){
+    const a=row*count+i,z=row*count+(i+1)%count;indices.push(a,a+count,z,z,a+count,z+count);
+  }
+  p.push(0,-h/2,0,0,h/2,0);
+  for(let i=0;i<count;i++)indices.push(count*4,i,(i+1)%count,count*4+1,count*3+(i+1)%count,count*3+i);
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setIndex(indices);
+  const flat=g.toNonIndexed();g.dispose();flat.computeVertexNormals();
+  const uv=[],pos=flat.attributes.position,n=flat.attributes.normal;
+  for(let i=0;i<pos.count;i++)uv.push(Math.abs(n.getY(i))>.65?pos.getX(i):Math.abs(n.getX(i))>.65?pos.getZ(i):pos.getX(i),Math.abs(n.getY(i))>.65?pos.getZ(i):pos.getY(i));
+  flat.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));return flat;
+}
+
 // inferred: quiet warm stone palette, tiny construction variation and chipped
 // post corners. Shared construction helpers accept another scene's dimensions.
 export function stoneBlocks(stone,reflected,rng,{palette=['#cbb997','#c8b694','#cebc9a','#c9b795'],copingColor='#c7b99f'}={}){

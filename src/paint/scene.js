@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {stoneBlocks,beveledBox,pierShaft} from './stonework.js';
+import {stoneBlocks,beveledBox,pierShaft,chippedQuayBlock} from './stonework.js';
 import {willowGeometry} from './willow.js';
 import {broadleafGeometry} from './foliage.js';
 import { PaintBatch } from './batch.js';
@@ -121,7 +121,9 @@ export function compose(engine, time, viewAt) {
   // Far bank stone courses and its warm upper promenade.
   // inferred: a low bank recessed behind the span exposes the intervening
   // water. Keep the full-height promenade to either side of this sightline.
-  for(const [x,width,height,z,depth]of [[-54.5,61,3,-42.8,24],[60.5,49,3,-42.8,24],[6,60,.9,-72,24]]){
+  // inferred: the right quay meets the front of the bridge instead of leaving
+  // an exposed pale strip between its recessed face and the bridge end.
+  for(const [x,width,height,z,depth]of [[-54.5,61,3,-42.8,24],[60.5,49,3,-38.65,32.3],[6,60,.9,-72,24]]){
     const g=new THREE.BoxGeometry(width,height,depth),p=g.attributes.position;
     for(let i=0;i<p.count;i++){
       const xx=p.getX(i)+x;p.setXYZ(i,xx,p.getY(i)+height/2,p.getZ(i)+z+(height>1?BRIDGE.skew*xx:0));
@@ -133,8 +135,14 @@ export function compose(engine, time, viewAt) {
   for (let row = 0; row < 5; row++) for (let i = 0; i < 62; i++) {
     const x = -80 + i * 2.65 + (row % 2) * 1.325;
     const underSpan=x>BRIDGE.start-3&&x<BRIDGE.end+3;
-    masonry([x, underSpan?.10+row*.18:.4+row*.66, (underSpan?-60:-30.2)+BRIDGE.skew*x], [2.61,underSpan?.16:.64,1.1], row===0?.68:1,0,false,65);
+    const right=x>=BRIDGE.end+3,bankZ=right?-22.1:-30.2;
+    masonry([x, underSpan?.10+row*.18:.4+row*.66, (underSpan?-60:bankZ)+BRIDGE.skew*x], [2.61,underSpan?.16:.64,1.1], row===0?.68:1,0,false,65);
   }
+  // inferred: coursed stone continues around the bridge end to the water;
+  // a narrow projecting coping covers the promenade's front edge.
+  const bankJoin=BRIDGE.end+1.3;
+  masonry([bankJoin,1.65,-22.1+BRIDGE.skew*bankJoin],[2.6,3.3,1.1],1,0,false,65);
+  for(let x=BRIDGE.end+1.33;x<85;x+=2.65)masonry([x,3.43,-22.1+BRIDGE.skew*x],[2.63,.22,1.28],1,0,true,63);
 
 
   function tower(x, z, scale) {
@@ -193,7 +201,7 @@ export function compose(engine, time, viewAt) {
   // retaining wall behind the trunk runs into the near end of the bridge.
   const quayYaw=Math.atan(QUAY.slope),cq=Math.cos(quayYaw),sq=Math.sin(quayYaw),nearRng=engine.rng('D3-quay-stones');
   const nearStone=(p,s,kind=74,yaw=0)=>{
-    const g=beveledBox(s,.04,p[0]*11+p[2]*17),m=new THREE.Matrix4().makeRotationY(yaw);m.setPosition(...p);
+    const seed=p[0]*11+p[2]*17,g=kind===73||kind===75?chippedQuayBlock(s,seed):beveledBox(s,.04,seed),m=new THREE.Matrix4().makeRotationY(yaw);m.setPosition(...p);
     const color=new THREE.Color('#cdbd9f').multiplyScalar(nearRng.range(.98,1.02));
     stone.add(g,m,color,1,0,kind);reflected.stone.add(g,m,color,1,0,kind);g.dispose();
   };

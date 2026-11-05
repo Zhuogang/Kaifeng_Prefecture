@@ -632,24 +632,52 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             vec2 local=mat2(cos(quayYaw),sin(quayYaw),-sin(quayYaw),cos(quayYaw))*(vP.xz-vec2(-13.81,0.));
             vec2 stoneQ=vec2(local.y,vP.y),stoneSize=vec2(1.65,.68);
             vec3 undappled=c;${dappleGLSL(dapple)}c=undappled;
+            if(abs(vKind-70.)<.5||abs(vKind-73.)<.5||abs(vKind-75.)<.5){
+              // inferred: finer overlapping leaf gaps cross both the close
+              // slabs and their kerb, instead of one broad soft light patch.
+              dapple=smoothstep(.38,.68,noise(canopy*vec2(2.8,2.3))*.65+noise(canopy*6.2)*.35);
+            }
             if(abs(vKind-73.)<.5||abs(vKind-75.)<.5){
-              // D4: mid-tone worn stone faces and warmer lit tops, crossed by
+              // D4c: the specified grey-brown faces and warm tops, crossed by
               // the same projected leaf shade as the paving and moored boat.
-              vec3 face=linearColor(vec3(.659,.604,.518)),top=linearColor(vec3(.847,.784,.659));
+              vec3 face=linearColor(vec3(.560784,.513725,.447059)),top=linearColor(vec3(.803922,.741176,.623529));
               c=mix(face*.67,face,sun);c=mix(c,top,max(n.y,0.));
-              c*=mix(vec3(.61,.63,.77),vec3(1.03,1.00,.95),dapple);
+              c*=mix(vec3(.60,.62,.80),vec3(1.12,1.03,.90),dapple);
             }
             if(abs(vKind-75.)<.5){stoneQ=vec2(q.x,vP.y-${(MOORING.position[1]-.10).toFixed(6)});stoneSize=vec2(.62,.63);}
             if(abs(vKind-73.)<.5)stoneSize=vec2(1.2,.36);
+            if((abs(vKind-73.)<.5||abs(vKind-75.)<.5)&&abs(n.y)>.65)stoneQ=local;
             if(abs(vKind-70.)<.5){
-              c=mix(linearColor(vec3(.46,.45,.53)),linearColor(vec3(.85,.70,.59)),dapple);
-              stoneQ=local;stoneSize=vec2(2.15,1.65);
+              // inferred: smaller worn slabs carry peach light across cool
+              // violet shade; their thin joints stay subordinate to the dapple.
+              c=mix(linearColor(vec3(.40,.40,.49)),linearColor(vec3(.91,.73,.60)),dapple);
+              stoneQ=local;stoneSize=vec2(1.05,.78);
             }
-            ${reflection?'c*=1.+(noise(stoneQ*.5)-.5)*.10;':`float joints=(abs(vKind-73.)<.5||abs(vKind-75.)<.5)?0.:abs(vKind-70.)<.5?.66:.35;
-            // The approved ashlar wall retains its D3 finish; D4's stronger
-            // wear and joints apply only to the coping, mooring and paving.
+            ${reflection?'c*=1.+(noise(stoneQ*.5)-.5)*.10;':`float joints=(abs(vKind-73.)<.5||abs(vKind-75.)<.5)?0.:abs(vKind-70.)<.5?.62:.35;
+            // The approved ashlar wall retains its D3 finish. Stronger internal
+            // mottling applies only to the close coping, mooring and paving.
             bool wall=abs(vKind-74.)<.5;
-            c=paintedStone(c,stoneQ,stoneSize,vec4(joints,.14,wall?.64:.80,.15),wall?vec2(.006,.022):vec2(.009,.026));`}
+            bool paving=abs(vKind-70.)<.5;
+            c=paintedStone(c,stoneQ,stoneSize,vec4(joints,paving?.20:.14,wall?.64:1.25,.15),paving?vec2(.004,.013):wall?vec2(.006,.022):vec2(.009,.026));
+            if(paving||abs(vKind-73.)<.5||abs(vKind-75.)<.5){
+              // inferred: close-range worn pits sit inside the D3 wash. Their
+              // derivative filter removes the grain before it can flicker.
+              vec2 grit=stoneQ*vec2(19.,27.);
+              float fade=1.-smoothstep(.55,1.3,max(length(dFdx(grit)),length(dFdy(grit))));
+              float flake=noise(stoneQ*vec2(6.7,9.1)+noise(stoneQ*3.)*.7);
+              c*=1.+((flake-.5)*.65+(noise(grit)-.5)*.30)*fade;
+            }
+            if(paving){
+              // inferred: occasional small moss tufts grow from the same
+              // wandering slab joints, never as a wash over whole stones.
+              float wander=noise(stoneQ*.7)-.5;
+              float course=floor(stoneQ.y/stoneSize.y+wander*.15);
+              vec2 slab=vec2(stoneQ.x/stoneSize.x+hash21(vec2(course,3.))*.7+(noise(stoneQ*1.3)-.5)*.15,stoneQ.y/stoneSize.y+wander*.15);
+              vec2 edge=min(fract(slab),1.-fract(slab))*stoneSize;
+              float distance=min(edge.x,edge.y),aa=max(.004,fwidth(distance));
+              float tuft=(1.-smoothstep(.012,.025+aa,distance))*smoothstep(.72,.85,noise(stoneQ*vec2(5.,7.)))*smoothstep(.60,.78,noise(stoneQ*1.8+12.));
+              c=mix(c,linearColor(vec3(.32,.36,.23))*(.72+.35*dapple),tuft*.85);
+            }`}
             float moss=(1.-smoothstep(.08,.62,vP.y))*smoothstep(.38,.70,noise(vP.xz*vec2(1.3,.9)));
             c=mix(c,linearColor(vec3(.30,.37,.25)),moss*.58);
             float canopyShade=(1.-smoothstep(.65,1.5,abs(vP.x+14.)))*smoothstep(-19.,-16.,vP.z)*(1.-smoothstep(-5.,-3.,vP.z));

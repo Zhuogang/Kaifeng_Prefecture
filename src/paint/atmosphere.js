@@ -110,6 +110,12 @@ export function paintedWater(engine,time,reflectionScene,{distortion=.48,bounds=
         float ripple=noise(p*vec2(1.4,12.)+vec2(paintTime*.024,0.))-.5;
         float rippleFine=noise(p*vec2(3.2,25.)+7.)-.5;
         vec2 shifted=p+vec2(ripple*.36+(dashes.y-.25)*.22,rippleFine*.035)*${distortion.toFixed(6)};
+        // inferred: short overlapping depth offsets break reflected deck/sky
+        // boundaries into dashes. Grazing views need the greatest displacement;
+        // the approved pigment balance, blur and mirror gain remain unchanged.
+        float grazing=1.-abs(normalize(cameraPosition-vP).y);
+        float verticalStroke=(dashes.x-.25)*1.4+(dashes.z-.25)*.8;
+        shifted.y+=verticalStroke*mix(.18,1.6,grazing*grazing);
         vec2 reflectedUV=mirrorUV(shifted);
         // inferred: smear along depth, keeping adjacent shafts horizontally
         // distinct. D3's narrow blur keeps the bright reflection columns.
