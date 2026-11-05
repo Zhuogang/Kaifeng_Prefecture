@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {stoneBlocks,chippedPost,pierCourse} from './stonework.js';
+import {stoneBlocks,beveledBox,pierShaft} from './stonework.js';
 import {willowGeometry} from './willow.js';
 import { PaintBatch } from './batch.js';
 import { paintMaterial } from './materials.js';
@@ -25,49 +25,53 @@ export function compose(engine, time, viewAt) {
   const halls=paintedHalls(engine,batches,reflected,{timberColor,time,view0:viewAt(0,0)}),hall=halls.hall;
 
   // Closely set bluestone columns below a low, nearly level bridge. No arches.
-  const bridgePoint=([x,y,z])=>[x,y+BRIDGE.fall*x,z+BRIDGE.skew*x+BRIDGE.offset];
-  const masonryRng=engine.rng('D2b-masonry-values');
-  // inferred: individual rose/ochre/grey stone loads replace the small
-  // confetti field. Preserve the original construction RNG's draw order.
-  const masonryColor=color=>new THREE.Color(color).multiply(new THREE.Color(masonryRng.pick(['#fff3df','#eee9dd','#f4e0d2','#e6e7db']))).multiplyScalar(masonryRng.range(.80,1.22));
-  const masonry=(p,s,ao=1,yaw=0,coping=false,kind=60)=>{
-    const {pos,color,angle}=block.sample(p,s,ao,yaw,coping),pigment=masonryColor(color);
-    stone.box(pos,s,pigment,ao,angle,coping||s[1]>.3,kind);reflected.stone.box(pos,s,pigment,ao,angle,false,kind);
+  const camber=x=>.18*Math.max(0,1-(x/30)**2),deckRise=x=>BRIDGE.fall*x+camber(x);
+  const bridgePoint=([x,y,z])=>[x,y+deckRise(x),z+BRIDGE.skew*x+BRIDGE.offset];
+  // Every vertex follows one sweep. Previously each level block was merely
+  // lifted at its centre, leaving visible steps along the falling deck.
+  const drape=(geometry,matrix=new THREE.Matrix4())=>{
+    const g=geometry.clone(),p=g.attributes.position,v=new THREE.Vector3();
+    for(let i=0;i<p.count;i++){v.fromBufferAttribute(p,i).applyMatrix4(matrix);p.setXYZ(i,...bridgePoint(v.toArray()));}
+    g.computeVertexNormals();return g;
   };
-  const pierRng=engine.rng('D2-pier-courses'),courses=Array.from({length:4},(_,i)=>pierCourse(i));
+  const masonryRng=engine.rng('D2b-masonry-values');
+  // D3: the brief's grey-cream base; almost all variation lives in its wash.
+  const masonryColor=()=>new THREE.Color('#cdbd9f').multiplyScalar(masonryRng.range(.99,1.01));
+  const masonry=(p,s,ao=1,yaw=0,coping=false,kind=60,follow=false)=>{
+    const {pos,angle}=block.sample(p,s,ao,yaw,coping),pigment=masonryColor();
+    const source=beveledBox(s,coping?.028:.025),m=new THREE.Matrix4().makeRotationY(follow?yaw:angle);m.setPosition(...(follow?p:pos));
+    const g=follow?drape(source,m):source.clone().applyMatrix4(m);
+    stone.add(g,undefined,pigment,ao,0,kind);reflected.stone.add(g,undefined,pigment,ao,0,kind);g.dispose();source.dispose();
+  };
+  const pierRng=engine.rng('D2-pier-courses'),shafts=Array.from({length:4},(_,i)=>pierShaft(i));
   for (let x = BRIDGE.start; x <= BRIDGE.end; x += 2.6) for (const z of [-17.0, -22.5]) {
     const stretch=1+BRIDGE.fall*x/3;
     // Keep the existing scene RNG stream: new masonry has its own seed, so
     // the approved quay, foliage and distant placements retain their values.
     const original=block.sample([x,1.43*stretch,z+BRIDGE.skew*x+BRIDGE.offset],[1.22,3.10*stretch,1.04],.94);
     // inferred: the rear member is narrower and staggered, exposing paired
-    // shafts rather than a continuous tan band. Five real courses per shaft.
-    const rear=z< -20,xx=x+(rear?.80:0),rise=1+BRIDGE.fall*xx/3,width=rear?.56:1.10;
-    const camber=.18*Math.max(0,1-(xx/30)**2),weights=Array.from({length:5},()=>pierRng.range(.84,1.16)),unit=(3.10*rise+camber)/weights.reduce((a,b)=>a+b,0);
-    let courseY=-.12*rise+original.pos[1]-1.43*stretch;
-    for(let row=0;row<5;row++){
-      const h=weights[row]*unit,p=[xx+original.pos[0]-x,courseY+h/2,z+BRIDGE.skew*xx+BRIDGE.offset];courseY+=h;
-      const size=[width*pierRng.range(.97,1.02),h-.042,1.04*pierRng.range(.97,1.02)];
-      const color=masonryColor(original.color);
-      const m=new THREE.Matrix4().compose(new THREE.Vector3(...p),new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),original.angle),new THREE.Vector3(...size));
-      stone.add(courses[row%4],m,color,.94,0,52);reflected.stone.box(p,size,color,.94,original.angle,false,52);
-    }
+    // shafts rather than a continuous tan band.
+    const rear=z< -20,xx=x+(rear?.80:0),width=rear?.56:1.10,h=3.10+deckRise(xx);
+    const p=[xx+original.pos[0]-x,h/2-.12,z+BRIDGE.skew*xx+BRIDGE.offset],size=[width,h,1.04],color=masonryColor();
+    const m=new THREE.Matrix4().compose(new THREE.Vector3(...p),new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),original.angle),new THREE.Vector3(...size));
+    // One softly broken shaft; the shared recipe supplies wandering courses,
+    // avoiding both black physical gaps and hard reflected colour stripes.
+    stone.add(shafts[pierRng.int(0,3)],m,color,.94,0,52);reflected.stone.box(p,size,color,.94,original.angle,false,52);
     // inferred: capital tops sit in the deck shadow; rounded arrises soften their square silhouette.
-    masonry(bridgePoint([xx, 2.9+camber, z]), [rear?.75:1.2, .28, 1.1], .86,0,false,37);
+    masonry([xx,2.9,z],[rear?.75:1.2,.28,1.1],.86,0,false,37,true);
   }
-  courses.forEach(g=>g.dispose());
+  shafts.forEach(g=>g.dispose());
   for (let x = BRIDGE.start-1; x < BRIDGE.end; x += 1.35) {
-    const camber = .18 * Math.max(0, 1 - (x / 30) ** 2);
-    masonry(bridgePoint([x, 3.18 + camber, -19.6]), [1.31, .48, 6.6], .92,0,false,61);
-    masonry(bridgePoint([x, 3.52 + camber, -19.6]), [1.31, .18, 6.9],1,0,true,62);
+    masonry([x,3.18,-19.6],[1.34,.48,6.6],.92,0,false,61,true);
+    masonry([x,3.52,-19.6],[1.34,.18,6.9],1,0,true,62,true);
   }
   for(let x=BRIDGE.start-1;x<BRIDGE.end;x+=2.65)for(const z of [-16.14,-23.05]){
-    const length=Math.min(2.65,BRIDGE.end-x),camber=.18*Math.max(0,1-(x/30)**2);
+    const length=Math.min(2.65,BRIDGE.end-x);
     // inferred: a projecting upper cornice over a narrow recessed shadow joint
     // makes the existing two deck-beam courses legible at river level.
-    for(const [y,h,depth,color,kind]of [[3.65,.12,.34,'#cbbca0',53],[3.43,.055,.20,'#716d62',56]]){
-      const p=bridgePoint([x+length/2,y+camber,z]),size=[length-.025,h,depth];
-      const pigment=masonryColor(color);stone.box(p,size,pigment,1,0,false,kind);reflected.stone.box(p,size,pigment,1,0,false,kind);
+    for(const [y,h,depth,kind]of [[3.65,.12,.34,53],[3.43,.055,.20,56]]){
+      const source=beveledBox([length-.012,h,depth],.012),m=new THREE.Matrix4().makeTranslation(x+length/2,y,z),g=drape(source,m),pigment=masonryColor();
+      stone.add(g,undefined,pigment,1,0,kind);reflected.stone.add(g,undefined,pigment,1,0,kind);g.dispose();source.dispose();
     }
   }
   function railing(x0, x1, z, y, spacing = 2.65, detailed = false) {
@@ -82,22 +86,22 @@ export function compose(engine, time, viewAt) {
       }
     }
     if(detailed){
-      const rails=goulan(engine,{path:[bridgePoint([x0,y,z]),bridgePoint([x1,y,z])]});
+      const rails=goulan(engine,{path:[[x0,y,z],[x1,y,z]]});
       rails.lod1.updateMatrixWorld(true);
       // inferred: square ashlar jackets and flat caps enclose the source posts,
       // retaining their cadence and small plain finials above the two rail bars.
       const postHeight=4*.312*1.3;
-      const square=new THREE.BoxGeometry(.32,postHeight,.32).translate(0,postHeight/2,0);
-      const cap=new THREE.BoxGeometry(.43,.12,.43).translate(0,postHeight+.04,0);
+      const square=beveledBox([.32,postHeight,.32],.025).translate(0,postHeight/2,0);
+      const cap=beveledBox([.43,.12,.43],.025).translate(0,postHeight+.04,0);
       rails.lod1.traverse(o=>{
         if(!o.isMesh)return;
         for(let i=0;i<(o.isInstancedMesh?o.count:1);i++){
           const m=new THREE.Matrix4();if(o.isInstancedMesh)o.getMatrixAt(i,m);
           const world=o.matrixWorld.clone().multiply(m);
-          const pigment=masonryColor(o.name==='wangzhu'?'#c0b5a3':'#b7ad9c');
-          stone.add(o.geometry,world,pigment,1,0,64);
-          if(o.name==='wangzhu')for(const g of [square,cap]){
-            const kind=g===cap?63:64;stone.add(g,world,pigment,1,0,kind);reflected.stone.add(g,world,pigment,1,0,kind);
+          const pigment=masonryColor();
+          const g=drape(o.geometry,world);stone.add(g,undefined,pigment,1,0,64);g.dispose();
+          if(o.name==='wangzhu')for(const source of [square,cap]){
+            const kind=source===cap?63:64,g=drape(source,world);stone.add(g,undefined,pigment,1,0,kind);reflected.stone.add(g,undefined,pigment,1,0,kind);g.dispose();
           }
         }
       });
@@ -105,12 +109,8 @@ export function compose(engine, time, viewAt) {
       for(const lod of [rails.lod0,rails.lod1])lod.traverse(o=>{if(o.isMesh)o.geometry.dispose();});
       for(let x=x0;x<x1;x+=7*.312){
         const width=Math.min(7*.312,x1-x)-.34;if(width<=0)continue;
-        const p=bridgePoint([x+width/2+.17,y+.56,z]),size=[width,.47,.12];
-        const g=new THREE.BoxGeometry(...size),uv=[];
-        for(let i=0;i<g.attributes.position.count;i++)uv.push(size[0],size[1]);
-        g.setAttribute('memberSize',new THREE.Float32BufferAttribute(uv,2));
-        const m=new THREE.Matrix4().makeTranslation(...p);
-        const pigment=masonryColor('#c5b99f');stone.add(g,m,pigment,1,0,54);reflected.stone.add(g,m,pigment,1,0,54);g.dispose();
+        const source=beveledBox([width,.47,.12],.018),m=new THREE.Matrix4().makeTranslation(x+width/2+.17,y+.56,z),g=drape(source,m);
+        const pigment=masonryColor();stone.add(g,undefined,pigment,1,0,54);reflected.stone.add(g,undefined,pigment,1,0,54);g.dispose();source.dispose();
       }
     }
   }
@@ -187,33 +187,29 @@ export function compose(engine, time, viewAt) {
 
   // inferred: the foreground coping follows c2's diagonal, while the older
   // retaining wall behind the trunk runs into the near end of the bridge.
-  const quayYaw=Math.atan(QUAY.slope), step=.68, quayLength=step/Math.cos(quayYaw);
-  for(let iz=0;iz<48;iz++){
-    const z=-13+iz*step,edge=QUAY.intercept+QUAY.slope*z;
-    for(let row=0;row<2;row++)block([edge-.14,.34+row*.62,z],[.75,.60,quayLength-.025],row?1:.70,quayYaw);
-    block([edge,1.40,z],[.66,.21,quayLength-.02],1,quayYaw,true,undefined,36);
-  }
-  const pavingRng=engine.rng('S4-quay-stone-pigments');
-  for(let ix=0;ix<24;ix++){
-    const inset=.67+ix*.65;
-    for(let z=-13+(ix%2)*.3;z<25;){
-      const length=rng.range(.5,.8),dz=length*Math.cos(quayYaw),center=z+dz*.5;
-      const edge=QUAY.intercept+QUAY.slope*center;
-      block([edge-inset*Math.cos(quayYaw),1.20,center+inset*Math.sin(quayYaw)],
-        [rng.range(.61,.64),.19,length-.012],.95,quayYaw,false,pavingRng.pick(['#99958e','#a1988c','#a09287','#93918e']),36);
-      z+=dz;
-    }
-  }
+  const quayYaw=Math.atan(QUAY.slope),cq=Math.cos(quayYaw),sq=Math.sin(quayYaw),nearRng=engine.rng('D3-quay-stones');
+  const nearStone=(p,s,kind=74,yaw=0)=>{
+    const g=beveledBox(s,.04,p[0]*11+p[2]*17),m=new THREE.Matrix4().makeRotationY(yaw);m.setPosition(...p);
+    const color=new THREE.Color('#cdbd9f').multiplyScalar(nearRng.range(.98,1.02));
+    stone.add(g,m,color,1,0,kind);reflected.stone.add(g,m,color,1,0,kind);g.dispose();
+  };
+  const long=38/cq,center=6/cq;
+  nearStone([QUAY.intercept+sq*center-cq*.14,.64,cq*center+sq*.14],[.75,1.28,long],74,quayYaw);
+  // One flat bed, with large painted slab joints; the former small paving
+  // boxes added geometry while their short repeated edges dominated the view.
+  nearStone([QUAY.intercept+sq*center-cq*8,1.20,cq*center+sq*8],[16,.19,long],70,quayYaw);
+  for(let v=-13/cq;v<25/cq;v+=1.18)nearStone([QUAY.intercept+sq*v,1.43,cq*v],[.76,.32,1.15],73,quayYaw);
   for(let iz=0;iz<12;iz++){
     const z=-17+iz*1.12;
-    for(let row=0;row<3;row++)block([-14.0,.33+row*.62,z],[1.0,.61,1.10],row?.96:.65);
-    block([-14.0,2.0,z],[1.15,.22,1.11],1,0,true,undefined,36);
+    if(iz===0)nearStone([-14,.94,-10.8],[1.0,1.88,13.5],74);
+    nearStone([-14.0,2.0,z],[1.15,.28,1.10],73);
   }
   // Source-based post/rail cadence, with a quieter strip below its coping.
   for(let i=0;i<7;i++){
     const z=-17+i*1.96;
-    block([-14.0,2.55,z],[.24,1.0,.25]);
-    if(i<6){block([-14.0,2.85,z+.98],[.17,.15,1.96]);block([-14.0,2.28,z+.98],[.18,.16,1.96],.8);}
+    nearStone([-14.0,2.55,z],[.24,1.0,.25],64);
+    nearStone([-14.0,3.10,z],[.34,.12,.35],63);
+    if(i<6){nearStone([-14.0,2.85,z+.98],[.17,.15,1.96],64);nearStone([-14.0,2.28,z+.98],[.18,.16,1.96],64);}
   }
 
   // Reuse the continuous plank hull and rope geometry, then repaint it in the
@@ -243,7 +239,15 @@ export function compose(engine, time, viewAt) {
   for(const s of [-.63,-.22,.22,.63]){
     const width=BOAT.width*(1-.72*Math.abs(s)**3)*.89;
     const seat=new THREE.BoxGeometry(.30,.145,width).translate(s*BOAT.length/2,.27+.18*Math.abs(s)**3,0);
-    timber.add(seat,boatMatrix,'#82715a',.85,0,9);reflected.timber.add(seat,boatMatrix,'#82715a',.85,0,9);seat.dispose();
+    timber.add(seat,boatMatrix,'#82715a',.85,0,78);reflected.timber.add(seat,boatMatrix,'#82715a',.85,0,78);seat.dispose();
+  }
+  // inferred: a worn, gently rounded lip catches the same warm dapple as the
+  // hull, with continuous strakes retained below it.
+  for(const side of [-1,1])for(let j=0;j<40;j++){
+    const point=s=>V(s*BOAT.length/2,.47+.18*Math.abs(s)**3,side*BOAT.width*.5*(1-.72*Math.abs(s)**3));
+    const a=point(-1+j/20),b=point(-1+(j+1)/20),d=b.clone().sub(a);
+    const g=beveledBox([.11,d.length()+.012,.10],.018),m=new THREE.Matrix4().compose(a.add(b).multiplyScalar(.5),new THREE.Quaternion().setFromUnitVectors(V(0,1,0),d.normalize()),V(1,1,1));
+    timber.add(g,boatMatrix.clone().multiply(m),'#9c8059',.9,0,77);reflected.timber.add(g,boatMatrix.clone().multiply(m),'#9c8059',.9,0,77);g.dispose();
   }
   const ribs=new Geometry();
   for(let i=-3;i<=3;i++)for(const side of [-1,1]){
@@ -251,11 +255,9 @@ export function compose(engine, time, viewAt) {
     ribs.tube([V(x,-.18+y,0),V(x,-.15+y,side*w*.55),V(x,.38+y,side*w*.94)],
       [.055,.06,.04],new THREE.Color('#77634e'),{sides:5,smooth:2});
   }
-  const ribGeometry=ribs.build();timber.add(ribGeometry,boatMatrix,'#ffffff',.76,0,9);reflected.timber.add(ribGeometry,boatMatrix,'#ffffff',.76,0,9);ribGeometry.dispose();
+  const ribGeometry=ribs.build();timber.add(ribGeometry,boatMatrix,'#ffffff',.76,0,78);reflected.timber.add(ribGeometry,boatMatrix,'#ffffff',.76,0,78);ribGeometry.dispose();
   const [mx,my,mz]=MOORING.position;
-  const post=chippedPost({...MOORING,rng});
-  const postMatrix=new THREE.Matrix4().makeTranslation(mx,my,mz);
-  stone.add(post,postMatrix,'#b7aa96',.9);reflected.stone.add(post,postMatrix,'#b7aa96',.9);post.dispose();
+  for(const [y,h]of [[.215,.63],[.845,.61]])nearStone([mx,my+y,mz],[MOORING.width,h,MOORING.width],75);
   const tieX = -BOAT.length * .37, tieZ = BOAT.width * .36;
   const tie = V(BOAT.position[0] + Math.cos(BOAT.yaw)*tieX + Math.sin(BOAT.yaw)*tieZ,
     .52, BOAT.position[2] - Math.sin(BOAT.yaw)*tieX + Math.cos(BOAT.yaw)*tieZ);
@@ -265,12 +267,20 @@ export function compose(engine, time, viewAt) {
     const a=i/80*Math.PI*4.3,r=MOORING.width*.55/Math.max(Math.abs(Math.cos(a)),Math.abs(Math.sin(a)));
     wrap.push(V(mx+Math.cos(a)*r,my+.60+i/80*.12,mz+Math.sin(a)*r));
   }
-  const wrapG=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(wrap),96,.033,5,false);
-  timber.add(wrapG,undefined,'#826e51',1,0,10);wrapG.dispose();
+  // inferred: three actual hemp strands twist around one transported centre
+  // curve; its pitch is large enough to remain legible in the near crop.
+  const cord=(curve,radius,steps)=>{
+    const g=new Geometry(),points=curve.getPoints(steps),frame=curve.computeFrenetFrames(steps,false),length=curve.getLength();
+    for(let strand=0;strand<3;strand++){
+      const path=points.map((p,i)=>{const a=i/steps*length/.16*Math.PI*2+strand*Math.PI*2/3;return p.clone().addScaledVector(frame.normals[i],Math.cos(a)*radius*.48).addScaledVector(frame.binormals[i],Math.sin(a)*radius*.48);});
+      g.tube(path,path.map(()=>radius*.48),new THREE.Color(['#9d8b67','#b19d75','#8e7b59'][strand]),{sides:5,smooth:1});
+    }
+    const geometry=g.build();timber.add(geometry,undefined,'#ffffff',1,0,76);geometry.dispose();
+  };
+  cord(new THREE.CatmullRomCurve3(wrap),.044,144);
   const ropeStart=V(mx+.3,my+.70,mz-.12),sag=ropeStart.clone().lerp(tie,.5);sag.y=.62;
   const rope=new THREE.CatmullRomCurve3([ropeStart,sag,tie]);
-  const ropeG = new THREE.TubeGeometry(rope, 20, .047, 5, false);
-  timber.add(ropeG,undefined,'#826e51',1,0,10); ropeG.dispose();
+  cord(rope,.058,128);
 
   function addWillow(x,z,height,hero=false){
     const rng=engine.rng(`P2-willow-${x}-${z}`),place=new THREE.Matrix4().makeTranslation(x,hero?HERO_WILLOW.position[1]:3.7,z);
@@ -303,7 +313,7 @@ export function compose(engine, time, viewAt) {
 
   for (const k of families) engine.add(keep(batches[k].mesh(paintMaterial(time, k), 'paint-' + k)), { castShadow: false, receiveShadow: false });
   const reflectionScene=new THREE.Scene();
-  for(const k of families){const material=paintMaterial(time,k,{});material.alphaToCoverage=false;reflectionScene.add(keepReflection(reflected[k].mesh(material,'reflection-'+k)));}
+  for(const k of families){const material=paintMaterial(time,k,{reflection:true});material.alphaToCoverage=false;reflectionScene.add(keepReflection(reflected[k].mesh(material,'reflection-'+k)));}
   halls.dispose();
   return reflectionScene;
 }

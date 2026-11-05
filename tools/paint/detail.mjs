@@ -1,13 +1,13 @@
-// D2 captures the approved composition at client resolution, with a deterministic
+// Painted captures at client resolution, with a deterministic
 // repeat and optional fixed-camera animation frames. Uses the real painted shell.
 import fs from 'node:fs';
 import {launchBrowser,observeErrors} from '../browser.mjs';
 import {startServer} from '../serve.mjs';
 const option=(n,d)=>{const i=process.argv.indexOf('--'+n);return i<0?d:process.argv[i+1];};
 const label=option('label','after'),w=+option('w',1920),h=+option('h',1080),spp=+option('spp',4),frames=+option('frames',0);
-const out=option('out',`out/D2/${label}`);fs.mkdirSync(out,{recursive:true});
-const server=await startServer(0),browser=await launchBrowser({width:w,height:h}),results={};
-try{for(const [scene,prefix]of [[0,'x'],[1,'v']]){
+const out=option('out',`out/D3/${label}`);fs.mkdirSync(out,{recursive:true});
+const server=await startServer(0),browser=await launchBrowser({width:w,height:h}),results=fs.existsSync(`${out}/metrics.json`)?JSON.parse(fs.readFileSync(`${out}/metrics.json`,'utf8')):{};
+try{for(const [scene,prefix]of [[0,'x'],[1,'v']].filter(([i])=>option('scenes','0,1').split(',').map(Number).includes(i))){
  const page=await browser.newPage(),clean=observeErrors(page);
  await page.evaluateOnNewDocument(()=>{
   const raf=requestAnimationFrame.bind(window),cancel=cancelAnimationFrame.bind(window),ids=[];

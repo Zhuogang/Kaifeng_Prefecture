@@ -3,8 +3,8 @@ import {PaintBatch} from './batch.js';
 import {paintMaterial} from './materials.js';
 import {paintVisibility} from './visibility.js';
 import {paintedHalls} from './halls.js';
-import {blossomGeometry,scatteredPetals} from './blossom.js';
-import {chippedPost} from './stonework.js';
+import {blossomGeometry,scatteredPetals,groundPetals} from './blossom.js';
+import {beveledBox} from './stonework.js';
 import {Geometry,V} from '../flora/geometry.js';
 import {buildCrane} from '../modules/cranes.js';
 // inferred: all composed dimensions/placements and wear fields here follow c1,
@@ -14,6 +14,10 @@ export function composeXuande(engine,time,viewAt){
  const families=['stone','plaster','timber','roof','bark','leaf'],batches=Object.fromEntries(families.map(k=>[k,new PaintBatch()])),reflected=Object.fromEntries(families.map(k=>[k,new PaintBatch()]));
  const rng=engine.rng('S1-xuande'),{stone,plaster,timber,bark,leaf}=batches;
  const both=(family,p,s,c,ao=1,chipped=false,kind=null)=>{batches[family].box(p,s,c,ao,0,chipped,kind);reflected[family].box(p,s,c,ao,0,false,kind);};
+ const softened=(family,p,s,c,kind,bevel=.035)=>{
+  const g=beveledBox(s,bevel),m=new THREE.Matrix4().makeTranslation(...p);
+  batches[family].add(g,m,c,1,0,kind);reflected[family].add(g,m,c,1,0,kind);g.dispose();
+ };
  // Battered platform: one continuous, non-coursed plaster surface around five
  // deep rectangular reveals. Sloped side wings make the platform's mass legible.
  const wall=(x0,x1,z=0,h=12,batter=2)=>{
@@ -30,13 +34,13 @@ export function composeXuande(engine,time,viewAt){
  for(let i=0;i<pp.count;i++)pp.setZ(i,-pp.getZ(i)+3.8+(1-pp.getY(i)/12)*2.1);
  platform.computeVertexNormals();plaster.add(platform,undefined,'#c8a16c',1,0,20);reflected.plaster.add(platform,undefined,'#c8a16c',1,0,20);platform.dispose();
  for(const x of centers){
-  both('timber',[x,2.8,4.0],[4.60,5.6,.32],'#994d3e',.86,false,21);
-  both('timber',[x,5.532824,5.04],[6.30,.60,1.00],'#974a37',.82,true,22);
+  both('timber',[x,2.8,3.90],[4.60,5.6,.10],'#4c302a',.8,false,79);
+  for(const side of [-1,1])both('timber',[x+side*1.165,2.8,4.0],[2.27,5.6,.32],'#994d3e',.86,false,21);
+  softened('timber',[x,5.532824,5.04],[6.30,.60,1.00],'#974a37',22,.055);
   both('timber',[x-2.50,2.9,4.78],[.30,5.8,1.4],'#654739',.63,false,22);
   both('timber',[x+2.50,2.9,4.78],[.30,5.8,1.4],'#654739',.63,false,22);
   // 門皆金釘朱漆: rows of gilt nails; inferred six-by-six spacing.
   for(const dx of [-1.75,-1.05,-.35,.35,1.05,1.75])for(let j=0;j<6;j++)both('timber',[x+dx,.8+j*.78,4.22],[.085,.085,.05],'#d2a45c',1,false,35);
-  both('timber',[x,2.9,4.20],[.07,5.8,.10],'#6b3d32',.8);
  }
  both('stone',[3.0,12.10,-.6],[40.8,.28,9.3],'#bfb196',1,true);
  // Side towers and joining galleries.
@@ -58,18 +62,20 @@ export function composeXuande(engine,time,viewAt){
  for(const [x,width]of [[-26.3,15.2],[29.7,11.5]])halls.hall([x,10.5,-5],1,false,false,{frontBays:[width/3,width/3,width/3],sideBays:[1.4],columnHeight:2.6,caiGrade:6,tiao:1,roof:'xuanshan',klass:'tingtang',bayFill:'open',ornaments:false});
  // Balcony and heavy square railings, with separate cap, collar and foot.
  function rail(x,z0,z1,spacing=2.4,y=0,scale=1){
-  const steps=Math.ceil((z1-z0)/spacing);for(let j=0;j<=steps;j++){
-   let z=z0+(z1-z0)*j/steps;const hero=x<0&&z>54&&z<56;
-   if(hero)z+=.8;
+  const steps=Math.ceil((z1-z0)/spacing),posts=Array.from({length:steps+1},(_,j)=>{const z=z0+(z1-z0)*j/steps,hero=x<0&&z>54&&z<56;return {z:z+(hero?.8:0),hero};});
+  for(let j=0;j<=steps;j++){
+   const {z,hero}=posts[j];
    const postScale=hero?1.6:1;
-   if(hero){
-    const g=chippedPost({width:.38*scale*postScale,height:1.68*scale*postScale,rng:engine.rng('S2-near-rail-post')}),m=new THREE.Matrix4().makeTranslation(x,y,z);
-    timber.add(g,m,'#a25450',.92,0,29);reflected.timber.add(g,m,'#a25450',.92,0,29);g.dispose();
-   }else both('timber',[x,y+.84*scale,z],[.42*scale,1.68*scale,.44*scale],'#98454b',.9,true,29);
-   both('timber',[x,y+1.74*scale*postScale,z],[.54*scale*postScale,.30*scale*postScale,.56*scale*postScale],'#a4524d',1,true,29);
-   both('timber',[x,y+.18*scale,z],[.46*scale*postScale,.36*scale,.48*scale*postScale],'#793640',.8,true,29);
-   if(hero){for(const dy of [.32,2.43])both('timber',[x,y+dy,z],[.67,.08,.69],'#68343b',.85,true,29);}
-   if(j<steps)for(const yy of [.48,1.28])both('timber',[x,y+yy*scale,z+(z1-z0)/steps/2],[.34*scale,.36*scale,(z1-z0)/steps+.05],'#9f4b4c',.88,true,29);
+   const k=scale*postScale;
+   softened('timber',[x,y+.71*k,z],[.42*k,1.42*k,.44*k],'#ae5b47',72,.035*k);
+   softened('timber',[x,y+1.51*k,z],[.30*k,.18*k,.32*k],'#a85b45',72,.018*k);
+   softened('timber',[x,y+1.83*k,z],[.56*k,.46*k,.57*k],'#b76348',72,.035*k);
+   softened('timber',[x,y+.16*k,z],[.47*k,.32*k,.49*k],'#95503e',72,.03*k);
+   if(j<steps){
+    const span=posts[j+1].z-z;
+    for(const yy of [.48,1.28])softened('timber',[x,y+yy*scale,z+span/2],[.35*scale,.35*scale,span+.05],'#b5634c',71,.035*scale);
+    softened('timber',[x,y+.86*scale,z+span/2],[.13*scale,.76*scale,.14*scale],'#a95944',72,.018*scale);
+   }
   }
  }
  for(const x of [-12.6,17.0])rail(x,1.2,69,2.4,0,1.0);
@@ -82,9 +88,9 @@ export function composeXuande(engine,time,viewAt){
  // Pale avenue slabs and narrow stone canal kerbs. Dapple is material-local.
  stone.box([9.6,-.44,41],[47.8,.25,90],'#a49e93',1);
  for(let z=1;z<85;z+=2.2)for(let x=-11.8;x<39;x+=3.1){
-  const c=new THREE.Color(rng.pick(['#c6b9a3','#cbbda7','#c2b7a6','#d0c2ae']));stone.box([x+(Math.floor(z/2.2)%2)*1.55,-.12,z],[3.08,.25,2.18],c,.98,0,true);
+  const c=new THREE.Color(rng.pick(['#c6b9a3','#cbbda7','#c2b7a6','#d0c2ae']));stone.box([x+(Math.floor(z/2.2)%2)*1.55,-.12,z],[3.08,.25,2.18],c,.98,0,true,70);
  }
- for(const x of [-13.7,-29.0])for(let z=-2;z<82;z+=1.9)both('stone',[x,-.02,z],[x>-20?1.4:1.0,.58,1.88],'#bcb098',.95,true,32);
+ for(const x of [-13.7,-29.0])for(let z=-2;z<82;z+=1.9)softened('stone',[x,-.02,z],[x>-20?1.4:1.0,.58,1.88],'#c8bba3',73,.04);
  rail(-29.7,1.2,69,3.0,0,.8);
  // inferred: soft grove ground extends behind the skyline; haze and actual
  // overlapping trees/roofs conceal its horizon rather than a hard backdrop join.
@@ -105,11 +111,14 @@ export function composeXuande(engine,time,viewAt){
  function tree(x,z,h,white=false,hero=false){const g=blossomGeometry(engine.rng(`S1-blossom-${x}-${z}`),{height:h,hero,white}),m=new THREE.Matrix4().makeTranslation(x,0,z);bark.add(g.wood,m,'#ffffff',hero?.78:1);leaf.add(g.flowers,m);reflected.bark.add(g.wood,m);reflected.leaf.add(g.reflectionFlowers||g.flowers,m);g.wood.dispose();g.flowers.dispose();g.reflectionFlowers?.dispose();}
  tree(-22,48,22,false,true);tree(-34,23,12.5,true);
  for(let i=0;i<12;i++){tree(-34+rng.range(-4,4),5+i*4.2,rng.range(5.7,9.5),i%3===0);tree(29+rng.range(-2,5),3+i*4,rng.range(5,8),i%3===1);}
- const heroPetals=scatteredPetals(engine.rng('S1-lying-petals'),{count:80,x:[-9,8],z:[48,66],scale:2.5});leaf.add(heroPetals);heroPetals.dispose();
- const petals=scatteredPetals(rng,{count:650,x:[-13,22],z:[1,74],scale:1.25});leaf.add(petals);petals.dispose();
+ const ground=groundPetals(engine.rng('S1-lying-petals'),{count:18,x:[-9,8],z:[45,56],scale:2.5});leaf.add(ground.petals);ground.petals.dispose();
+ const petalShadows=new PaintBatch();petalShadows.add(ground.shadows);ground.shadows.dispose();
+ const petals=scatteredPetals(rng,{count:650,x:[-13,22],z:[1,44],scale:1.25});leaf.add(petals);petals.dispose();
  for(const k of families)engine.add(keep(batches[k].mesh(paintMaterial(time,k,{profile:'xuande'}),'xuande-'+k)),{castShadow:false,receiveShadow:false});
  const reflection=new THREE.Scene();for(const k of families){const m=paintMaterial(time,k,{profile:'xuande'});m.alphaToCoverage=false;reflection.add(keepReflection(reflected[k].mesh(m,'xuande-reflection-'+k)));}
  halls.dispose();
+ const contact=paintMaterial(time,'leaf',{profile:'xuande'});contact.transparent=true;contact.depthWrite=false;contact.alphaToCoverage=false;
+ engine.add(petalShadows.mesh(contact,'petal-contact-shadows'),{castShadow:false,receiveShadow:false});
  // Source crane silhouette with painted pigments, 0.18 Hz wing beats and glide.
  for(const [i,p]of [[0,[11,35.5,-3]],[1,[28,36,-4]],[2,[44,30,-8]]]){
   const g=buildCrane({far:true}),batch=new PaintBatch();batch.add(g);g.dispose();const m=paintMaterial(time,'leaf',{profile:'xuande'});

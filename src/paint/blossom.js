@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {Geometry,V} from '../flora/geometry.js';
+import {barkRelief} from './bark.js';
 // inferred: peach/plum-like branching and pigment clusters compose c1; five
 // rounded petals, small leaves, and irregular lit clumps replace spherical crowns.
 function flower(g,p,r,normal,color,rng,hero){
@@ -19,7 +20,7 @@ export function blossomGeometry(rng,{height=7,hero=false,white=false}={}){
  const wood=new Geometry(),bloom=new Geometry(),h=height;
  if(hero){bloom.reflectionProxy=new Geometry();bloom.reflectionIndex=0;}
  const trunk=hero?[V(-1,-1,0),V(-.5,h*.21,-.6),V(1.3,h*.43,-1.6),V(6.2,h*.65,-2.1),V(13.2,h*.80,-2.8),V(21.2,h*.84,-3.2)]:[V(),V(.16,h*.18,0),V(-.2,h*.32,-.2),V(.2,h*.47,0)];
- wood.tube(trunk,hero?[1.6,1.4,1.05,.75,.40,.06]:[h*.034,h*.027,h*.019,h*.008],new THREE.Color('#48423c'),{sides:hero?12:8,gnarl:.75,smooth:5});
+ wood.tube(trunk,hero?[1.95,1.65,1.14,.75,.40,.06]:[h*.034,h*.027,h*.019,h*.008],new THREE.Color('#48423c'),{sides:hero?16:8,gnarl:hero?.35:.75,smooth:5});
  const colors=white?['#f1dbc0','#f3e2ca','#dbb4a9','#fff0d3']:['#ed9d9f','#f8bab0','#db7e92','#f5c6b4'];
  for(let i=0;i<(hero?38:15);i++){
   const a=i*2.399,from=hero?trunk[Math.min(5,1+i%5)]:trunk[1].clone().lerp(trunk[3],(i%5)/5),r=h*rng.range(.25,.48);
@@ -51,9 +52,39 @@ export function blossomGeometry(rng,{height=7,hero=false,white=false}={}){
   const f=j/15*(trunk.length-2)+1,index=Math.min(trunk.length-2,Math.floor(f)),center=trunk[index].clone().lerp(trunk[index+1],f-index).add(V(rng.range(-.8,.8),rng.range(.2,1.8),rng.range(-1,1)));
   for(let k=0;k<38;k++){const p=center.clone().add(V(...rng.sphere()).multiplyScalar(rng.range(.2,1.15)));flower(bloom,p,rng.range(.24,.40),V(rng.range(-.6,.6),rng.range(-.1,.7),1),new THREE.Color(rng.pick(colors)),rng,true);}
  }
- return {wood:wood.build(),flowers:bloom.build(),reflectionFlowers:hero?bloom.reflectionProxy.build():null};
+ if(hero)for(let i=0;i<wood.p.length/3;i++){
+  const relief=(barkRelief(wood.uv[i*2],wood.uv[i*2+1])-.5)*.10;
+  for(let k=0;k<3;k++)wood.p[i*3+k]+=wood.n[i*3+k]*relief;
+ }
+ const bark=wood.build();if(hero)bark.computeVertexNormals();
+ return {wood:bark,flowers:bloom.build(),reflectionFlowers:hero?bloom.reflectionProxy.build():null};
 }
 export function scatteredPetals(rng,{count=220,x=[-7,14],z=[2,67],scale=1}={}){
  const g=new Geometry();for(let i=0;i<count;i++){const p=V(rng.range(...x),.075,rng.range(...z));g.leaf(p,rng.range(.065,.16)*scale,rng.range(.05,.12)*scale,V(Math.cos(i),0,Math.sin(i)),new THREE.Color(rng.pick(['#efadae','#f6c5b6','#d9959c'])),0,0,2);}
  return g.build();
+}
+
+// inferred: ground petals are small curled cups, with a darker fold and a
+// peach-lit rim. Their soft contact shadows share one transparent draw.
+export function groundPetals(rng,{count,x,z,scale=1}={}){
+ const petals=new Geometry(),shadows=new Geometry();
+ for(let i=0;i<count;i++){
+  const p=V(rng.range(...x),.025,rng.range(...z)),a=rng.range(0,Math.PI*2),length=rng.range(.14,.24)*scale,width=length*rng.range(.55,.82);
+  const d=V(Math.cos(a),0,Math.sin(a)),s=V(-d.z,0,d.x),color=new THREE.Color(rng.pick(['#efadae','#f6c5b6','#d9959c'])),rows=[];
+  for(let j=0;j<=5;j++){
+   const t=j/5,w=Math.pow(Math.sin(t*Math.PI),.65)*width/2,row=[];
+   for(const side of [-1,0,1]){
+    const q=p.clone().addScaledVector(d,(t-.5)*length).addScaledVector(s,side*w);
+    q.y+=length*(.04*Math.sin(t*Math.PI)+.20*t*t*t+.10*side*side*Math.sin(t*Math.PI));
+    const pigment=color.clone().lerp(new THREE.Color(side===0?'#bb7889':'#ffe0c5'),side===0?.18:.28+t*.12);
+    row.push(petals.vertex(q,V(0,1,0),pigment,81,0,[(side+1)/2,t]));
+   }rows.push(row);
+  }
+  for(let j=1;j<rows.length;j++)for(let k=0;k<2;k++){
+   petals.tri(rows[j-1][k],rows[j][k],rows[j-1][k+1]);petals.tri(rows[j-1][k+1],rows[j][k],rows[j][k+1]);
+  }
+  const ids=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([u,v])=>shadows.vertex(V(p.x+d.x*u*length*.58+s.x*v*width*.62,.012,p.z+d.z*u*length*.58+s.z*v*width*.62),V(0,1,0),new THREE.Color('#514753'),80,0,[(u+1)/2,(v+1)/2]));
+  shadows.tri(ids[0],ids[2],ids[1]);shadows.tri(ids[0],ids[3],ids[2]);
+ }
+ const g=petals.build();g.computeVertexNormals();return {petals:g,shadows:shadows.build()};
 }

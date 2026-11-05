@@ -108,7 +108,9 @@ export function paintedWater(engine,time,reflectionScene,{distortion=.48,bounds=
         vec3 reflected=texture2D(tDiffuse,reflectedUV).rgb*.4;
         reflected+=(texture2D(tDiffuse,reflectedUV+vec2(texel.x*.8,0.)).rgb+texture2D(tDiffuse,reflectedUV-vec2(texel.x*.8,0.)).rgb)*.15;
         reflected+=(texture2D(tDiffuse,reflectedUV+vec2(0.,texel.y*.65)).rgb+texture2D(tDiffuse,reflectedUV-vec2(0.,texel.y*.65)).rgb)*.15;
-        float reach=mix(.12,.34,front);
+        // inferred: soften fine bridge courses along the reflected shafts,
+        // while keeping their horizontally separate silhouettes and colours.
+        float reach=mix(${river?'.60':'.12'},.34,front);
         vec4 pa=textureMatrix*vec4(shifted.x-(${bounds?((bounds[0]+bounds[2])/2).toFixed(6):'0.'}),-(shifted.y+reach-${bounds?((bounds[1]+bounds[3])/2).toFixed(6):'0.'}),0.,1.);
         vec4 pb=textureMatrix*vec4(shifted.x-(${bounds?((bounds[0]+bounds[2])/2).toFixed(6):'0.'}),-(shifted.y-reach-${bounds?((bounds[1]+bounds[3])/2).toFixed(6):'0.'}),0.,1.);
         reflected=reflected*.72+(texture2D(tDiffuse,pa.xy/pa.w).rgb+texture2D(tDiffuse,pb.xy/pb.w).rgb)*.14;

@@ -74,10 +74,10 @@ import {barkRelief} from './bark.js';
         leaves.ellipsoid(center,size,color,{detail:0,kind:12,sway:.10});
       }
     }
-    // inferred: radial relief uses the same braided field as the fragment
-    // material, with a low-frequency footprint and no extra silhouette meshes.
+    // inferred: small radial chips use the same elongated plate field as the
+    // fragment material, with no extra silhouette meshes.
     if(hero)for(let i=0;i<wood.p.length/3;i++){
-      const relief=(barkRelief(wood.uv[i*2],wood.uv[i*2+1])-.35)*.20;
+      const relief=(barkRelief(wood.uv[i*2],wood.uv[i*2+1])-.5)*.10;
       for(let k=0;k<3;k++)wood.p[i*3+k]+=wood.n[i*3+k]*relief;
     }
     const bark=wood.build();if(hero)bark.computeVertexNormals();
