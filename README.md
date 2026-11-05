@@ -20,11 +20,11 @@ There are no people yet.
 | Input | Action |
 |---|---|
 | Nothing | The camera drifts slowly along the scene's path |
-| Pointer | Look around a little |
+| Pointer | Look around: up to 6° to each side and 3° up or down |
 | Drag or wheel | Move along the path. Drift resumes a few seconds later |
 | ← → or the on-screen arrows | Change scene |
 | C | Show or hide captions |
-| P | Show frame rate, draw calls, triangles and pixel ratio |
+| P | Show frame rate, draw calls, triangles, pixel ratio, quality level and GPU |
 
 ## Running it
 
@@ -36,7 +36,9 @@ node tools/build.mjs        # static site in dist/, upload it to any host
 
 `?scene=0` or `?scene=1` opens a scene directly.
 
-Tested in headless Chromium with software rendering only. **Frame rate on a real GPU has not been measured.** Press `P` to see it. Each scene is at most 30 draw calls and about 1.1 M triangles.
+An earlier, less detailed version ran at 60 FPS, locked to vsync, on an RTX 3070 Laptop GPU. This version costs less than that one in software tests, but hasn't been measured on a real GPU yet. Press `P` to see it. Each scene is at most 35 draw calls and about 940,000 triangles.
+
+If a machine can't keep up, the page reduces reflection quality first, then resolution, and recovers when there's room.
 
 ## How accurate is it?
 
@@ -61,6 +63,9 @@ node test/gates/scroll.mjs            # the scroll works from a sub-path of the 
 python3 -I test/gates/detail.py c1 <render.png>     # surface detail against a target
 python3 -I test/gates/regions.py c1 <render.png>    # regional values against a target
 python3 -I test/gates/shimmer.py <frames-dir>       # flicker on consecutive frames from a fixed camera
+python3 -I test/gates/crops.py c1 <render.png> <dir> # target above render, region by region
+python3 -I test/gates/colour.py <render.png>         # colour of 州桥's water and willows against the target
+node test/gates/perf.mjs                             # frame cost in software, to compare versions
 ```
 
 ## The earlier version

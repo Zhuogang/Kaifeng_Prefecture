@@ -5,19 +5,20 @@ Known faults, biggest first within each group.
 ## The painted scenes
 
 Whole-picture
-- Reads as a painted animation background, but it's simpler than the targets. Brush character isn't matched, even where `test/gates/detail.py` passes. That gate measures how much detail there is, not how it's arranged.
-- Frame rate on a real GPU is unmeasured. Shimmer is measured only on 10 frames from a fixed camera, in software.
+- Reads as a painted animation background and is much closer to the targets after D1 to D4, but it's still cleaner and more regular than they are. Edges are crisper and marks less varied. `test/gates/detail.py` measures how much detail there is, not how it's arranged.
+- The detailed version hasn't been measured on a real GPU. On high-DPI screens it now starts at a pixel ratio of up to 2, not 1.5. The adaptive quality ladder protects slower machines.
 - Portrait phones crop the scenes heavily, and the English gloss takes noticeable space there.
 
 宣德楼
-- The wall has swung between camouflage, plastic, granite and plain. It's plain now, with broad washes and the tree's shadow, and it lacks c1's lichen, stone blocks and streaks.
-- Bracket sets read as stacked bars, not fans of arms. The roof has less tile weight than c1.
-- Blossom is flatter than c1's, and the grass is plain.
+- The wall is much richer but still plainer than c1. It has few distinct flaked stones, so it stays closer to a wash.
+- Corner bracket clusters are spiky and busier than c1's. Tile rows are more regular.
+- The bark is too fluted, and near-rail paint wear is restrained. Distant trees at the right are soft smooth domes.
 
 州桥
-- Bark is rich but too fluted. Boat wear is angular. Some blockiness remains on the quay's caps.
-- The bridge and its bright reflection merge into one tan band, with a hard line at the reflected deck.
-- Paving is greyer than c2, with weaker peach dapple.
+- Stone is more regular than c2. Bridge piers and balustrade have less wear, and pale ghost piers show in the water just below the bridge.
+- The boat is darker than c2's, with less dappled sunlight on it.
+- The trunk is smoother than c2's. Paving dapple is a little busy.
+- Willows by the towers cover more of them than in c2. The tower brackets are dense.
 
 ## The earlier photoreal city
 
