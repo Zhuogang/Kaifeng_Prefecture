@@ -23,13 +23,17 @@ def bands(image):
         g1, g3, g9 = blur(channel, 1.0), blur(channel, 3.0), blur(channel, 9.0)
         out += [g1 - g3, g3 - g9]
     return out
+def patchiness(band):
+    # How unevenly fine marks are spread: the variation of local mark energy over its mean, per region. Even speckle is low. Patches are high.
+    return blur(np.abs(band), 10.0)
 scene, render = sys.argv[1], sys.argv[2]
 T, R = bands(load(f'refs/style/{scene}.png')), bands(load(render))
-print(f"{'region':11s}  ratio Lfine Lmed Cfine Cmed   (keep each between .7 and 1.3)")
-worst = []
+print(f"{'region':11s}  ratio Lfine Lmed Cfine Cmed   (keep each between .7 and 1.3)   patchiness target render ratio (at least .7)")
+worst = []; PT, PR = patchiness(T[0]), patchiness(R[0]); low = 0
 for name, (x0, y0, x1, y1) in SC[scene].items():
     s = (slice(int(y0 * 720), int(y1 * 720)), slice(int(x0 * 1280), int(x1 * 1280)))
     ratios = [r[s].std() / t[s].std() for t, r in zip(T, R)]
     worst += [x for x in ratios if x < .7 or x > 1.3]
-    print(f"{name:11s}        " + '  '.join(f'{x:4.2f}' + ('*' if x < .7 or x > 1.3 else ' ') for x in ratios))
-print(f'{len(worst)} of {4 * len(SC[scene])} outside .7 to 1.3')
+    pt, pr = PT[s].std() / PT[s].mean(), PR[s].std() / PR[s].mean(); low += pr / pt < .7
+    print(f"{name:11s}        " + '  '.join(f'{x:4.2f}' + ('*' if x < .7 or x > 1.3 else ' ') for x in ratios) + f'      {pt:4.2f} {pr:4.2f} {pr / pt:4.2f}' + ('*' if pr / pt < .7 else ''))
+print(f'{len(worst)} of {4 * len(SC[scene])} outside .7 to 1.3; {low} of {len(SC[scene])} too even')
