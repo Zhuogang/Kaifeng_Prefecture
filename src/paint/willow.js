@@ -7,7 +7,7 @@ import {Geometry,V} from '../flora/geometry.js';
     const wood = new Geometry(), leaves = new Geometry();
     const h = height, trunk = hero ? trunkPoints.map(p=>V(...p)) :
       [V(),V(-.2,h*.16,0),V(.3,h*.33,0),V(.1,h*.46,0)];
-    wood.tube(trunk, hero ? [1.15,1.02,.85,.61,.25] : [h * .052, h * .04, h * .035, h * .018], new THREE.Color('#635c50'), { sides: 10, gnarl: .6, smooth: 4 });
+    wood.tube(hero?[V(0,-.24,0),V(.01,.40,-.08),...trunk.slice(1)]:trunk, hero ? [1.65,1.35,1.02,.85,.61,.25] : [h * .052, h * .04, h * .035, h * .018], new THREE.Color('#635c50'), { sides: 10, gnarl: .6, smooth: 4 });
     if(hero){
       // inferred: irregular burls and interrupted ridges break the trunk's
       // contour without the old evenly spaced, full-length comb of tubes.
@@ -18,7 +18,14 @@ import {Geometry,V} from '../flora/geometry.js';
         const radius=THREE.MathUtils.lerp([1.15,1.02,.85,.61][segment],[1.02,.85,.61,.25][segment],t);
         center.addScaledVector(out,radius*.88);
         const rotation=new THREE.Quaternion().setFromUnitVectors(V(0,1,0),axis);
+        const burlStart=wood.p.length/3;
         wood.ellipsoid(center,V(rng.range(.17,.30),rng.range(.28,.60),rng.range(.12,.22)),new THREE.Color('#68452c'),{detail:1,rotation});
+        // inferred: unwrap each burl about the parent branch axis as well.
+        const inverse=rotation.clone().invert();
+        for(let k=burlStart;k<wood.p.length/3;k++){
+          const q=V(...wood.p.slice(k*3,k*3+3)).sub(center).applyQuaternion(inverse);
+          wood.uv[k*2]=Math.atan2(q.z,q.x)*radius;wood.uv[k*2+1]=f*17+q.y;
+        }
         if(j<5){
           const begin=center.clone().addScaledVector(axis,-.45),end=center.clone().addScaledVector(axis,.65).addScaledVector(out,-.12);
           wood.tube([begin,center.clone().addScaledVector(out,.12),end],[.12,.16,.035],new THREE.Color('#65452b'),{sides:7,gnarl:.8,smooth:3});
@@ -28,9 +35,13 @@ import {Geometry,V} from '../flora/geometry.js';
       wood.tube([trunk[1],V(-.8,6.8,-1.5),V(-1.3,13,-3.0)],[.68,.43,.15],new THREE.Color('#69442b'),{sides:12,gnarl:.7,smooth:5});
       // inferred: buttressed roots spread over the quay and turn into the ground.
       for(let i=0;i<4;i++){
-        const a=i*2.399,tip=V(Math.cos(a)*rng.range(1.15,1.65),-.12,Math.sin(a)*rng.range(1.1,1.55));
-        wood.tube([V(Math.cos(a)*.55,.42,Math.sin(a)*.55),V(tip.x*.65,.10,tip.z*.65),tip],[.27,.17,.025],new THREE.Color('#654327'),{sides:7,gnarl:.45,smooth:3});
+        const a=i*2.399,tip=V(Math.cos(a)*rng.range(1.65,2.20),-.20,Math.sin(a)*rng.range(1.5,2.05));
+        wood.tube([V(Math.cos(a)*.65,.38,Math.sin(a)*.65),V(tip.x*.64,.05,tip.z*.64),tip],[.42,.24,.025],new THREE.Color('#654327'),{sides:7,gnarl:.45,smooth:3});
       }
+    }
+    if(hero)for(let i=0;i<3;i++){
+      const a=.6+i*2.15,tip=V(Math.cos(a)*2.05,-.18,Math.sin(a)*1.95);
+      wood.tube([V(Math.cos(a)*.8,.30,Math.sin(a)*.8),V(tip.x*.68,.03,tip.z*.68),tip],[.32,.19,.025],new THREE.Color('#554735'),{sides:7,gnarl:.25,smooth:3});
     }
     for (let j = 0; j < (hero ? branches.length : 20); j++) {
       const angle=j*2.399,start=trunk[hero?branches[j].from:2];

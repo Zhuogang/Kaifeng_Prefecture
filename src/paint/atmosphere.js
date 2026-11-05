@@ -34,10 +34,12 @@ export async function paintedSky(engine,{shiftU=0,backdrop='bd1',heightOffset=0}
     uniforms: { backdrop: { value: map } }, side: THREE.DoubleSide, depthWrite: false,
     vertexShader: 'varying vec2 vUv;varying float vHeight;void main(){vUv=uv;vHeight=position.y;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
     fragmentShader: `uniform sampler2D backdrop; varying vec2 vUv;varying float vHeight; ${BRUSH}
-      void main(){vec3 c=texture2D(backdrop,vUv+vec2(${shiftU.toFixed(6)},0.)).rgb;
-        vec3 distance=texture2D(backdrop,vec2(vUv.x+(${shiftU.toFixed(6)}),.22+(vHeight-5.)/230.)).rgb;
+      void main(){vec3 c=texture2D(backdrop,vUv+vec2(${shiftU.toFixed(6)},0.),1.8).rgb;
+        vec3 distance=texture2D(backdrop,vec2(vUv.x+(${shiftU.toFixed(6)}),.22+(vHeight-5.)/230.),1.8).rgb;
         distance=mix(distance,linearColor(vec3(.78,.77,.66)),.55);
         c=mix(c,distance,1.-smoothstep(3.,14.,vHeight));
+        // The supplied image owns the brushwork. No procedural stroke overlay.
+        c=mix(c*vec3(1.035,1.0,.97),linearColor(vec3(.87,.76,.65)),.035);
         gl_FragColor=vec4(c,1.0);}`,
   });
   material.userData.noPatch = true;
@@ -100,31 +102,21 @@ export function paintedWater(engine,time,reflectionScene,{width=1536,height=864,
         vec4 pa=textureMatrix*vec4(shifted.x-(${bounds?((bounds[0]+bounds[2])/2).toFixed(6):'0.'}),-(shifted.y+reach-${bounds?((bounds[1]+bounds[3])/2).toFixed(6):'0.'}),0.,1.);
         vec4 pb=textureMatrix*vec4(shifted.x-(${bounds?((bounds[0]+bounds[2])/2).toFixed(6):'0.'}),-(shifted.y-reach-${bounds?((bounds[1]+bounds[3])/2).toFixed(6):'0.'}),0.,1.);
         reflected=reflected*.72+(texture2D(tDiffuse,pa.xy/pa.w).rgb+texture2D(tDiffuse,pb.xy/pb.w).rgb)*.14;
-        reflected*=${river?'.21':'.64'};
-        float warmth=smoothstep(-.025,.10,reflected.r-reflected.b);
-        reflected*=mix(vec3(.75,1.00,.90),vec3(.92,1.01,.91),warmth);
-        vec3 body=mix(linearColor(vec3(.47,.60,.52)),linearColor(vec3(.66,.71,.58)),noise(p*.18));
-        // inferred: soft world-space bridge shade, with no hard water edge.
-        float bridgeZ=p.y-(${BRIDGE.skew.toFixed(6)})*p.x-(${BRIDGE.offset.toFixed(6)});
-        float shade=exp(-pow((bridgeZ+12.)/13.,2.));
-        body=mix(body,linearColor(vec3(.20,.39,.33)),shade*${river?'.48':'0.'});
-        float vermilion=smoothstep(1.25,1.7,reflected.r/max(.001,reflected.g));
-        float mirror=mix(.72+.12*strokes,.82+.10*strokes,vermilion);
-        mirror=mix(.76,mirror,smoothstep(-21.,-14.,p.y));
-        vec3 frontBody=mix(linearColor(vec3(.32,.47,.44)),linearColor(vec3(.46,.57,.50)),noise(p*.19));
-        float nearFade=${river?'smoothstep(1.,12.,p.y)':'.15'};
-        body=mix(body,frontBody,nearFade);
-        mirror*=1.-nearFade*.50;
-        // inferred: murky jade remains visible through very dark reflected
-        // surfaces, so the broad deck soffit cannot become an opaque hard bar.
-        float reflectedValue=dot(reflected,vec3(.2126,.7152,.0722));
-        mirror*=mix(.22,1.,smoothstep(${river?'.004,.035':'.012,.12'},reflectedValue));
+        // inferred: bright jade pigment raises dark reflected objects and
+        // lowers bright ones through mixing, never by scaling the mirror dark.
+        vec3 body=mix(linearColor(vec3(.43,.55,.47)),linearColor(vec3(.58,.66,.55)),noise(p*.18));
+        ${river?'body=mix(body,linearColor(vec3(.43,.56,.52)),smoothstep(1.,18.,p.y)*.35);':''}
+        float skyOpening=smoothstep(.008,.13,reflected.b-reflected.r);
+        // Actual blue/cream sky exposed in the two open tower passages caused
+        // the teal-white patches after the former tint. Neutralise its chroma.
+        reflected=mix(reflected,body,skyOpening*.78);
+        float warmStone=smoothstep(.01,.07,reflected.r-reflected.b)*(1.-smoothstep(1.25,1.65,reflected.r/max(.001,reflected.g)));
+        reflected=mix(reflected,linearColor(vec3(.64,.59,.46)),warmStone*.16);
+        float mirror=${river?'(.46+.22*strokes)*(1.-smoothstep(1.,18.,p.y)*.55)':'.40+.20*strokes'};
         vec3 c=mix(body,reflected,mirror);
-        // Transparent cream pigment catches the same warm sky between strokes.
-        c+=linearColor(vec3(.66,.61,.43))*(1.-strokes)*.10;
-        c*=.95+strokes*.12;
-        float glint=smoothstep(.70,.91,fine)*smoothstep(.44,.72,noise(p*vec2(.37,3.7)+8.));
-        c+=linearColor(vec3(.73,.76,.61))*glint*.12;
+        c+=linearColor(vec3(.68,.65,.50))*(1.-strokes)*.055;
+        float glint=smoothstep(.74,.94,fine)*smoothstep(.45,.74,noise(p*vec2(.37,3.7)+8.));
+        c+=linearColor(vec3(.73,.75,.62))*glint*.055;
         float bankEdge=(${QUAY.intercept.toFixed(6)})+p.y*${QUAY.slope.toFixed(6)};
         float bankShade=exp(-max(0.,p.x-bankEdge)*.8)*smoothstep(-13.,0.,p.y);
         float hullHalf=${(BOAT.width*.5).toFixed(6)}*(1.-.72*pow(min(abs(along),1.),3.))*.70;
