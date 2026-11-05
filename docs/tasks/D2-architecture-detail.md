@@ -46,7 +46,7 @@ Today the piers and their bright reflection merge into one tan band with dark re
 
 ## Limits
 
-- **Cost:** `node test/gates/perf.mjs` under **230 ms for 宣德楼 and 400 ms for 州桥**, per-pixel under 80 ms in each, at most 40 calls and 1.2 M triangles. The original 351 and 638 ms held 60 FPS on the client's RTX 3070 Laptop, so that's the ceiling for all three rounds, and later rounds need room.
+- **Cost:** `node test/gates/perf.mjs` starts this round at 241 and 531 ms. Stay under **290 ms for 宣德楼 and 570 ms for 州桥**, per-pixel under 80 ms in each, at most 40 calls and 1.2 M triangles. The original 351 and 638 ms held 60 FPS on the client's RTX 3070 Laptop, so that's the ceiling for all three rounds, and later rounds need room. The D1b baked brush approach was reverted because it changed the look: if you bake tile rows or similar new detail, that's fine, as long as approved surfaces don't change.
 - **Motion:** detail must be filtered. Fixed-camera `python3 -I test/gates/shimmer.py` under .05%, and fine rows and lattice must not crawl or sparkle along the path. Check with a clip through `tools/paint/clip.mjs` (adjust its output folder if you need to), and look at consecutive frames.
 - **Wider angles:** the extremes sheet from `tools/paint/extremes.mjs` must still hold.
 - **Don't regress:** `node --test test/*.spec.mjs`, `node tools/build.mjs` then `node test/gates/scroll.mjs`, and `?world=1` unchanged.
