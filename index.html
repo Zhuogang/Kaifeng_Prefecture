@@ -6,6 +6,12 @@
   <meta name="theme-color" content="#171d1d" />
   <link rel="icon" href="data:," />
   <title>东京梦华 · Kaifeng</title>
+  <script>
+    if (!['test', 'shot', 'mode', 'world'].some(key => new URLSearchParams(location.search).has(key))) {
+      document.documentElement.dataset.scroll = '';
+      if (new URLSearchParams(location.search).has('scene')) document.documentElement.dataset.scrollDirect = '';
+    }
+  </script>
   <style>
     html, body { margin: 0; height: 100%; background: #171d1d; overflow: hidden; }
     canvas { display: block; }
@@ -41,6 +47,58 @@
     #evidence-panel p { margin: 12px 0 0; color: #b5b2a4; font-size: 11px; }
     #evidence-source { border-top: 1px solid #a98c6255; padding-top: 12px; overflow-wrap: anywhere; }
     @media (prefers-reduced-motion: reduce) { progress::-webkit-progress-value { transition: none; } }
+    :root { --paper: #e9dfca; --ink: #514a3e; --scroll-serif: "Songti SC", "STSong", "Noto Serif CJK SC", "SimSun", serif; }
+    .scroll-only { display: none; }
+    html[data-scroll], html[data-scroll] body { background: var(--paper); }
+    html[data-scroll] .scroll-only { display: block; }
+    html[data-scroll-direct] #scroll-opening { display: none; }
+    html[data-scroll] #loading, html[data-scroll] #evidence-toggle, html[data-scroll] #evidence-panel,
+    html[data-scroll] #controls-hint { display: none; }
+    #scroll-cover { position: fixed; inset: 0 -6%; z-index: 20; pointer-events: none;
+      background: linear-gradient(90deg, transparent, var(--paper) 4%, var(--paper) 96%, transparent);
+      transform: translateX(0); transition: transform 1s cubic-bezier(.45,0,.25,1); }
+    #scroll-cover-status { position: absolute; top: 50%; width: 100%; text-align: center; color: var(--ink); font: 13px/2 var(--scroll-serif); letter-spacing: .12em; }
+    #scroll-opening { position: fixed; z-index: 21; inset: 0; background: var(--paper); color: var(--ink);
+      opacity: 1; transition: opacity .8s; }
+    #scroll-opening.opened { opacity: 0; pointer-events: none; }
+    .scroll-title-panel { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #scroll-opening h1 { writing-mode: vertical-rl; font: 400 clamp(42px, 6vh, 64px)/1.6 var(--scroll-serif); letter-spacing: .24em; margin: 0 0 28px; }
+    .scroll-source { font: 13px/2 var(--scroll-serif); letter-spacing: .15em; margin: 0 0 30px; }
+    #scroll-progress { font: 12px/1.8 var(--scroll-serif); letter-spacing: .12em; margin: 0; }
+    #scroll-open { color: #7b4436; background: transparent; border: 1px solid #9b756f88; padding: 8px 26px; margin-top: 18px;
+      cursor: pointer; font: 18px/1.5 var(--scroll-serif); letter-spacing: .3em; }
+    #scroll-ui { position: fixed; inset: 0; z-index: 5; pointer-events: none; color: var(--ink); transition: opacity .4s; }
+    #scroll-ui.leaving { opacity: 0; }
+    .scroll-edge { position: absolute; bottom: 28px; pointer-events: auto; cursor: pointer; border: 1px solid #514a3e44;
+      border-radius: 2px; color: var(--ink); background: #efe5d3dc; padding: 6px 14px; min-width: 44px; min-height: 44px; font: 20px/1.4 var(--scroll-serif); }
+    #scroll-prev { left: 24px; } #scroll-next { right: 24px; }
+    #scroll-position { position: absolute; bottom: 44px; left: 50%; transform: translateX(-50%); font: 22px/1 var(--scroll-serif); text-shadow: 0 1px 6px var(--paper); }
+    #scroll-hint { position: absolute; bottom: 17px; left: 50%; transform: translateX(-50%); white-space: nowrap;
+      font: 10px/1.5 var(--scroll-serif); letter-spacing: .08em; text-shadow: 0 1px 5px var(--paper); }
+    #scroll-caption { position: absolute; bottom: 90px; right: 5vw; max-width: 240px; opacity: 0; transition: opacity 1.2s;
+      text-shadow: 0 0 2px var(--paper), 0 0 5px var(--paper), 0 0 12px var(--paper); }
+    #scroll-caption.visible { opacity: 1; }
+    .scroll-vertical { display: flex; flex-direction: row-reverse; align-items: flex-start; gap: 16px; }
+    #scroll-caption-name, #scroll-caption-line { writing-mode: vertical-rl; margin: 0; font: 17px/1.9 var(--scroll-serif); letter-spacing: .14em; max-height: 24vh; }
+    #scroll-caption-name { font-size: 23px; color: #7b4436; }
+    #scroll-caption-gloss { margin: 18px 0 0; max-width: 280px; font: 12px/1.6 var(--scroll-serif);
+      background: #e9dfcab0; box-shadow: 0 0 10px 6px #e9dfcab0; }
+    #scroll-performance { position: absolute; left: 16px; top: 16px; margin: 0; padding: 10px 12px; color: #fff6e5; background: #272c2de8;
+      border-radius: 3px; font: 13px/1.7 ui-monospace, Consolas, monospace; white-space: pre; }
+    #scroll-error { position: fixed; z-index: 30; top: 40%; left: 10%; right: 10%; text-align: center; color: var(--ink); font: 16px/1.8 var(--scroll-serif); }
+    @media (max-width: 600px) {
+      #scroll-caption { bottom: 110px; right: 20px; max-width: 210px; }
+      #scroll-caption-name, #scroll-caption-line { font-size: 15px; max-height: 160px; }
+      #scroll-caption-name { font-size: 20px; }
+      #scroll-caption-gloss { font-size: 11px; max-width: 210px; margin-top: 12px; }
+      #scroll-prev { left: 14px; } #scroll-next { right: 14px; }
+      #scroll-hint { font-size: 9px; }
+      #scroll-performance { top: 14px; left: 14px; font-size: 11px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #scroll-cover { transition-timing-function: linear; }
+      #scroll-caption { transition-duration: .2s; }
+    }
   </style>
   <script type="importmap">
     {
@@ -52,6 +110,27 @@
   </script>
 </head>
 <body>
+  <div id="scroll-cover" class="scroll-only"><p id="scroll-cover-status" role="status" aria-live="polite">展纸 · Preparing the scroll</p></div>
+  <section id="scroll-opening" class="scroll-only" aria-label="Open the painted scroll">
+    <div class="scroll-title-panel">
+      <h1>东京梦华</h1>
+      <p class="scroll-source">孟元老《東京夢華錄》</p>
+      <p id="scroll-progress" role="status" aria-live="polite">展纸 · Preparing the scroll</p>
+      <button id="scroll-open" type="button" hidden>开卷</button>
+    </div>
+  </section>
+  <div id="scroll-ui" class="scroll-only" hidden>
+    <button id="scroll-prev" class="scroll-edge" type="button" aria-label="Previous scene: 宣德樓">‹</button>
+    <button id="scroll-next" class="scroll-edge" type="button" aria-label="Next scene: 州橋">›</button>
+    <span id="scroll-position"></span>
+    <span id="scroll-hint">拖曳 · Scroll to drift · ← → · C captions · P stats</span>
+    <aside id="scroll-caption" aria-label="From 東京夢華錄" aria-hidden="true">
+      <div class="scroll-vertical"><p id="scroll-caption-name"></p><p id="scroll-caption-line"></p></div>
+      <p id="scroll-caption-gloss"></p>
+    </aside>
+    <pre id="scroll-performance" hidden></pre>
+  </div>
+  <p id="scroll-error" class="scroll-only" role="alert" hidden></p>
   <div id="loading" role="status" aria-live="polite">
     <div class="load-panel">
       <div class="seal">北宋 · 宣和</div>
@@ -75,6 +154,11 @@
   <script type="module">
     const fail = message => {
       window.__RENDER_ERROR = message;
+      if (document.documentElement.hasAttribute('data-scroll')) {
+        document.getElementById('scroll-opening').hidden = true;
+        const error = document.getElementById('scroll-error');
+        error.textContent = message; error.hidden = false;
+      }
       document.getElementById('load-label').textContent = 'The city could not open';
       document.getElementById('load-detail').textContent = message;
       document.getElementById('load-progress').hidden = true;

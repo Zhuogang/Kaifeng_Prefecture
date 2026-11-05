@@ -153,8 +153,10 @@ function showControlsHint() {
   });
 }
 
-boot().catch((error) => {
+const scrollRoute = !['test', 'shot', 'mode', 'world'].some(key => P.has(key));
+(scrollRoute ? import('./scroll/index.js').then(module => module.bootScroll(P)) : boot()).catch((error) => {
   window.__RENDER_ERROR = error.stack || error.message || String(error);
+  window.__scrollFail?.(error.message || String(error));
   loading.fail(error);
   console.error(window.__RENDER_ERROR);
 });

@@ -17,7 +17,7 @@ import { LOOKS } from '../world/looks.js';
 const LIT = (m) => m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial || m.isMeshToonMaterial;
 
 export class Engine {
-  constructor({ width, height, quality, params }) {
+  constructor({ width, height, quality, params, painted = false }) {
     this.width = width; this.height = height;
     this.quality = quality;
     this.params = params;
@@ -55,12 +55,18 @@ export class Engine {
 
     this.scene.add(this.camera);
 
-    installAtmosphere(this.scene);
-    this.sky = createSky();
-    this.scene.add(this.sky);
-    SKY.uCloudSteps.value = quality.cloudSteps;
-
-    this.lighting = new Lighting(this);
+    if (painted) {
+      // Painted shaders own light and distance. Keep the engine interface without
+      // submitting unused cloud-volume generation or sky/PMREM passes to the GPU.
+      this.sky = new THREE.Group();
+      this.lighting = { csmUniforms: {}, setSun() {}, refreshCSM() {}, buildEnvironment() {}, update() {} };
+    } else {
+      installAtmosphere(this.scene);
+      this.sky = createSky();
+      this.scene.add(this.sky);
+      SKY.uCloudSteps.value = quality.cloudSteps;
+      this.lighting = new Lighting(this);
+    }
     // three r186: the CSM addon replaces lights_fragment_begin without the new DFG / multi-scatter
     // setup, which zeroes IBL specular on every patched PBR material. Prepend it once, globally.
     if (!THREE.ShaderChunk.lights_fragment_begin.includes('cgNVms')) {
