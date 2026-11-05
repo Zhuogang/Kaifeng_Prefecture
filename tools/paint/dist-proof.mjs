@@ -1,4 +1,4 @@
-// Verify P3's delivered backdrop beneath a hosting prefix, with no source-tree
+// Verify S1's delivered backdrop beneath a hosting prefix, with no source-tree
 // or node_modules fallback. Run tools/build.mjs first, from the repository root.
 import http from 'node:http';
 import fs from 'node:fs';
@@ -6,12 +6,13 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { launchBrowser, observeErrors } from '../browser.mjs';
 
+const scene=process.argv[2]||'xuande',backdropName=scene==='xuande'?'bd2':'bd1';
 const root=path.resolve('dist'),prefix='/some/sub/path/',requests=[],bad=[];
 let lock;
 for(;;){
   for(let i=0;i<Number(process.env.GPU_SLOTS||2);i++){
     const candidate=path.resolve(`out/.gpu.lock.${i}`);
-    try{const fd=fs.openSync(candidate,'wx');fs.writeSync(fd,JSON.stringify({pid:process.pid,args:'P3 dist proof'}));fs.closeSync(fd);lock=candidate;break;}
+    try{const fd=fs.openSync(candidate,'wx');fs.writeSync(fd,JSON.stringify({pid:process.pid,args:'S1 dist proof'}));fs.closeSync(fd);lock=candidate;break;}
     catch(error){if(error.code!=='EEXIST')throw error;try{process.kill(JSON.parse(fs.readFileSync(candidate)).pid,0);}catch{fs.rmSync(candidate,{force:true});}}
   }
   if(lock)break;
@@ -36,23 +37,23 @@ let browser;
 try{
   browser=await launchBrowser({width:960,height:540});
   const page=await browser.newPage(),clean=observeErrors(page),start=performance.now();
-  await page.goto(`http://127.0.0.1:${server.address().port}${prefix}index.html?test=paint_zhouqiao&mode=still&quality=preview&w=960&h=540&spp=1`,{waitUntil:'load'});
+  await page.goto(`http://127.0.0.1:${server.address().port}${prefix}index.html?test=paint_${scene}&mode=still&quality=preview&w=960&h=540&spp=1`,{waitUntil:'load'});
   await page.waitForFunction('window.__READY||window.__RENDER_ERROR',{timeout:900000});
   const error=await page.evaluate(()=>window.__RENDER_ERROR);if(error)throw new Error(error);
   const image=await page.evaluate(()=>window.__renderTest());clean();
   const backdrop=await page.evaluate(()=>engine.registry.paint.backdrop);
   const stats=await page.evaluate(()=>window.__STATS);
   const sum=file=>createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-  const identical=sum('assets/backdrops/bd1.jpg')===sum('dist/assets/backdrops/bd1.jpg');
+  const identical=sum(`assets/backdrops/${backdropName}.jpg`)===sum(`dist/assets/backdrops/${backdropName}.jpg`);
   if(bad.length||!identical||!backdrop.width||!new URL(backdrop.source).pathname.startsWith(prefix+'assets/backdrops/'))
-    throw new Error('P3 sub-path delivery failed: '+JSON.stringify({bad,identical,backdrop}));
+    throw new Error('S1 sub-path delivery failed: '+JSON.stringify({bad,identical,backdrop}));
   if(requests.some(r=>r.path.includes('node_modules')||r.path.includes('/refs/')))
-    throw new Error('P3 delivery requested a source dependency or reference image');
-  fs.mkdirSync('out/P3',{recursive:true});
-  fs.writeFileSync('out/P3/dist.png',Buffer.from(image.split(',')[1],'base64'));
+    throw new Error('S1 delivery requested a source dependency or reference image');
+  fs.mkdirSync('out/S1/'+scene,{recursive:true});
+  fs.writeFileSync(`out/S1/${scene}/dist.png`,Buffer.from(image.split(',')[1],'base64'));
   const report={milliseconds:Math.round(performance.now()-start),backdrop,identical,stats,requests};
-  fs.writeFileSync('out/P3/dist-proof.json',JSON.stringify(report,null,2)+'\n');
-  console.log('[P3 dist] PASS',JSON.stringify({milliseconds:report.milliseconds,backdrop,identical,calls:stats.calls,triangles:stats.triangles,requests:requests.length}));
+  fs.writeFileSync(`out/S1/${scene}/dist-proof.json`,JSON.stringify(report,null,2)+'\n');
+  console.log('[S1 dist] PASS',JSON.stringify({milliseconds:report.milliseconds,backdrop,identical,calls:stats.calls,triangles:stats.triangles,requests:requests.length}));
 }finally{
   if(browser){await Promise.race([browser.close().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,1500))]);try{browser.process()?.kill('SIGKILL');}catch{}}
   await new Promise(resolve=>{server.close(resolve);server.closeAllConnections?.();});

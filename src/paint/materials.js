@@ -29,7 +29,7 @@ export function dappleGLSL({height=8,wind=.12,scale=[1.05,.8]}={}){
             c=mix(c*vec3(.58,.57,.69)+linearColor(vec3(.13,.10,.19))*.04,c*vec3(1.52,1.22,1.03),dapple);`;
 }
 
-export function paintMaterial(time,kind='stone',{dapple={}}={}) {
+export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao'}={}) {
   const code = {
     stone: `vec2 q=abs(n.y)>.65?vP.xz:vec2(abs(n.x)>.65?vP.z:vP.x,vP.y);
       variation=dab(q*vec2(2.1,5.0)+vec2(q.y*.8,0.0))*.55+dab(q*vec2(8.0,14.0))*.20;
@@ -105,19 +105,21 @@ export function paintMaterial(time,kind='stone',{dapple={}}={}) {
           c+=linearColor(vec3(.66,.56,.37))*glaze*.55;
         ` : ''}
         ${kind === 'bark' ? `
-          if(length(dFdx(q))+length(dFdy(q))<.0001)q=vec2(vP.x+vP.z*.4,vP.y);
-          q.x+=(noise(q*vec2(.8,.35))-.5)*.65;
-          float twist=noise(q*vec2(1.2,.45));
-          float grain=noise(vec2(q.x*4.2+twist*2.8+sin(q.y*.7)*.6,q.y*.72));
-          float fissure=smoothstep(.60,.78,grain)*(.4+.6*noise(q*vec2(2.3,1.2)));
-          vec3 violet=linearColor(vec3(.21,.14,.20)),ochre=linearColor(vec3(.55,.32,.14));
-          c=mix(violet,ochre,light*.80+variation*.25);
-          float plate=smoothstep(.30,.70,noise(q*vec2(4.3,2.1)+vec2(twist,0.)));
-          c*=.52+plate*1.02;
-          c=mix(c,linearColor(vec3(.13,.09,.14)),fissure*.65);
-          float detail=1.-smoothstep(.40,1.4,max(length(dFdx(q*vec2(8.,4.))),length(dFdy(q*vec2(8.,4.)))));
-          float scumble=max(0.,dab(q*vec2(7.,2.)+vec2(twist,0.)))*detail;
-          c+=linearColor(vec3(.64,.36,.14))*scumble*light*1.15;
+          // inferred: broken world-space bark plates, grey-brown pigment and
+          // tan ridges. The discontinuous fissures avoid parallel comb lines.
+          q=vec2(vP.x*.83+vP.z*.61,vP.y);
+          float warp=noise(q*vec2(.75,.52));
+          vec2 plateQ=q*vec2(3.3,1.7)+vec2(warp*2.1,noise(q*.8));
+          float plate=noise(plateQ)*.7+noise(plateQ*2.7)*.3;
+          float crack=1.-smoothstep(.025,.095,abs(noise(q*vec2(9.8,2.9)+vec2(warp*3.2,0.))-.56));
+          crack*=smoothstep(.30,.58,noise(q*vec2(1.4,2.3)));
+          vec3 grey=linearColor(vec3(.34,.31,.30)),tan=linearColor(vec3(.67,.57,.43));
+          c=mix(grey*vec3(.72,.80,1.02),tan,clamp(light*.62+(plate-.4)*1.0,0.,1.));
+          c*=(.46+.69*plate)*mix(.64,1.06,smoothstep(.42,.70,plate));
+          c*=1.+dab(q*vec2(14.,8.))*1.0+dab(q*vec2(32.,16.))*.30;
+          c=mix(c,linearColor(vec3(.12,.12,.15)),crack*.84);
+          float ridge=smoothstep(.54,.72,plate)*(1.-crack)*light;
+          c+=linearColor(vec3(.58,.50,.38))*ridge*.42;
         ` : ''}
         c=mix(c*${kind==='stone'?'vec3(.64,.61,.59)':'vec3(.55,.58,.76)'},c,clamp(vData.x,0.0,1.0));
         ${kind === 'timber' ? `
@@ -145,14 +147,14 @@ export function paintMaterial(time,kind='stone',{dapple={}}={}) {
             c*=.88+.14*noise(vP.xz*9.+vP.y*4.);
           }
         ` : ''}
-        ${kind === 'stone' ? `float bridgeY=vP.y-(${BRIDGE.fall.toFixed(6)})*vP.x,bridgeZ=vP.z-(${BRIDGE.skew.toFixed(6)})*vP.x-(${BRIDGE.offset.toFixed(6)});
+        ${kind === 'stone'&&profile==='zhouqiao' ? `float bridgeY=vP.y-(${BRIDGE.fall.toFixed(6)})*vP.x,bridgeZ=vP.z-(${BRIDGE.skew.toFixed(6)})*vP.x-(${BRIDGE.offset.toFixed(6)});
           float underDeck=(1.-smoothstep(2.1,2.95,bridgeY))*smoothstep(1.2,2.95,bridgeY)*(1.-smoothstep(-15.9,-15.4,bridgeZ));
           c=mix(c,c*vec3(.61,.68,.86),underDeck*.52);
           // inferred: occluded beam soffit and fascia; the unshaded low-detail
           // deck was the cream mass mirrored beyond the column reflections.
           float beam=(1.-smoothstep(3.70,3.82,bridgeY))*smoothstep(2.78,2.95,bridgeY);
           beam*=smoothstep(-23.6,-23.0,bridgeZ)*(1.-smoothstep(-15.8,-15.3,bridgeZ));
-          if(n.y<.35||vN.y<-.35)c=mix(c,c*vec3(.08,.12,.15),beam*.98);
+          if(n.y<.35||vN.y<-.35)c=mix(c,c*vec3(.34,.38,.40),beam*.82);
           float backWall=(1.-smoothstep(-26.,-24.,bridgeZ))*(1.-smoothstep(3.,3.8,vP.y));
           backWall*=(1.-smoothstep(${BRIDGE.end.toFixed(6)},${(BRIDGE.end+5).toFixed(6)},vP.x))*smoothstep(${(BRIDGE.start-4).toFixed(6)},${BRIDGE.start.toFixed(6)},vP.x);
           c=mix(c,c*vec3(.25,.31,.32),backWall*.86);
@@ -161,9 +163,10 @@ export function paintMaterial(time,kind='stone',{dapple={}}={}) {
           float shaft=(1.-smoothstep(2.85,3.1,bridgeY))*(1.-smoothstep(-15.9,-15.4,bridgeZ));
           if(abs(vN.y)<.35){
             float faceSun=smoothstep(.02,.55,dot(n,paintSun));
-            vec3 pier=mix(linearColor(vec3(.39,.34,.29)),linearColor(vec3(.84,.71,.48)),faceSun);
+            vec3 pier=mix(linearColor(vec3(.36,.34,.32)),linearColor(vec3(.65,.60,.50)),faceSun);
             pier*=.90+.17*noise(q*vec2(3.2,4.4));
             pier*=1.-smoothstep(2.35,3.05,bridgeY)*.62;
+            pier=mix(pier,linearColor(vec3(.17,.22,.21)),(1.-smoothstep(.02,.24,vP.y))*.85);
             c=mix(c,pier,shaft);
           }
           if(bridgeY>3.65&&bridgeY<5.2)c*=mix(vec3(.82,.78,.75),vec3(1.11,1.05,.89),light);
@@ -172,7 +175,7 @@ export function paintMaterial(time,kind='stone',{dapple={}}={}) {
           vec3 postP=vP-vec3(${MOORING.position.map(x=>x.toFixed(6)).join(',')});
           if(abs(postP.x)<${(MOORING.width*.6).toFixed(6)}&&abs(postP.z)<${(MOORING.width*.6).toFixed(6)}&&postP.y>0.){
             float stain=noise(q*vec2(13.,2.9))*.7+noise(q*vec2(23.,9.))*.3;
-            c*=mix(.60,1.13,smoothstep(.26,.72,stain));
+            c*=mix(.41,.77,smoothstep(.26,.72,stain));
             c+=linearColor(vec3(.65,.59,.47))*max(0.,dab(q*vec2(18.,7.)))*.25;
           }
           float quayShade=(1.-smoothstep(.65,1.5,abs(vP.x+14.)))*smoothstep(-19.,-16.,vP.z)*(1.-smoothstep(-5.,-3.,vP.z));
@@ -181,8 +184,9 @@ export function paintMaterial(time,kind='stone',{dapple={}}={}) {
           c=mix(c,linearColor(vec3(.29,.35,.23)),moss*.52);
           if(vP.z>-7. && n.y>.5){
             ${dappleGLSL(dapple)}
+            float grey=dot(c,vec3(.2126,.7152,.0722));c=mix(vec3(grey),c,.64);
           }` : ''}
-        ${['timber','plaster'].includes(kind) ? TOWERS.map(([x,z,s]) => `{
+        ${profile==='zhouqiao'&&['timber','plaster'].includes(kind) ? TOWERS.map(([x,z,s]) => `{
           vec3 p=(vP-vec3(${x.toFixed(6)},3.6,${z.toFixed(6)}))/${s.toFixed(6)};
           float roofShade=(1.-smoothstep(7.,9.,abs(p.x)))*(1.-smoothstep(4.5,6.5,abs(p.z)));
           roofShade*=smoothstep(6.9,8.8,p.y)*(1.-smoothstep(10.8,11.8,p.y));
@@ -207,7 +211,59 @@ export function paintMaterial(time,kind='stone',{dapple={}}={}) {
             c=mix(c,recess,inside*.85);
           }` : ''}
         }`).join('\n') : ''}
-        ${kind==='timber'?'if(vP.z<0.)c*=1.17;':''}
+        ${kind==='timber'&&profile==='zhouqiao'?'if(vP.z<0.)c*=1.17;':''}
+        ${profile==='xuande'?`
+          ${kind==='plaster'?`
+          // inferred: quiet ochre washes, irregular patches and vertical
+          // seepage are attached to masonry; no regular block courses.
+          if(vKind>19.5){
+          vec2 wallQ=vec2(vP.x+vP.z*.23,vP.y);
+          float wallWash=noise(wallQ*vec2(.65,1.1))*.72+noise(wallQ*vec2(2.8,3.7))*.28;
+          c=mix(linearColor(vec3(.74,.61,.44)),linearColor(vec3(.89,.77,.57)),smoothstep(.22,.78,wallWash));
+          float stain=smoothstep(.43,.70,noise(wallQ*vec2(2.3,.13)))*smoothstep(2.,12.,vP.y);
+          float foot=1.-smoothstep(.2,2.0,vP.y),top=exp(-abs(vP.y-11.7)*1.9);
+          c*=1.-stain*.10-foot*.16-top*.21;
+          c*=1.+dab(wallQ*vec2(4.,3.))* .23;
+          float wingShade=smoothstep(20.,25.,abs(vP.x-3.3))*(1.-smoothstep(11.7,12.3,vP.y));
+          c=mix(c,c*vec3(.60,.66,.82),wingShade*.70);
+          float seep=smoothstep(.51,.69,noise(wallQ*vec2(1.5,.16)))*exp(-abs(vP.y-10.9)*.45);
+          c=mix(c,c*vec3(.70,.70,.77),seep*.33);
+          c+=linearColor(vec3(.77,.67,.48))*max(0.,dab(wallQ*vec2(1.5,2.4)))*.13;
+          }else{c=linearColor(vec3(.44,.36,.29))*(.8+.25*light);}
+          `:''}
+          ${kind==='stone'?`
+          if(vP.y<.2){
+            c=linearColor(vec3(.77,.69,.57))*(.94+.10*noise(vP.xz*1.7));
+            ${dappleGLSL({height:12,wind:.08,scale:[.18,.14]})}
+            vec2 canopy2=vP.xz+(12.-vP.y)*paintSun.xz/paintSun.y;
+            canopy2+=vec2(sin(paintTime*.55+vP.z*.3),cos(paintTime*.43+vP.x*.4))*.08;
+            float shadeField=noise(canopy2*vec2(.18,.14))*.64+noise(canopy2*vec2(.71,.56))*.27+noise(canopy2*vec2(1.8,1.3))*.09;
+            float pool=smoothstep(.49,.64,shadeField);
+            vec3 shade=linearColor(vec3(.48,.49,.56)),sun=linearColor(vec3(.83,.73,.63));
+            c=mix(shade,sun,pool)*(1.+dab(vP.xz*vec2(2.,4.))*.30+dab(vP.xz*vec2(.8,1.3))*.12);
+            c*=.95+.10*noise(vP.xz*vec2(.8,1.6));
+          }` :''}
+          ${kind==='timber'?`
+          float grain=noise(vec2(vP.x+vP.z,vP.y)*vec2(5.2,.7));
+          vec3 woodShade=vC*vec3(.65,.66,.83)+linearColor(vec3(.13,.10,.16))*.15;
+          c=mix(woodShade,vC*vec3(1.85,1.50,1.15),light*.72+.17)*(.92+grain*.16);
+          if(vP.y>18.3)c*=.73;
+          if(vP.y<3.1&&vP.z>4.){
+            float worn=noise(vec2(vP.x+vP.z*.4,vP.y)*vec2(7.,2.));
+            c*=.80+.23*worn;
+            c+=linearColor(vec3(.55,.35,.26))*max(0.,dab(vP.xz*vec2(11.,2.)))*max(n.y,0.)*.45;
+          }
+          if(vKind>20.5&&vKind<21.5){
+            c=linearColor(vec3(.85,.47,.35))*(.88+.16*noise(vP.xy*vec2(2.1,.55)));
+            float board=1.-smoothstep(.01,.04,abs(mod(vP.x,.72)-.36));c*=1.-board*.085;
+            c*=1.-smoothstep(4.9,5.8,vP.y)*.22;
+          }
+          `:''}
+          ${kind==='leaf'?`
+          if(vKind>1.5&&vKind<2.5){c=vC*(.72+.48*light)*(1.+variation*.35);}
+          if(vKind>3.5&&vKind<4.5)c=vC*(.86+.26*light);
+          `:''}
+        `:''}
         // inferred: painted aerial wash, deliberately independent of view direction.
         float haze=smoothstep(35.0,140.0,-vP.z)*.68;
         c=mix(c,linearColor(vec3(.76,.75,.69)),haze);
@@ -222,6 +278,7 @@ export function paintMaterial(time,kind='stone',{dapple={}}={}) {
           if(vKind>4.5)coverage*=smoothstep(.70,1.6,pixelWidth);
           else if(vKind<2.)coverage*=smoothstep(.45,1.20,pixelWidth);
           if(vKind>2.5&&vKind<3.5)coverage=1.0;
+          if(vKind>3.5&&vKind<4.5)coverage=1.;
           if(vKind>11.5){
             float facing=abs(dot(n,normalize(cameraPosition-vP)));
             float feather=noise(vP.xz*vec2(7.,3.)+vec2(0.,vP.y*1.7));

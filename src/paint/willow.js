@@ -35,13 +35,14 @@ import {Geometry,V} from '../flora/geometry.js';
     for (let j = 0; j < (hero ? branches.length : 20); j++) {
       const angle=j*2.399,start=trunk[hero?branches[j].from:2];
       const tip=hero?V(...branches[j].tip):V(Math.cos(angle)*h*rng.range(.25,.43),h*rng.range(.66,.90),Math.sin(angle)*h*rng.range(.24,.40));
+      if(!hero)tip.y=h*(.89-.27*Math.pow(Math.hypot(tip.x,tip.z)/(h*.50),2)+rng.range(-.045,.045));
       const mid = start.clone().lerp(tip, .55).add(V(0, h * .06, 0));
       wood.tube([start, mid, tip], [hero ? .26 : h * .016, hero ? .12 : h * .008, .018], new THREE.Color('#696551'), { sides: 6, gnarl: .4, smooth: 3 });
       const family=hero?branches[j].color:rng.pick(['#adb55f','#879249','#c1b65e','#667b53']);
       const clusterLength=hero?branches[j].length:h*rng.range(.57,.80);
       for (let k = 0; k < (hero ? rng.int(58,70) : 32); k++) {
         const base = mid.clone().lerp(tip,rng.range(hero?.70:.55,hero?1:1.08)).add(V(rng.range(-.7, .7), rng.range(-.4, .6), rng.range(-.8, .8)));
-        const lengthVariation=rng.range(.78,1.16),end=hero?0:h*rng.range(.06,.20);
+        const lengthVariation=rng.range(.78,1.16),end=hero?0:h*THREE.MathUtils.clamp(.15+.23*Math.pow(Math.hypot(base.x,base.z)/(h*.45),1.5)+rng.range(-.12,.12),.10,.57);
         // inferred: the mid-distance crown hangs down around its short trunk,
         // instead of stopping halfway up and exposing a palm-like bare pole.
         const length=hero?clusterLength*lengthVariation:Math.max(h*.25,base.y-end),yaw=rng.range(0,Math.PI*2);
@@ -50,7 +51,7 @@ import {Geometry,V} from '../flora/geometry.js';
           return base.clone().add(V(Math.cos(yaw) * .7 * Math.sin(t * 1.8), -length * t + .3 * Math.sin(t * Math.PI), Math.sin(yaw) * .5 * t));
         });
         const c=new THREE.Color(family).multiplyScalar(rng.range(.88,1.09));
-        const clumpShade=hero?.68+.32*THREE.MathUtils.clamp((base.z-tip.z+.8)/1.6,0,1):.90;
+        const clumpShade=hero?.68+.32*THREE.MathUtils.clamp((base.z-tip.z+.8)/1.6,0,1):.65+.35*THREE.MathUtils.clamp(base.y/h,0,1);
         leaves.curtain(path,rng.range(.008,.018),yaw,c,{sway:1,ao:clumpShade,random:rng.random()});
         const count=hero?rng.int(34,44):rng.int(32,42);
         for (let s = 1; s < count; s++) {
@@ -73,8 +74,8 @@ import {Geometry,V} from '../flora/geometry.js';
       // inferred: a soft rounded inner crown connects the hanging clumps all
       // the way down the short trunk; individual whips dress its outer surface.
       for(let j=0;j<144;j++){
-        const a=j*2.399,r=h*rng.range(.08,.29),center=V(Math.cos(a)*r,h*rng.range(.43,.67),Math.sin(a)*r);
-        const size=V(h*rng.range(.045,.085),h*rng.range(.13,.24),h*rng.range(.045,.085));
+        const a=j*2.399,r=h*rng.range(.08,.29),center=V(Math.cos(a)*r,h*(.75-.29*Math.pow(r/(h*.32),2)+rng.range(-.035,.035)),Math.sin(a)*r);
+        const size=V(h*rng.range(.045,.085),h*rng.range(.085,.145),h*rng.range(.045,.085));
         const color=new THREE.Color(rng.pick(['#738349','#8c984f','#9fa457','#657a4b']));
         leaves.ellipsoid(center,size,color,{detail:0,kind:12,sway:.10});
       }

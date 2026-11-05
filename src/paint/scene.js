@@ -121,7 +121,7 @@ export function compose(engine, time) {
       const length=rng.range(.5,.8),dz=length*Math.cos(quayYaw),center=z+dz*.5;
       const edge=QUAY.intercept+QUAY.slope*center;
       block([edge-inset*Math.cos(quayYaw),1.20,center+inset*Math.sin(quayYaw)],
-        [rng.range(.61,.64),.19,length-.012],.95,quayYaw,false,'#9d8d78');
+        [rng.range(.61,.64),.19,length-.012],.95,quayYaw,false,'#98958e');
       z+=dz;
     }
   }

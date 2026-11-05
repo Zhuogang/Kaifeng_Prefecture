@@ -37,9 +37,9 @@ export class PaintBatch {
     if (g.index) for (const i of g.index.array) this.idx.push(start + i);
     else for (let i = 0; i < p.count; i++) this.idx.push(start + i);
   }
-  box(center, size, color, ao = 1, yaw = 0, chipped = false) {
+  box(center, size, color, ao = 1, yaw = 0, chipped = false, paintKind = null) {
     this.add(chipped ? stoneCubes[Math.abs(Math.floor(center[0]*7+center[2]*3))%stoneCubes.length] : cube, new THREE.Matrix4().compose(new THREE.Vector3(...center),
-      new THREE.Quaternion().setFromAxisAngle(up, yaw), new THREE.Vector3(...size)), color, ao);
+      new THREE.Quaternion().setFromAxisAngle(up, yaw), new THREE.Vector3(...size)), color, ao,0,paintKind);
   }
   beam(a, b, width, depth, color, ao = 1) {
     const va = new THREE.Vector3(...a), vb = new THREE.Vector3(...b), d = vb.clone().sub(va);
