@@ -17,19 +17,19 @@ export class Geometry {
   }
   tri(a, b, c) { this.index.push(a, b, c); }
   // inferred: fixed world-oriented cards with curved crown normals; never face the camera.
-  card(center, width, height, normal, color, {kind=6, sway=0.4, roll=0, random=0, ao=1}={}) {
+  card(center, width, height, normal, color, {kind=6, sway=0.4, roll=0, random=0, ao=1, segments=2}={}) {
     const n=normal.clone().normalize(), u=n.clone().cross(Math.abs(n.y)>0.9?V(1,0,0):V(0,1,0)).normalize().applyAxisAngle(n,roll), v=n.clone().cross(u);
     const rows=[];
-    for(let j=0;j<3;j++) {
+    for(let j=0;j<=segments;j++) {
       const row=[];
-      for(let i=0;i<3;i++) {
-        const x=i-1,y=j-1,p=center.clone().addScaledVector(u,x*width*0.5).addScaledVector(v,y*height*0.5);
+      for(let i=0;i<=segments;i++) {
+        const x=i/segments*2-1,y=j/segments*2-1,p=center.clone().addScaledVector(u,x*width*0.5).addScaledVector(v,y*height*0.5);
         const bent=n.clone().multiplyScalar(0.7).addScaledVector(u,x*0.55).addScaledVector(v,y*0.55).normalize();
-        row.push(this.vertex(p,bent,color,kind,sway,[i/2,j/2],center,random,ao));
+        row.push(this.vertex(p,bent,color,kind,sway,[i/segments,j/segments],center,random,ao));
       }
       rows.push(row);
     }
-    for(let j=0;j<2;j++) for(let i=0;i<2;i++) {
+    for(let j=0;j<segments;j++) for(let i=0;i<segments;i++) {
       this.tri(rows[j][i],rows[j][i+1],rows[j+1][i]);this.tri(rows[j][i+1],rows[j+1][i+1],rows[j+1][i]);
     }
   }

@@ -215,7 +215,12 @@ function structure(mats,lod) {
 function materials(engine) {
   return {
     passage:timberMaterial(engine,{baseY:forecourtY,color:0x705342,grainAxis:[0,0,1],wear:0.8}),
-    timber:timberMaterial(engine,{baseY:12,wear:0.8}),door:timberMaterial(engine,{baseY:0,wear:0.85,variation:3}),
+    timber:timberMaterial(engine,{baseY:12,wear:0.8}),
+    // 门皆金釘朱漆 (东京梦华录卷一).
+    // inferred: deep cinnabar with a lighter weathered red layer;
+    // retain worn wood, rain variation and socket dirt rather than a flat red coat.
+    door:timberMaterial(engine,{baseY:0,wear:0.85,variation:3,color:0x702018,fadedColor:0x944531}),
+    fence:timberMaterial(engine,{baseY:0,wear:0.85,variation:3}),
     window:timberMaterial(engine,{variant:'unpainted',color:0x40372c,wear:0.6,baseY:12}),
     bracket:paintMaterial(engine,{style:'wucai',wear:0.8}),
     masonry:masonryMaterial(engine,{topY:12,batter:0.08,variation:11,coursePeriod:2.496,courseHeight:0.156}),
@@ -383,7 +388,7 @@ export async function build(engine) {
   }
   for(const path of fencePaths) {
     const fence=chazi(engine,{path});
-    for(const group of [fence.lod0,fence.lod1])group.traverse(o=>{if(o.isMesh)o.material=mats.door;});
+    for(const group of [fence.lod0,fence.lod1])group.traverse(o=>{if(o.isMesh)o.material=mats.fence;});
     const l=new THREE.LOD();l.addLevel(fence.lod0,0);l.addLevel(fence.lod1,230);root.add(l);
   }
   // Replace the T0 calibration object once real architecture occupies its ground.

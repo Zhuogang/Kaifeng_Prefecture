@@ -60,13 +60,15 @@ export async function build(engine) {
   }
   // The bed is physical geometry; opaque water represents its high optical depth.
   blocks.box([0,r.bedY-0.12,z],[r.halfLength*2,0.24,r.width]);
-  const stone=stoneMaterial(engine,{tint:0xb7b9ae,waterline:r.waterY,polished:0.15,wear:0.95,joints:1,blockSize:[1.25,0.47]});
+  // W2B: the family already defines blue-grey albedo. The old sRGB tint multiplied
+  // it by about 0.47 in linear light, turning sunlit dressed stone into charcoal.
+  const stone=stoneMaterial(engine,{waterline:r.waterY,polished:0.15,wear:0.95,joints:1,blockSize:[1.25,0.47]});
   const quayMesh=paving.mesh(pavingMaterial(engine,{ruts:0,drains:0}),'bank-quays');
   quayMesh.castShadow=false;quayMesh.userData.castShadow=false;quayMesh.userData.reflectionSkip=true;
   group.add(blocks.mesh(stone,'dressed-bank-courses'),quayMesh);
   const detailed=reliefGeometry(engine.quality.detail>=1?360:216,engine.quality.detail>=1?144:88);
   const medium=reliefGeometry(112,44),distant=reliefGeometry(64,26);
-  const carvingMat=carvedStoneMaterial(engine,{tint:0xb7b9ae,waterline:r.waterY,polished:0,wear:0.88,joints:0,blockSize:[1.25,0.47]},detailed.userData.heightField);
+  const carvingMat=carvedStoneMaterial(engine,{waterline:r.waterY,polished:0,wear:0.88,joints:0,blockSize:[1.25,0.47]},detailed.userData.heightField);
   const shadowGeometry=reliefGeometry(32,12),shadowMaterial=proceduralMaterial({name:'relief-shadow-only',params:{colorWrite:false,depthWrite:false}});
   const reliefShadow=new THREE.InstancedMesh(shadowGeometry,shadowMaterial,16);let shadowIndex=0;
   reliefShadow.name='carved-wall-shadow-hulls';
@@ -105,6 +107,13 @@ export async function build(engine) {
     engine.footprints.addRect((a+b)/2,z,Math.abs(b-a)/2,half,0,'bianhe-water');
   }
   engine.registry.riverReflection.register(group);engine.registry.riverReflection.register(boats);
+  // inferred: a coarse copy of every carved panel keeps calm-water reflections
+  // consistent with the bank instead of showing its plain backing masonry.
+  // All placements are shared with the real wall; only tessellation is reduced.
+  const reflectedRelief=new THREE.InstancedMesh(reliefGeometry(24,10),stoneMaterial(engine,{waterline:r.waterY,polished:0,wear:0.88}),placements.length);
+  reflectedRelief.name='carved-wall-reflection-LOD';
+  placements.forEach(({matrix},i)=>reflectedRelief.setMatrixAt(i,matrix));
+  engine.registry.riverReflection.register(reflectedRelief);
   const result={group,water,boats,plan:r};engine.registry.bianhe=result;
   console.log('[bianhe] bank geometry '+JSON.stringify(meshStats(group)));
   return result;

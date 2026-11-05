@@ -20,10 +20,16 @@ export function pavingLayoutGLSL(brick = false) {
   const [a, b] = P.paving.roadTracks;
   return `vec4 pavingLayout(vec3 p) {
     float across=abs(p.x);
-    float wheel=${brick ? `abs(across-${f(P.paving.laneTrack)})` : `min(abs(across-${f(a)}),abs(across-${f(b)}))`}-${f(P.paving.axleHalf)};
+    // inferred: secondary cart streams divide the broad public lane into three
+    // working paths. Their axes derive from the plan's lane width and main track.
+    float wheel=${brick ? `min(abs(across-${f(P.paving.laneTrack)}),
+      min(abs(across-${f(P.section.bank+(P.section.blackFence-P.section.bank)*.12)}),
+          abs(across-${f(P.section.bank+(P.section.blackFence-P.section.bank)*.75)})))` : `min(abs(across-${f(a)}),abs(across-${f(b)}))`}-${f(P.paving.axleHalf)};
     float drain=across-${f(brick ? P.section.bank + P.paving.laneDrainOffset : P.section.road - P.paving.roadDrainInset)};
     if(across>${f(P.section.blackFence)}) { wheel=100000.0; drain=100000.0; }
-    return vec4(p.x,p.z,wheel,drain);
+    // inferred: lane courses run along the avenue, consistent with 卷十五
+    // 露道's longitudinal edge courses; the imperial slabs remain transverse.
+    return vec4(${brick ? 'p.z,p.x' : 'p.x,p.z'},wheel,drain);
   }`;
 }
 

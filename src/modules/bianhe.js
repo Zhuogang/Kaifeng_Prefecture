@@ -107,6 +107,13 @@ export async function build(engine) {
     engine.footprints.addRect((a+b)/2,z,Math.abs(b-a)/2,half,0,'bianhe-water');
   }
   engine.registry.riverReflection.register(group);engine.registry.riverReflection.register(boats);
+  // inferred: a coarse copy of every carved panel keeps calm-water reflections
+  // consistent with the bank instead of showing its plain backing masonry.
+  // All placements are shared with the real wall; only tessellation is reduced.
+  const reflectedRelief=new THREE.InstancedMesh(reliefGeometry(24,10),stoneMaterial(engine,{waterline:r.waterY,polished:0,wear:0.88}),placements.length);
+  reflectedRelief.name='carved-wall-reflection-LOD';
+  placements.forEach(({matrix},i)=>reflectedRelief.setMatrixAt(i,matrix));
+  engine.registry.riverReflection.register(reflectedRelief);
   const result={group,water,boats,plan:r};engine.registry.bianhe=result;
   console.log('[bianhe] bank geometry '+JSON.stringify(meshStats(group)));
   return result;

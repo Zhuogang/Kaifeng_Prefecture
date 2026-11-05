@@ -6,11 +6,11 @@ import { Geometry, V, TAU } from '../flora/geometry.js';
 // inferred: 2.4 m spread, 2 m beak-to-trailing-toe length, 1.45 m standing
 // height, and feather proportions. Markings follow ruihe_bright.jpg / ref3.png.
 export function buildCrane({perched=false,far=false}={}) {
-  const g=new Geometry(),white=new THREE.Color('#eee9db'),black=new THREE.Color('#292d2a'),red=new THREE.Color('#b82520'),beak=new THREE.Color('#838170');
+  const g=new Geometry(),white=new THREE.Color('#d0d5d2'),black=new THREE.Color('#292d2a'),red=new THREE.Color('#b82520'),beak=new THREE.Color('#838170');
   const bodyY=perched?0.83:0;
   const sphere=(p,s,c,detail=far?0:2,flap=0)=>g.ellipsoid(p,s,c,{detail,kind:4,sway:flap});
   const tube=(p,r,c,sides=far?4:10)=>g.tube(p,r,c,{sides,kind:4,smooth:far?2:4});
-  sphere(V(0,bodyY,0),V(0.17,0.17,0.38),white,far?0:3);
+  sphere(V(0,bodyY,0),V(0.19,0.225,0.40),white,far?0:3);
   const neck=perched?[V(0,0.94,-0.18),V(0,1.05,-0.31),V(0,1.26,-0.22),V(0,1.36,-0.28)]:[V(0,0.04,-0.29),V(0,0.075,-0.51),V(0,0.11,-0.78),V(0,0.13,-1.0)];
   tube(neck,[0.07,0.045,0.036,0.04],black);
   // Narrow white dorsal stripe leaves the black throat and cheek visible.
@@ -32,39 +32,52 @@ export function buildCrane({perched=false,far=false}={}) {
     } else {
       // inferred: a thick leading edge and cambered covert layers support the
       // separated remiges. White coverts overlap the black trailing primaries.
-      const sections=[ [0.13,-0.16,0.18,0.045], [0.38,-0.27,0.20,0.08], [0.72,-0.29,0.14,0.075], [0.98,-0.16,0.05,0.04], [1.10,-0.035,0.015,0.015] ];
-      for(const under of [false,true]) {
-        const rows=sections.map(([x,lead,trail,y])=>[0,0.5,1].map(t=>{
-          const ridge=Math.sin(t*Math.PI)*(under?-0.024:0.028);
-          const p=V(side*x,y+(under?-0.035:0)+ridge,lead+(trail-lead)*t);
-          const n=V(-side*0.15,under?-1:1,Math.cos(t*Math.PI)*0.85).normalize();
-          return g.vertex(p,n,white,4,1,[t,x]);
-        }));
-        for(let i=1;i<rows.length;i++)for(let j=0;j<2;j++) {
-          g.tri(rows[i-1][j],rows[i][j],rows[i-1][j+1]);
-          g.tri(rows[i-1][j+1],rows[i][j],rows[i][j+1]);
+      const sections=[[0.13,-0.18,0.18,0.04],[0.33,-0.30,0.21,0.07],[0.59,-0.35,0.19,0.085],[0.83,-0.26,0.12,0.07],[1.05,-0.08,0.035,0.025]];
+      const profile=[[0,0],[0.15,0.025],[0.45,0.052],[0.8,0.035],[1,0],[0.8,-0.021],[0.45,-0.027],[0.15,-0.014]];
+      const rings=sections.map(([x,lead,trail,y],station)=>profile.map(([t,up],j)=>{
+        const prev=profile[(j+profile.length-1)%profile.length],next=profile[(j+1)%profile.length],thickness=1-station*0.12;
+        const normal=V(side*0.07,(next[0]-prev[0])*(trail-lead),-(next[1]-prev[1])*thickness).normalize();
+        return g.vertex(V(side*x,y+up*thickness,lead+(trail-lead)*t),normal,white,4,1,[t,x]);
+      }));
+      for(let i=1;i<rings.length;i++)for(let j=0;j<8;j++) {
+        const k=(j+1)%8;
+        if(side>0) {
+          g.tri(rings[i-1][j],rings[i-1][k],rings[i][j]);g.tri(rings[i-1][k],rings[i][k],rings[i][j]);
+        } else {
+          g.tri(rings[i-1][j],rings[i][j],rings[i-1][k]);g.tri(rings[i-1][k],rings[i][j],rings[i][k]);
         }
       }
-      const count=far?9:20;
-      for(let i=0;i<count;i++) {
-        const t=i/(count-1),x=0.22+0.82*t;
-        const start=V(side*x,0.015,-0.12+0.1*t);
-        const direction=V(side*(0.15+0.7*t*t),-0.06,1-0.58*t).normalize();
-        const length=0.43-0.10*t+0.04*Math.sin(t*Math.PI);
-        const featherColor=t>0.32?black.clone().multiplyScalar(0.83+0.22*t):white;
-        g.feather(start,length,far?0.15:0.085,direction,featherColor,1);
-        if(!far) {
-          g.feather(start.clone().add(V(0,0.027,-0.075)),length*0.54,0.078,direction,white.clone().multiplyScalar(0.87+0.12*t),1);
-          g.feather(start.clone().add(V(0,-0.026,-0.10)),length*0.38,0.073,direction,white.clone().multiplyScalar(0.92),1);
+      // Long separated primaries fan from the wrist; shorter secondaries make
+      // the broad trailing edge. Coverts overlap their roots in two tiers.
+      for(const primary of [false,true]) {
+        const count=far?5:12;
+        for(let i=0;i<count;i++) {
+          const t=i/(count-1),x=primary?0.64+0.38*t:0.18+0.58*t;
+          const start=V(side*x,0.02,primary?-0.13+0.10*t:-0.10);
+          const direction=V(side*(primary?0.28+0.95*t:0.13+0.13*t),-0.025,primary?0.85-0.45*t:1).normalize();
+          const length=primary?0.50-0.07*t+0.08*Math.sin(t*Math.PI):0.33+0.10*t;
+          const pigment=primary||t>0.28?black.clone().multiplyScalar(0.87+0.1*Math.sin(i*2.3)):white;
+          g.feather(start,length,far?0.13:primary?0.115:0.092,direction,pigment,1,!far);
+          if(!far)for(let layer=0;layer<2;layer++)g.feather(start.clone().add(V(0,(layer?0.035:-0.035),-0.10)),length*(layer?0.42:0.57),0.1,direction,white.clone().multiplyScalar(0.90+0.08*Math.sin(i*1.9+layer)),1);
         }
       }
     }
   }
+  // inferred: short scapular feathers overlap the rounded shoulder and back,
+  // so the torso retains a layered surface rather than a smooth white oval.
+  if(!far)for(const side of [-1,1])for(let i=0;i<3;i++) {
+    g.feather(V(side*0.14,bodyY+0.12,-0.17+i*0.10),0.27+i*0.02,0.095,V(side*0.08,-0.20,1),white.clone().multiplyScalar(0.88+i*0.045),0,true);
+  }
   for(let i=0;i<(far?2:6);i++) g.feather(V((i-2.5)*0.028,bodyY+0.03,0.22),0.23,0.055,V(0,-0.15,1),white);
-  // inferred: compress the flight mesh across its axis to the specified 2.4 m span.
-  if(!perched)for(let i=0;i<g.p.length;i+=3) {
-    g.p[i]*=0.9;
-    const n=V(g.n[i]/0.9,g.n[i+1],g.n[i+2]).normalize();g.n[i]=n.x;g.n[i+1]=n.y;g.n[i+2]=n.z;
+  // Match the specified flight span in both detail levels, including the
+  // curved feather tips; keep normal scaling consistent with the geometry.
+  if(!perched) {
+    let extent=0;for(let i=0;i<g.p.length;i+=3)extent=Math.max(extent,Math.abs(g.p[i]));
+    const scale=1.2/extent;
+    for(let i=0;i<g.p.length;i+=3) {
+      g.p[i]*=scale;
+      const n=V(g.n[i]/scale,g.n[i+1],g.n[i+2]).normalize();g.n[i]=n.x;g.n[i+1]=n.y;g.n[i+2]=n.z;
+    }
   }
   return g.build();
 }
@@ -91,8 +104,8 @@ function craneMaterials(engine) {
     name:'red-crowned-cranes',head:'varying vec2 vFeatherUV; varying float vFeather;',params:{vertexColors:true,roughness:0.84,side:THREE.DoubleSide},
     uniforms:{uCraneTime:time},vertexHead:VERT,
     vertexPre:FLAP+/* glsl */`
+      objectNormal.xy=mat2(ca,sa,-sa,ca)*objectNormal.xy;
       vec3 birdNormal = objectNormal;
-      birdNormal.xy=mat2(ca,sa,-sa,ca)*birdNormal.xy;
       #ifdef USE_INSTANCING
       birdNormal = mat3(instanceMatrix)*birdNormal;
       #endif
@@ -108,6 +121,8 @@ function craneMaterials(engine) {
       }
     `,
     roughness:'roughnessFactor=0.76;',
+    // inferred: overlapping plumage occludes sky bounce on the underside.
+    ao:'cgAO=0.72+0.28*smoothstep(-0.7,0.6,cgN.y);',
     emissive:'totalEmissiveRadiance+=diffuseColor.rgb*0.025;',
   });
   const depth=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking,side:THREE.DoubleSide});
@@ -146,18 +161,19 @@ export function addCranes(engine,settings) {
     if(key===last)return;last=key;
     const counts=[0,0,0,0];
     for(let i=0;i<20;i++) {
-      let yaw,bank=0,size=1,phase=0;
+      let yaw,bank=0,pitch=0,size=1,phase=0;
       const p=positions[i];
       if(i<18) {
         const f=flight[i],a=f.phase+t/120*TAU;
-        const r=config.radius*f.r,spread=config.spread??1.5;
-        p.set(config.center[0]+Math.cos(a)*r,config.center[1]+config.height+f.lift*spread+Math.sin(a*2)*spread*0.8,config.center[2]+Math.sin(a)*r*0.78);
-        yaw=Math.atan2(Math.sin(a),-0.78*Math.cos(a));bank=0.13*Math.sin(a+0.5);size=f.size;phase=f.wing;
+        const r=config.radius*f.r,spread=config.spread??1.5,depth=config.orbitDepth??0.78;
+        p.set(config.center[0]+Math.cos(a)*r,config.center[1]+config.height+f.lift*spread+Math.sin(a*2)*spread*0.8+(config.orbitTilt??0)*Math.sin(a)*r*depth,config.center[2]+Math.sin(a)*r*depth);
+        pitch=Math.atan2(Math.cos(a*2)*spread*1.6+(config.orbitTilt??0)*Math.cos(a)*r*depth,Math.hypot(Math.sin(a)*r,Math.cos(a)*r*depth));
+        yaw=Math.atan2(Math.sin(a),-depth*Math.cos(a));bank=0.13*Math.sin(a+0.5);size=f.size;phase=f.wing;
       } else {
         const anchor=config.perches[i-18];p.fromArray(Array.isArray(anchor)?anchor:anchor.position);yaw=anchor.yaw??(i===18?0.4:-0.4);
       }
       const l=(i<18?0:2)+(p.distanceTo(cam)>100?1:0),mesh=meshes[l],k=counts[l]++;
-      q.setFromEuler(new THREE.Euler(0,yaw,bank));matrix.compose(p,q,V(size,size,size));mesh.setMatrixAt(k,matrix);
+      q.setFromEuler(new THREE.Euler(pitch,yaw,bank,'YXZ'));matrix.compose(p,q,V(size,size,size));mesh.setMatrixAt(k,matrix);
       mesh.geometry.attributes.iCrane.set([phase,0,0,0],k*4);
     }
     meshes.forEach((m,l)=>{m.count=counts[l];m.visible=m.count>0;m.instanceMatrix.needsUpdate=true;m.geometry.attributes.iCrane.needsUpdate=true;if(m.count)m.computeBoundingSphere();});
@@ -178,12 +194,12 @@ export async function build(engine) {
   // Prefer the ornament-tip anchors already supplied by Xuande's own builder.
   // inferred: its current 2.30 m fin-tip offset is retained as a fallback.
   const perches=existing?.settings?.perches??anchors.map(a=>[a.position[0]+base[0],a.position[1]+base[1]+2.30,a.position[2]+base[2]]);
-  const halfSpan=Math.abs(perches[1][0]-perches[0][0])/2,radius=halfSpan*0.65;
-  // inferred: birds wheel over the south eave and forecourt, with the lowest
-  // flight tier close above the ridge and a loose vertical spread. These fixed
+  const halfSpan=Math.abs(perches[1][0]-perches[0][0])/2,radius=halfSpan*1.5;
+  // inferred: birds wheel around the main roof in a circular orbit descending
+  // toward the front eave, with a loose vertical spread. These fixed
   // roof-relative paths and physical bird dimensions apply from every viewpoint.
-  const ridgeY=Math.max(...perches.map(p=>p[1])),center=[base[0],base[1],base[2]+radius*1.8];
-  return addCranes(engine,{center,radius,height:ridgeY-base[1]+5,spread:radius*0.24,perches});
+  const ridgeY=Math.max(...perches.map(p=>p[1])),center=[...base];
+  return addCranes(engine,{center,radius,height:ridgeY-base[1]+6,spread:radius*0.09,orbitDepth:1,orbitTilt:-0.18,perches});
 }
 export async function test(engine) {
   const {test}=await import('./flora.js');return test(engine);

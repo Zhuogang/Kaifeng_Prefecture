@@ -32,8 +32,9 @@ import { SUN } from '../core/lighting.js';
 export class RiverReflection {
   constructor(engine,level) {
     this.engine=engine;this.level=level;this.scene=new THREE.Scene();this.camera=new THREE.PerspectiveCamera();
-    // inferred: 320 px preview / 512 px high reflection, intentionally softly filtered.
-    const width=engine.quality.detail>=1?512:320,height=Math.round(width*engine.height/engine.width);
+    // inferred: modest 512 px preview / 768 px high reflection keeps columns
+    // identifiable in calm water. Geometry, pass count and shadow cost are unchanged.
+    const width=engine.quality.detail>=1?768:512,height=Math.round(width*engine.height/engine.width);
     this.target=new THREE.WebGLRenderTarget(width,height,{type:THREE.HalfFloatType,colorSpace:THREE.LinearSRGBColorSpace,
       minFilter:THREE.LinearMipmapLinearFilter,magFilter:THREE.LinearFilter,generateMipmaps:true,depthBuffer:true,stencilBuffer:false});
     this.target.texture.name='bianhe-planar-reflection';

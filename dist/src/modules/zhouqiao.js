@@ -84,7 +84,12 @@ export async function build(engine) {
     const points=Array.from({length:16},(_,i)=>[sign*(w/2+i*2),0.45,z+side*(half+0.40)]);
     balustrade(rails,points);
   }
-  const stone=stoneMaterial(engine,{tint:0xb9bcb7,waterline:r.waterY,polished:0.3,wear:0.9});
+  // inferred: dressed beam courses share the banks' 1.25 × 0.47 m bond. These
+  // resolved joints retain structure after fine tooling filters out at distance.
+  // Keep the lower shafts unjointed; the datum is just below the lowest beam.
+  const stone=stoneMaterial(engine,{waterline:r.waterY,polished:0.3,wear:0.9,joints:1,
+    jointBaseY:p.endY-p.deckThickness-0.35,blockSize:[1.25,0.47],
+    deckShadow:engine.registry.riverReflection?.occlusionUniforms});
   group.add(structure.mesh(stone,'stone-columns-and-beams'),rails.mesh(stone,'stone-goulan'));
   const deckMesh=paving.mesh(stoneMaterial(engine,{waterline:r.waterY,polished:0.8,wear:0.7}),'square-cambered-paving');
   deckMesh.castShadow=false;deckMesh.userData.castShadow=false;group.add(deckMesh);
@@ -150,6 +155,8 @@ export async function build(engine) {
   for(const side of [-1,1])engine.footprints.addRect(side*(w/2-0.1),z,0.16,half,0,'bridge-goulan');
   for(const side of [-1,1])for(const sign of [-1,1])engine.footprints.addRect(sign*(w/2+r.carvedWalls.length/2),z+side*(half+0.4),r.carvedWalls.length/2,0.16,0,'bank-goulan');
   engine.registry.riverReflection?.register(group);engine.registry.riverReflection?.register(pairLOD);
+  engine.registry.riverReflection?.setDeckOccluder({halfWidth:w/2,halfSpan:half,centerZ:z,
+    baseY:p.endY-p.deckThickness,camber:p.camber});
   const result={group,halls,deckEnds:p.deckEnds,deckHeight};engine.registry.zhouqiao=result;
   console.log('[zhouqiao] bridge '+JSON.stringify(meshStats(group))+' towers '+JSON.stringify(halls.map(h=>h.hall.stats)));
   return result;

@@ -90,12 +90,14 @@ export function chiwei({height=1.8}={}) {
 
 /** Small crouching ridge guardian. Modelled as a modest animal, not a Qing ridge-end dragon. */
 function guardian(detail,scale=1) {
-  const parts=[ball(0,0.18,0,0.18,0.16,0.10,false),ball(0.13,0.32,0,0.09,0.10,0.085,false),
-    ball(0.20,0.30,0,0.05,0.035,0.065,false),box(0.42,0.06,0.24,false).translate(0,0.03,0)];
+  // Distant guardians retain the same volumes without close-view surface tessellation.
+  const lobe=(x,y,z,sx,sy,sz)=>new THREE.SphereGeometry(1,detail?10:6,detail?7:4).scale(sx,sy,sz).translate(x,y,z);
+  const parts=[lobe(0,0.18,0,0.18,0.16,0.10),lobe(0.13,0.32,0,0.09,0.10,0.085),
+    lobe(0.20,0.30,0,0.05,0.035,0.065),box(0.42,0.06,0.24,false).translate(0,0.03,0)];
   for(const z of [-0.065,0.065]) {
-    parts.push(ball(0.10,0.11,z,0.045,0.095,0.038,false),ball(-0.11,0.09,z,0.06,0.06,0.04,false));
-    parts.push(ball(0.10,0.41,z*0.7,0.028,0.05,0.024,false));
-    if(detail)parts.push(ball(0.19,0.34,z,0.015,0.012,0.009,false));
+    parts.push(lobe(0.10,0.11,z,0.045,0.095,0.038),lobe(-0.11,0.09,z,0.06,0.06,0.04));
+    parts.push(lobe(0.10,0.41,z*0.7,0.028,0.05,0.024));
+    if(detail)parts.push(lobe(0.19,0.34,z,0.015,0.012,0.009));
   }
   parts.push(tube([[-0.15,0.16,0],[-0.24,0.19,0],[-0.24,0.29,0],[-0.18,0.31,0]],0.025,false));
   return merge(parts).scale(scale,scale,scale);

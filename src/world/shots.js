@@ -4,9 +4,10 @@ import { VALIDATION } from './plan.js';
 export const SHOTS = [
   { id: 1, ...VALIDATION.eye },
   { id: 2, pos: [128, 2.6, 860], target: [24, 1, 802], fov: 44, near: 0.1 },
-  // inferred: W2B: low river view; near-normal carving view at 5 m from its backing.
-  // Validation cameras only; architecture never reads this file.
-  { id: 5, pos: [42, -1.35, 410.1], target: [0, 2.4, 390], fov: 54, near: 0.1 },
+  // inferred: W5B, west riverbank at sunset, facing the sunlit western piers.
+  // This selects the world clock; architecture and water never read the camera list.
+  { id: 5, pos: [-37, -1.1, 410.4], target: [0, 2.4, 390], fov: 60, near: 0.1, time: 'sunset' },
+  // inferred: W2B, near-normal carving view at 5 m from its backing.
   { id: 6, pos: [26.25, -1.1, 392.86], target: [26.25, -0.85, 387.86], fov: 60, near: 0.1 },
 ];
 

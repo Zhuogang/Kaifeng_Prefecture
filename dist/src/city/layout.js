@@ -21,35 +21,46 @@ export function cityLayout(engine) {
     });return pieces;
   }
   function divisions(a,b,size) {
-    const n=Math.max(1,Math.round((b-a)/size)),weights=Array.from({length:n},()=>rng.range(.78,1.25));
+    const n=Math.max(1,Math.round((b-a)/size)),weights=Array.from({length:n},()=>rng.range(.65,1.4));
     const total=weights.reduce((s,v)=>s+v,0),out=[a];
     for(const v of weights)out.push(out.at(-1)+(b-a)*v/total);return out;
   }
   function fill(ax,bx,az,bz,outer) {
     blocks.push({x:(ax+bx)/2,z:(az+bz)/2,hw:(bx-ax)/2,hd:(bz-az)/2,outer});
     const rows=divisions(az,bz,outer?f.outerCourtDepth:f.courtDepth);
-    const blockYaw=rng.range(-.085,.085),phase=rng.range(0,6.28);
+    const blockYaw=rng.range(-.18,.18);
     for(let j=1;j<rows.length;j++) {
       const columns=divisions(ax,bx,(outer?f.outerCourtWidth:f.courtWidth)*rng.range(.88,1.17));
       for(let i=1;i<columns.length;i++) {
-        const w=columns[i]-columns[i-1],d=rows[j]-rows[j-1],cx=(columns[i]+columns[i-1])/2,cz=(rows[j]+rows[j-1])/2;
-        const yaw=blockYaw+rng.range(-.018,.018),two=rng.chance(.23),height=rng.range(.9,1.13),tint=rng.range(.78,1.14);
-        const north=d*rng.range(f.northDepth-.025,f.northDepth+.025),south=d*f.southDepth;
-        const wing=w*f.wingDepth,depth=d-north-south+.5;
-        // Keep complete roof envelopes inside their lots, including a rotating
-        // street frontage. Trimming the lot prevents encroachment into reservations.
-        const margin=Math.max(w,d)*Math.abs(Math.sin(yaw))*.55+.3;
+        // inferred: occasional joined parcels form larger compounds. Their main
+        // ranges remain separate buildings rather than stretching a five-bay hall.
+        const left=columns[i-1],large=i<columns.length-1&&rng.chance(.09);
+        if(large)i++;
+        const w=columns[i]-left,d=rows[j]-rows[j-1],cx=(columns[i]+left)/2,cz=(rows[j]+rows[j-1])/2;
+        const turned=rng.chance(.24),cw=turned?d:w,cd=turned?w:d;
+        const yaw=blockYaw+rng.range(-.018,.018)+(turned?Math.PI/2:0),two=rng.chance(.23),height=rng.range(.9,1.13),tint=rng.range(.78,1.14);
+        const north=cd*rng.range(f.northDepth-.025,f.northDepth+.025),south=cd*f.southDepth;
+        const wing=cw*f.wingDepth,depth=cd-north-south+.5;
+        // Adjacent ranges share a roof edge. A setback around every individual
+        // building made the previous city mostly bare earth. Clip only at the
+        // actual street/block boundary; leave the small interior court open.
+        const margin=.15;
         const add=(dx,dz,width,roofDepth,angle,upper=two)=>{
           const co=Math.cos(yaw),si=Math.sin(yaw),position=[cx+dx*co+dz*si,p.surfaceY,cz-dx*si+dz*co];
           const scale=[Math.max(3,width-2*margin)/(f.roofHalfWidth*2),height,Math.max(3,roofDepth-2*margin)/(f.roofHalfDepth*2)];
+          const a=yaw+angle,c=Math.abs(Math.cos(a)),s=Math.abs(Math.sin(a));
+          let hx=c*scale[0]*f.roofHalfWidth+s*scale[2]*f.roofHalfDepth,hz=s*scale[0]*f.roofHalfWidth+c*scale[2]*f.roofHalfDepth;
+          const fit=Math.min(1,(bx-ax-.2)/(hx*2),(bz-az-.2)/(hz*2));scale[0]*=fit;scale[2]*=fit;hx*=fit;hz*=fit;
+          position[0]=Math.max(ax+hx,Math.min(bx-hx,position[0]));position[2]=Math.max(az+hz,Math.min(bz-hz,position[2]));
           houses.push({position,scale,yaw:yaw+angle,tint:rng.range(.93,1.07)*tint,outer,two:upper,storey:upper?3.1:0,
             roofWidth:scale[0]*f.roofHalfWidth*2,roofDepth:scale[2]*f.roofHalfDepth*2});
         };
-        add(0,-d/2+north/2,w*f.roofFraction,north,0);
-        add(0,d/2-south/2,w*f.roofFraction,south,0,rng.chance(.12));
-        add(-w/2+wing/2,(north-south)/2,depth,wing,Math.PI/2,false);
-        add(w/2-wing/2,(north-south)/2,depth,wing,Math.PI/2,rng.chance(.12));
-        courts.push({x:cx,z:cz,width:w,depth:d,outer});
+        if(cw>34)for(const sign of [-1,1])add(sign*cw*.25,-cd/2+north/2+rng.range(-.5,.5),cw*.49,north,0);
+        else add(0,-cd/2+north/2,cw*f.roofFraction,north,0);
+        add(0,cd/2-south/2,cw*f.roofFraction,south,0,rng.chance(.12));
+        add(-cw/2+wing/2,(north-south)/2,depth,wing,Math.PI/2,false);
+        add(cw/2-wing/2,(north-south)/2,depth,wing,Math.PI/2,rng.chance(.12));
+        courts.push({x:cx,z:cz,width:w,depth:d,outer,large});
         // Clumps favour occasional larger yards instead of a regular tree per lot.
         if(rng.chance(.085)) {
           const count=rng.chance(.35)?3:1;
@@ -59,16 +70,22 @@ export function cityLayout(engine) {
     }
   }
   function district(x0,x1,z0,z1,outer) {
+    // inferred: only the named cross streets continue across a district. Minor
+    // lanes terminate at staggered junctions; successive bands shift their lanes.
+    // Previously every block shared a row boundary, producing kilometre-long rows.
     for(let z=z0;z<z1;) {
-      let end=Math.min(z1,z+rng.range(85,175));
-      const cross=openings.find(v=>v>z+20&&v<end+10);if(cross!==undefined)end=cross-5;
-      if(end-z<25){z+=24;continue;}
+      let end=Math.min(z1,z+rng.range(280,480));
+      const cross=openings.find(v=>v+5>z&&v-5<end);
+      if(cross!==undefined)end=Math.max(z,cross-5);
       for(let x=x0;x<x1;) {
         const right=Math.min(x1,x+rng.range(85,185)),lane=f.lane*rng.range(.7,1.3);
-        for(const piece of available(x+lane/2,right-lane/2,z+lane/2,end-lane/2))fill(...piece,outer);
+        const rows=divisions(z,end,rng.range(85,175));
+        for(let row=1;row<rows.length;row++) {
+          for(const piece of available(x+lane/2,right-lane/2,rows[row-1]+lane/2,rows[row]-lane/2))fill(...piece,outer);
+        }
         x=right;
       }
-      z=end+(cross!==undefined&&Math.abs(end-(cross-5))<.1?10:rng.range(2.4,5.2));
+      z=cross!==undefined?cross+5:end+f.lane;
     }
   }
   district(-p.east,p.east,p.north,p.south,false);
@@ -76,5 +93,15 @@ export function cityLayout(engine) {
   district(p.east+12,p.outerExtent,-p.outerExtent,p.outerExtent,true);
   district(-p.east-12,p.east+12,-p.outerExtent,p.north-12,true);
   district(-p.east-12,p.east+12,p.south+12,p.outerExtent,true);
+  // inferred: mature huai clumps occupy a larger share of unroofed yards. A
+  // separate stream preserves all existing parcels, buildings and street gaps.
+  const grove=engine.rng('W4-city-court-groves');
+  for(const c of courts)if(grove.chance(c.outer?.065:.32)) {
+    const count=grove.int(2,3),radius=Math.min(c.width,c.depth)*.12;
+    for(let k=0;k<count;k++) {
+      const angle=grove.range(0,Math.PI*2),r=grove.range(.3,1)*radius;
+      trees.push([c.x+Math.cos(angle)*r,p.surfaceY,c.z+Math.sin(angle)*r]);
+    }
+  }
   return {houses,blocks,trees,courts,openings};
 }

@@ -3,9 +3,27 @@ import { instancePalaceTrees } from '../flora/instances.js';
 
 /** Public flora geometry, wind and cutouts with city-distance batching. */
 export function cityTrees(engine,positions) {
-  const flora=instancePalaceTrees(engine,positions,{species:'huai',height:13,seed:'T8-courtyard-fields',collision:false});
+  // inferred: mature city crowns are dark olive/grey-green, with fixed clump
+  // variation. Public geometry and leaf cutouts remain shared with palace flora.
+  const tintRng=engine.rng('W4-city-tree-tints');
+  const entries=positions.map(position=>{
+    const shade=tintRng.range(.85,1.12);
+    return {position,tint:[.42*shade,.62*shade,.52*shade]};
+  });
+  const flora=instancePalaceTrees(engine,entries,{species:'huai',height:13,seed:'T8-courtyard-fields',collision:false});
   flora.meshes[0].geometry.dispose();flora.meshes[0].geometry=flora.meshes[1].geometry.clone();
   flora.stats.lodTriangles[0]=flora.stats.lodTriangles[1];
+  // inferred: beyond 120 m the public canopy cards need only their four corners,
+  // not a subdivided surface. Preserve every card's extent, UV cutout and wind;
+  // roofs hide the omitted trunk. This keeps the full-city view inside T8's budget.
+  const far=flora.meshes[2].geometry,{aFlora:kind,aOrigin:origin,uv}=far.attributes,cards=new Map(),canopy=[];
+  for(let i=0;i<kind.count;i++)if(kind.getX(i)>.5) {
+    const u=uv.getX(i),v=uv.getY(i);if((u!==0&&u!==1)||(v!==0&&v!==1))continue;
+    const key=[origin.getX(i),origin.getY(i),origin.getZ(i),kind.getX(i),kind.getZ(i)].join(':');
+    if(!cards.has(key))cards.set(key,[]);cards.get(key)[u+v*2]=i;
+  }
+  for(const [a,b,c,d]of cards.values())if([a,b,c,d].every(Number.isInteger))canopy.push(a,b,c,b,d,c);
+  far.setIndex(canopy);far.userData.triangles=flora.stats.lodTriangles[2]=canopy.length/3;
   for(const m of flora.meshes){m.castShadow=false;m.userData.castShadow=false;}
   const geometry=flora.model.lod2.clone();
   geometry.setAttribute('iFlora',new THREE.InstancedBufferAttribute(new Float32Array(positions.length*4),4).setUsage(THREE.DynamicDrawUsage));
@@ -34,7 +52,7 @@ export function cityTrees(engine,positions) {
       if(m.instanceColor)m.instanceColor.needsUpdate=true;m.geometry.attributes.iFlora.needsUpdate=true;if(m.count)m.computeBoundingSphere();
     });
     proxy.count=shadows;proxy.visible=shadows>0;proxy.instanceMatrix.needsUpdate=true;geometry.attributes.iFlora.needsUpdate=true;if(shadows)proxy.computeBoundingSphere();
-    Object.assign(flora.stats,{counts,shadowInstances:shadows,shadowTriangles:shadows*flora.stats.lodTriangles[2],
+    Object.assign(flora.stats,{counts,shadowInstances:shadows,shadowTriangles:shadows*geometry.index.count/3,
       triangles:counts.reduce((sum,n,l)=>sum+n*flora.stats.lodTriangles[l],0),calls:counts.filter(Boolean).length});
   }
   flora.group.updateMatrixWorld=function(force){update();THREE.Group.prototype.updateMatrixWorld.call(this,force);};

@@ -24,6 +24,7 @@ export function bake(root) {
 
 /** Compact instances before scene traversal, so shadows see the same LOD as the camera.
  * Thresholds are physical distances, independent of any validation framing.
+ * distances may also return thresholds per entry (e.g. the two orchard rows).
  */
 export function instanceLods(engine, name, levels, entries, distances, { depth, flora = false, shadow = true, shadowLevels } = {}) {
   const group = new THREE.Group(); group.name = name;
@@ -37,6 +38,7 @@ export function instanceLods(engine, name, levels, entries, distances, { depth, 
     const g = geometry.clone();
     if (flora) g.setAttribute('iFlora', new THREE.InstancedBufferAttribute(new Float32Array(items.length * 4), 4));
     const mesh = new THREE.InstancedMesh(g, material, items.length);
+    g.computeBoundingBox();
     mesh.name = name + ':LOD' + l; mesh.count = 0; mesh.customDepthMaterial = depth;
     // inferred: subpixel distant silhouettes receive shadows; shadow casting stops at the far LOD.
     mesh.userData.castShadow = shadow && l < 2 && !shadowLevels; mesh.castShadow = mesh.userData.castShadow;
@@ -54,29 +56,54 @@ export function instanceLods(engine, name, levels, entries, distances, { depth, 
       mesh.name=name+':shadow-LOD'+l; mesh.count=0; mesh.customDepthMaterial=depth;
       mesh.castShadow=true; mesh.receiveShadow=false;
       mesh.userData.castShadow=true; mesh.userData.receiveShadow=false;
+      mesh.userData.yujieShadowProxy=true;
       group.add(mesh); meshes[l].push(mesh);
     }));
   }
+  // Cull individual visible instances, rather than drawing every tree in an
+  // avenue-length batch. Offscreen shadow proxies remain: their shadows may enter
+  // the view. Geometry LOD still depends only on physical distance.
+  const bounds=levels.map(parts=>{
+    const box=new THREE.Box3();
+    for(const part of parts) { part.geometry.computeBoundingBox(); box.union(part.geometry.boundingBox); }
+    const sphere=box.getBoundingSphere(new THREE.Sphere());
+    // inferred: bounded wind/branch warp from the public flora vertex deformation.
+    if(flora) sphere.radius+=.4;
+    return sphere;
+  });
   let last = [];
+  const frustum=new THREE.Frustum(), projection=new THREE.Matrix4(), sphere=new THREE.Sphere();
   const update = () => {
     const p = engine.camera.position;
-    if (p.x === last[0] && p.y === last[1] && p.z === last[2]) return;
-    last = p.toArray(); const counts = levels.map(() => 0);
+    const key=[...engine.camera.matrixWorldInverse.elements,...engine.camera.projectionMatrix.elements];
+    if(key.every((v,i)=>v===last[i]))return;
+    last=key; const counts = levels.map(() => 0), shadowCounts=levels.map(()=>0);
+    frustum.setFromProjectionMatrix(projection.multiplyMatrices(engine.camera.projectionMatrix,engine.camera.matrixWorldInverse));
     for (const item of items) {
       const d = item.position.distanceTo(p);
-      const l = d < distances[0] ? 0 : d < distances[1] ? 1 : 2, k = counts[l]++;
+      const limits=typeof distances==='function'?distances(item):distances;
+      const l = d < limits[0] ? 0 : d < limits[1] ? 1 : 2;
+      sphere.copy(bounds[l]).applyMatrix4(item.matrix);
+      const castsWithoutProxy=shadow && !shadowLevels && l<2;
+      const visible=levels[l].length>0 && (castsWithoutProxy || frustum.intersectsSphere(sphere));
+      const k=visible?counts[l]++:0, sk=shadowCounts[l]++;
       for (const mesh of meshes[l]) {
-        mesh.setMatrixAt(k, item.matrix); mesh.setColorAt(k, item.tint);
-        if (flora) mesh.geometry.attributes.iFlora.set([item.phase, 1, item.warp, 1], k * 4);
+        const proxy=mesh.userData.yujieShadowProxy;
+        if(!proxy && !visible)continue;
+        const index=proxy?sk:k;
+        mesh.setMatrixAt(index, item.matrix);
+        if(!proxy) mesh.setColorAt(index, item.tint);
+        if (flora) mesh.geometry.attributes.iFlora.set([item.phase, 1, item.warp, 1], index * 4);
       }
     }
     meshes.forEach((parts, l) => parts.forEach(mesh => {
-      mesh.count = counts[l]; mesh.visible = mesh.count > 0; mesh.instanceMatrix.needsUpdate = true;
+      mesh.count = mesh.userData.yujieShadowProxy?shadowCounts[l]:counts[l]; mesh.visible = mesh.count > 0; mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       if (flora) mesh.geometry.attributes.iFlora.needsUpdate = true;
       if (mesh.count) mesh.computeBoundingSphere();
     }));
     group.userData.counts = counts;
+    group.userData.shadowCounts = shadowCounts;
   };
   group.updateMatrixWorld = function(force) { update(); THREE.Group.prototype.updateMatrixWorld.call(this, force); };
   engine.add(group, { castShadow: shadow }); update();

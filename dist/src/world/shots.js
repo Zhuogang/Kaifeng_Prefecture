@@ -3,26 +3,28 @@ import { VALIDATION } from './plan.js';
 // Validation cameras only. Only the application entry point reads this list.
 export const SHOTS = [
   { id: 1, ...VALIDATION.eye },
-  { id: 2, ...VALIDATION.aerial },
-  // inferred: T6 validation framings; architecture never reads this file.
-  { id: 5, pos: [42, -0.8, 410.5], target: [0, 2.6, 383.5], fov: 54, near: 0.1 },
-  { id: 6, pos: [21.7, -0.95, 392.0], target: [26.2, -0.50, 387.4], fov: 53, near: 0.1 },
+  { id: 2, pos: [128, 2.6, 860], target: [24, 1, 802], fov: 44, near: 0.1 },
+  // inferred: W5B, west riverbank at sunset, facing the sunlit western piers.
+  // This selects the world clock; architecture and water never read the camera list.
+  { id: 5, pos: [-37, -1.1, 410.4], target: [0, 2.4, 390], fov: 60, near: 0.1, time: 'sunset' },
+  // inferred: W2B, near-normal carving view at 5 m from its backing.
+  { id: 6, pos: [26.25, -1.1, 392.86], target: [26.25, -0.85, 387.86], fov: 60, near: 0.1 },
 ];
 
 import { XUANDE_VIEWS } from './plan.js';
 // T4 replaces the T0 calibration framing, retaining the aerial inspection camera.
 Object.assign(SHOTS.find(shot => shot.id === 1), XUANDE_VIEWS.front);
-SHOTS.push({ id: 3, ...XUANDE_VIEWS.roof });
+// inferred: W4F, below-eave framing retains the roof, both perches and flock headroom.
+SHOTS.push({ id: 3, pos: [0, 21, 22], target: [0, 35, -12], fov: 68, near: 0.1 });
 
 import { PALACE_VIEWS } from './plan.js';
 SHOTS.push({ id: 8, ...PALACE_VIEWS.front });
 
 import { YUJIE_VIEWS } from './plan.js';
-Object.assign(SHOTS.find(shot => shot.id === 2), YUJIE_VIEWS.avenue);
-SHOTS.push({ id: 7, ...YUJIE_VIEWS.corridor });
+SHOTS.push({ id: 7, pos: [-151, 3.0, 610], target: [-148, 4.6, 640], fov: 72, near: 0.05 });
 
 import { CITY_VIEWS } from './plan.js';
-SHOTS.push({ id: 4, ...CITY_VIEWS.aerial }, { id: 9, ...CITY_VIEWS.gallery });
+SHOTS.push({ id: 4, pos: [175, 120, 190], target: [0, 12, -110], fov: 48, near: 0.1 }, { id: 9, ...CITY_VIEWS.gallery });
 
 // inferred: W1 item 5, lower and closer five-door inspection; both forward towers may crop out.
-Object.assign(SHOTS.find(shot => shot.id === 1), {pos:[1.5,2.45,78],target:[0,14,-8],fov:31,near:0.1});
+Object.assign(SHOTS.find(shot => shot.id === 1), {pos:[-3,2.45,104],target:[0,13.6,-8],fov:23,near:0.1});

@@ -29,42 +29,59 @@ const MORNING_GRADE = {
 
 export const TIME_PRESETS = {
   morning: {
-    // inferred: TL2 direct/fill separation and weather, starting from athenaion's
-    // original zenith, cloud extinction and ambient light; the clearing opens
-    // the sky above the city without selecting or reading a validation camera.
-    sun: { azimuth: SUN.azimuth, elevation: SUN.elevation, color: [1.0, 0.62, 0.34], intensity: 18 },
+    // inferred: W5 spectral balance fitted to the measured reference regions.
+    // Direct light stays warmer than the sky fill, without tinting stone orange.
+    sun: { azimuth: SUN.azimuth, elevation: SUN.elevation, color: [1.0, 0.75, 0.45], intensity: 12 },
     sky: { ...MORNING_SKY,
-      uZenith: [0.015, 0.105, 0.2], uSkyFalloff: 5.0,
-      uSkyLower: [1.4, 1.8, 2.6], uSkyHorizonWidth: 0.06,
-      uGround: [0.5, 0.46, 0.42], uEnvScale: 0.45, uEnvBlue: 0.1,
-      uCloudCover: 0.22, uCloudScale: 4.0, uCloudBase: 2300, uCloudThick: 1000,
-      uCloudSigma: 0.016, uCloudBright: 2.2, uCloudAmbient: 0.85, uCloudErode: 0.6,
+      // inferred: a slightly deeper blue zenith and stronger neutral sky fill;
+      // the lower hemisphere represents warm diffuse ground bounce.
+      uZenith: [0.28, 0.4, 0.63], uSkyFalloff: 4.0,
+      uSkyLower: [1.4, 1.65, 2.1], uSkyHorizonWidth: 0.06,
+      uGround: [0.6, 0.5, 0.4], uEnvScale: 0.8, uEnvBlue: 0.2,
+      // inferred: optically thinner, softly sunlit low cumulus; the high veil
+      // darkened the bright lower sky into broad grey smudges.
+      uCloudCover: 0.26, uCloudScale: 4.0, uCloudBase: 2300, uCloudThick: 800,
+      uCloudSigma: 0.004, uCloudBright: 4.0, uCloudAmbient: 1.2, uCloudErode: 0.6,
       uCloudClearRadius: 12500,
-      uCirrus: [0.06, 7500, 0.6],
+      uCirrus: [0, 7500, 0.6],
     },
-    atmo: { ...MORNING_ATMO, uHazeColor: [1.2, 0.95, 0.75] },
-    grade: { ...MORNING_GRADE, uExposure: 0.5, uContrast: 2.0, uPivot: 0.55, uToe: 0.8,
-      uHighlights: 0.25, uAgxPunch: 1.0, uLift: [0.045, 0.045, 0.05], uShadowTint: [0, 0, 0.006],
+    // inferred: remove warm split toning and reduce shadow chroma. One shared
+    // luminance meter balances enclosed and open areas, within its existing
+    // 0.5–2 exposure-gain limits; no validation-camera settings are used.
+    atmo: { ...MORNING_ATMO, uHazeColor: [1.2, 1.05, 0.94] },
+    grade: { ...MORNING_GRADE, uExposure: 0.85, uContrast: 2.1, uPivot: 0.55, uToe: 0.8,
+      uAutoExpo: 2.5, uAutoKey: 0.18, uHighTint: [0, 0, 0], uShadowSat: -0.9,
+      uHighlights: 0.15, uAgxPunch: 1.0, uLift: [0.045, 0.045, 0.05], uShadowTint: [0, 0, 0.006],
       uSaturation: 0.96, uVibrance: 0.05, uLtmFine: 0.2, uLtmMid: 0.3, uLtmLarge: 0.18, uSharpen: 0.2 },
   },
   sunset: {
     sun: { azimuth: 255, elevation: 8, color: [1.0, 0.67, 0.4], intensity: 7.5 },
-    sky: { ...MORNING_SKY, uZenith: [0.025, 0.08, 0.2], uSkyFalloff: 3.0,
-      uSkyAureole: [0.35, 0.7, 4], uGround: [0.055, 0.035, 0.024],
-      uEnvScale: 1.1, uCloudCover: 0.32, uCloudBright: 3.5 },
-    atmo: { ...MORNING_ATMO, uHazeColor: [0.7, 0.4, 0.22], uMistColor: [0.66, 0.59, 0.6],
+    // inferred: a pale blue-to-peach evening sky, with the same city-wide
+    // fair-weather clearing as morning. Warm ground bounce balances sky fill.
+    sky: { ...MORNING_SKY, uZenith: [0.15, 0.23, 0.34], uSkyFalloff: 3.5,
+      uSkyLower: [0.8, 0.85, 1.0], uSkyHorizonWidth: 0.09,
+      uSkyAureole: [0.35, 0.7, 4], uGround: [0.25, 0.2, 0.17],
+      uEnvScale: 0.8, uEnvBlue: 0.1,
+      uCloudCover: 0.26, uCloudScale: 4.0, uCloudBase: 2300, uCloudThick: 800,
+      uCloudSigma: 0.004, uCloudBright: 4.0, uCloudAmbient: 0.6, uCloudErode: 0.6,
+      uCloudClearRadius: 12500 },
+    atmo: { ...MORNING_ATMO, uHazeColor: [0.85, 0.72, 0.62], uMistColor: [0.66, 0.59, 0.6],
       uMie: [0.72, 1.1, 0.5] },
-    grade: { ...MORNING_GRADE, uExposure: 0.9, uContrast: 1.55, uSaturation: 0.96 },
+    grade: { ...MORNING_GRADE, uExposure: 1.1, uContrast: 1.65, uSaturation: 0.96 },
   },
   bluehour: {
     sun: { azimuth: 275, elevation: -4, color: [1, 0.35, 0.16], intensity: 0 },
-    sky: { ...MORNING_SKY, uZenith: [0.008, 0.022, 0.075], uSkyFalloff: 2.4,
-      uSkyAureole: [0.06, 0.0, 0.0], uTwilight: [0.65, 0.15, 0.035], uSunDisk: 0, uGround: [0.018, 0.024, 0.045],
-      uEnvScale: 2.0, uEnvBlue: 0.1, uCloudAmbient: 0.45, uCloudCover: 0.28, uCloudSigma: 0.012 },
-    atmo: { ...MORNING_ATMO, uHazeColor: [0.08, 0.065, 0.13], uMistColor: [0.06, 0.08, 0.14],
+    // inferred: clear blue-hour air with thin high ice clouds, rather than an
+    // unlit, opaque cumulus layer. The warm horizon is world-wide afterglow.
+    sky: { ...MORNING_SKY, uZenith: [0.012, 0.03, 0.12], uSkyFalloff: 3.5,
+      uSkyLower: [0.12, 0.18, 0.36], uSkyHorizonWidth: 0.08,
+      uSkyAureole: [0.06, 0.0, 0.0], uTwilight: [1.4, 0.38, 0.07], uTwilightSpread: 1,
+      uSunDisk: 0, uGround: [0.018, 0.024, 0.045], uCirrus: [0.06, 8000, 0.6],
+      uEnvScale: 2.0, uEnvBlue: 0.1, uCloudCover: 0 },
+    atmo: { ...MORNING_ATMO, uHazeColor: [0.12, 0.09, 0.12], uMistColor: [0.06, 0.08, 0.14],
       uMie: [0.68, 0.1, 0] },
-    grade: { ...MORNING_GRADE, uExposure: 1.1, uContrast: 1.25,
-      uLift: [0.006, 0.009, 0.018], uSaturation: 0.9 },
+    grade: { ...MORNING_GRADE, uExposure: 1.35, uContrast: 1.3,
+      uLift: [0.012, 0.014, 0.022], uSaturation: 1.0 },
   },
 };
 export const TIME_NAMES = Object.freeze(Object.keys(TIME_PRESETS));

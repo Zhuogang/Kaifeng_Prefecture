@@ -17,6 +17,8 @@ import { addCranes } from './cranes.js';
 
 const matrix = (position, angle = 0) => new THREE.Matrix4().makeRotationY(angle).setPosition(...position);
 const rect = (x0,x1,z0,z1) => [[x0,z0],[x1,z0],[x1,z1],[x0,z1]];
+// inferred: a 0.12 m cut stone field gives the sculpted frieze a real recessed background.
+const friezeRecess=0.12;
 
 // Eight corners define battered masonry, including straight tapering gate reveals.
 function block(batch, bottom, top, y0, y1) {
@@ -31,10 +33,16 @@ function block(batch, bottom, top, y0, y1) {
   g.setIndex(idx);g.computeVertexNormals();batch.add(g);g.dispose();
 }
 
-function platform(batch, p, openings = null) {
+function platform(batch, p, openings = null, bed = batch) {
   const [x,,z]=p.center, w=p.width/2,d=p.depth/2, h=p.height,b=p.batter;
-  const corners=(y,l=-w,r=w)=>rect(x+l+(l===-w?b*y:0),x+r-(r===w?b*y:0),z-d+b*y,z+d-b*y);
-  if(!openings) { block(batch,corners(0),corners(h),0,h);return; }
+  const corners=(y,l=-w,r=w,inset=0)=>rect(x+l+(l===-w?b*y+inset:0),x+r-(r===w?b*y+inset:0),z-d+b*y+inset,z+d-b*y-inset);
+  const upper=start=>{
+    const y0=P.frieze.centerY-P.frieze.height/2,y1=P.frieze.centerY+P.frieze.height/2;
+    block(batch,corners(start),corners(y0),start,y0);
+    block(bed,corners(y0,-w,w,friezeRecess),corners(y1,-w,w,friezeRecess),y0,y1);
+    block(batch,corners(y1),corners(h),y1,h);
+  };
+  if(!openings) { upper(0);return; }
   let left=-w;
   for(let i=0;i<=openings.centers.length;i++) {
     const right=i===openings.centers.length?w:openings.centers[i]-openings.width/2;
@@ -43,7 +51,7 @@ function platform(batch, p, openings = null) {
     block(batch,corners(0,left,right),corners(openings.height,topLeft,topRight),0,openings.height);
     left=i===openings.centers.length?w:openings.centers[i]+openings.width/2;
   }
-  block(batch,corners(openings.height),corners(h),openings.height,h);
+  upper(openings.height);
 }
 
 function railing(batch,path,height=1.15,detail=true) {
@@ -72,9 +80,13 @@ const centreDoor = P.doors.centers[Math.floor(P.doors.centers.length/2)];
 const passageHalfWidth = P.doors.topWidth/2-0.25;
 const passageBack = P.platform.center[2]-P.platform.depth/2;
 const passageFront = P.platform.center[2]+P.platform.depth/2;
-// inferred: four-centimetre clearance above adjoining avenue paving; the passage falls gently
+// inferred: six-millimetre clearance above the avenue's millimetric stone relief; the passage falls gently
 // to the palace's existing apron datum. Dimensions derive from the shared plan, not a camera.
-const forecourtY = YUJIE.surfaceY+0.04;
+const forecourtY = YUJIE.surfaceY+0.006;
+const forecourtEnd=P.forecourt.center[2]+P.forecourt.depth/2;
+const fenceInner=Math.min(...P.fences.flatMap(path=>path.map(p=>Math.abs(p[0]))));
+// inferred: an opening three doorway widths wide admits the processional approach within the enclosure.
+const fencePaths=P.fences.map(path=>path.map(([x,,z])=>[Math.abs(x)===fenceInner?Math.sign(x)*P.doors.width*1.5:x,forecourtY,z]));
 function passageY(z) {
   const t=THREE.MathUtils.clamp((passageFront-z)/P.platform.depth,0,1);
   return THREE.MathUtils.lerp(forecourtY,P.forecourt.center[1]+0.06,t);
@@ -150,8 +162,8 @@ function wall(batches, lod) {
 function structure(mats,lod) {
   const group=new THREE.Group();group.name=`xuande-masonry-LOD${lod}`;
   const batches=Object.fromEntries(Object.keys(mats).map(k=>[k,new GeometryBatch()]));
-  platform(batches.masonry,P.platform,P.doors);
-  for(const p of P.wingPlatforms)platform(batches.masonry,p);
+  platform(batches.masonry,P.platform,P.doors,batches.reliefBed);
+  for(const p of P.wingPlatforms)platform(batches.masonry,p,null,batches.reliefBed);
   for(const p of [P.platform,...P.wingPlatforms]) {
     batches.paving.box([p.center[0],p.height+0.018,p.center[2]],[p.width-p.batter*p.height*2,0.035,p.depth-p.batter*p.height*2]);
     // inferred: stone cap and lime course crown the battered platform.
@@ -187,13 +199,15 @@ function structure(mats,lod) {
       }
     }
     const fr=P.frieze;
-    for(const p of [P.platform,...P.wingPlatforms])for(const sign of [-1,1]) {
-      const z=p.center[2]+sign*(p.depth/2-p.batter*fr.centerY);
-      batches.reliefBed.box([p.center[0],fr.centerY,z],[p.width-2,fr.height,0.10]);
-      for(const y of [fr.centerY-fr.height/2,fr.centerY+fr.height/2])batches.carving.box([p.center[0],y,z+sign*0.04],[p.width-1.8,0.12,0.20]);
+    for(const p of [P.platform,...P.wingPlatforms])for(const y of [fr.centerY-fr.height/2,fr.centerY+fr.height/2]) {
+      const halfW=p.width/2-p.batter*y,halfD=p.depth/2-p.batter*y;
+      for(const sign of [-1,1]){
+        batches.carving.box([p.center[0],y,p.center[2]+sign*(halfD+0.025)],[halfW*2,0.12,0.16]);
+        batches.carving.box([p.center[0]+sign*(halfW+0.025),y,p.center[2]],[0.16,0.12,halfD*2]);
+      }
     }
   }
-  addFrieze(group,[P.platform,...P.wingPlatforms],P.frieze,mats.carving,lod);
+  addFrieze(group,[P.platform,...P.wingPlatforms],{...P.frieze,recess:friezeRecess},mats.carving,lod);
   for(const [name,batch]of Object.entries(batches))if(batch.indices.length)group.add(batch.mesh(mats[name],name));
   return group;
 }
@@ -201,9 +215,15 @@ function structure(mats,lod) {
 function materials(engine) {
   return {
     passage:timberMaterial(engine,{baseY:forecourtY,color:0x705342,grainAxis:[0,0,1],wear:0.8}),
-    timber:timberMaterial(engine,{baseY:12,wear:0.8}),door:timberMaterial(engine,{baseY:0,wear:0.85,variation:3}),
+    timber:timberMaterial(engine,{baseY:12,wear:0.8}),
+    // 门皆金釘朱漆 (东京梦华录卷一).
+    // inferred: deep cinnabar with a lighter weathered red layer;
+    // retain worn wood, rain variation and socket dirt rather than a flat red coat.
+    door:timberMaterial(engine,{baseY:0,wear:0.85,variation:3,color:0x702018,fadedColor:0x944531}),
+    fence:timberMaterial(engine,{baseY:0,wear:0.85,variation:3}),
+    window:timberMaterial(engine,{variant:'unpainted',color:0x40372c,wear:0.6,baseY:12}),
     bracket:paintMaterial(engine,{style:'wucai',wear:0.8}),
-    masonry:masonryMaterial(engine,{topY:12,batter:0.08,variation:11}),
+    masonry:masonryMaterial(engine,{topY:12,batter:0.08,variation:11,coursePeriod:2.496,courseHeight:0.156}),
     lime:plasterMaterial(engine,{wear:0.5}),plaster:plasterMaterial(engine,{baseY:12,variation:8}),
     paving:pavingMaterial(engine,{ruts:0,drains:0,variation:4}),
     forecourt:forecourtMaterial(engine,{variation:4}),
@@ -212,11 +232,24 @@ function materials(engine) {
       t2Albedo=mix(vec3(0.125,0.12,0.105),vec3(0.21,0.20,0.17),n);t2Rough=0.96;t2Height=(n-0.5)*0.002;
     `),
     carving:surfaceMaterial(engine,'carved-warm-grey-stone',{variation:17},`
-      float n=t2Fbm(cgP*12.0+t2Variation);
+      float n=t2Fbm(cgP*3.0+t2Variation);
       t2Albedo=mix(vec3(0.19,0.185,0.165),vec3(0.34,0.325,0.28),n);
       t2Rough=0.94;t2Height=(n-0.5)*0.003;
-      t2Occlusion=0.85+max(cgN.y,0.0)*0.15;
-    `),
+      float groove=step(5.5,vReliefKind)*(1.0-step(6.5,vReliefKind));
+      t2Albedo*=mix(1.0,0.48,groove);t2Occlusion=mix(0.92,0.55,groove);
+      t2Height+=(n-0.5)*0.001;
+      if(vReliefKind>6.5){
+        // inferred: small staggered scales are incised into the body, not dark oversized
+        // ribbons floating above it. Physical coordinates follow the curved stone surface.
+        vec2 cell=vCarveUV*vCarveSize/vec2(0.09,0.07);
+        float row=floor(cell.y);vec2 q=vec2(fract(cell.x+mod(row,2.0)*0.5)-0.5,fract(cell.y)-0.1)*vec2(0.09,0.07);
+        float visible=1.0-smoothstep(0.35,1.2,max(fwidth(cell.x),fwidth(cell.y)));
+        float incision=t2Line(length(q)-0.047,0.0018)*visible;
+        t2Albedo*=1.0-incision*0.24;t2Height-=incision*0.0015;t2Occlusion-=incision*0.04;
+      }
+    `,{vertexHead:'attribute float memberType; attribute vec2 memberUV,memberSize; varying float vReliefKind; varying vec2 vCarveUV,vCarveSize;',
+      vertexPre:'vReliefKind=memberType;vCarveUV=memberUV;vCarveSize=memberSize;',
+      head:'varying float vReliefKind;varying vec2 vCarveUV,vCarveSize;',attributes:{memberType:[0],memberUV:[0.5,0.5],memberSize:[1,1]}}),
     gold:metalMaterial(engine,{wear:0.7}),iron:metalMaterial(engine,{variant:'iron'}),
     tile:tileMaterial(engine,{wear:0.7}),ridge:tileMaterial(engine,{ribbed:false,wear:0.8}),
   };
@@ -266,7 +299,7 @@ function previewShadows(complex,engine) {
   invisible.userData.noPatch=true;
   const depth=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking});
   for(const original of complex.levels[1].object.children) {
-    if(!original.castShadow || original.material.name.startsWith('paint-'))continue;
+    if(!original.castShadow)continue;
     const m=original.clone();m.material=invisible;m.customDepthMaterial=depth;m.receiveShadow=false;proxy.add(m);
   }
   for(const original of complex.levels[0].object.children) {
@@ -294,6 +327,8 @@ function registerCollision(engine,halls) {
   }
   // inferred: height-blind occupancy closes passage mouths, leaving the walk above the recessed leaves clear.
   for(const x of P.doors.centers)if(x!==centreDoor)fp.addRect(x,-P.platform.batter*P.doors.height,P.doors.width/2,0.14,0,'xuande-closed-passage');
+  for(const sign of [-1,1])fp.addRect(centreDoor+sign*(P.doors.topWidth/2-0.13),
+    -P.doors.recess-(P.doors.topWidth/2-0.13)/2,0.18,(P.doors.topWidth/2-0.13)/2,0,'xuande-open-leaf');
   const back=p.center[2]-p.depth/2+0.96;
   for(const z of [back,-0.96])for(const [a,b]of [[-half,centreDoor-passageHalfWidth],[centreDoor+passageHalfWidth,half]])edge([a,z],[b,z]);
   for(const sign of [-1,1])edge([centreDoor+sign*(passageHalfWidth+0.20),passageBack],
@@ -308,7 +343,7 @@ function registerCollision(engine,halls) {
     edge([outer,stair.z-18],[out,stair.z-18]);edge([out,stair.z-18],[out,stair.z]);
     for(const x of [stair.x-stair.width/2,stair.x+stair.width/2])edge([x,stair.z],[x,stair.z+stair.run]);
   }
-  for(const path of P.fences)fp.addPath(path.map(p=>[p[0],p[2]]),0.08,'xuande-chazi');
+  for(const path of fencePaths)fp.addPath(path.map(p=>[p[0],p[2]]),0.08,'xuande-chazi');
   for(const sign of [-1,1])fp.addRect(sign*(P.wall.extent+60)/2,P.wall.centerZ,(P.wall.extent-60)/2,P.wall.depth/2,0,'palace-wall');
   for(const {hall,entry}of halls)for(const obstacle of hall.footprint.obstacles) {
     const point=new THREE.Vector3(obstacle.x,0,obstacle.z).applyMatrix4(matrix(entry.position,entry.rotation??0));
@@ -334,7 +369,7 @@ export async function build(engine) {
   for(const entry of [P.hall,...P.elbows,...P.wings,...P.towers]) {
     const spec={...entry,klass:'diange',roof:'wudian',eaves:1,tile:'tongwa',rafterDiameter:0.156,jiaPerSlope:5,
       platform:{height:0,margin:0},interior:false,enclosedBrackets:true,windowJambs:true,bayFill:{south:'lattice',north:'wall',east:'wall',west:'wall'}};
-    const hall=buildHall(spec,engine,{timber:mats.timber,bracket:mats.bracket,stone:mats.masonry,plaster:mats.plaster,tile:mats.tile,ridge:mats.ridge});
+    const hall=buildHall(spec,engine,{timber:mats.timber,bracket:mats.bracket,stone:mats.masonry,plaster:mats.plaster,window:mats.window,tile:mats.tile,ridge:mats.ridge});
     const ornaments=roofOrnaments(engine,hall.anchors,{height:entry===P.hall?2.6:1.5});
     for(const group of [ornaments.lod0,ornaments.lod1])group.traverse(o=>{if(o.isMesh)o.material=mats.ridge;});
     hall.lod0.add(ornaments.lod0);hall.lod1.add(ornaments.lod1);
@@ -345,15 +380,15 @@ export async function build(engine) {
   apron.name='xuande-forecourt';apron.position.set(...P.forecourt.center);apron.castShadow=false;root.add(apron);
   // A laid stone court meets the avenue at the existing vermilion enclosure. Its thin finish
   // clears the avenue paving, leaving the two canals and planted banks open at their plan widths.
-  const end=Math.max(...P.fences.flatMap(path=>path.map(p=>p[2])));
+  const end=forecourtEnd;
   for(const [x0,x1]of [[-YUJIE.section.edge,-YUJIE.section.bank],[-YUJIE.section.road,YUJIE.section.road],[YUJIE.section.bank,YUJIE.section.edge]]) {
     const laid=new THREE.Mesh(new THREE.BoxGeometry(x1-x0,0.035,end-passageFront),mats.forecourt);
     laid.position.set((x0+x1)/2,forecourtY-0.0175,(end+passageFront)/2);laid.castShadow=false;
     laid.name='xuande-laid-forecourt';root.add(laid);
   }
-  for(const path of P.fences) {
+  for(const path of fencePaths) {
     const fence=chazi(engine,{path});
-    for(const group of [fence.lod0,fence.lod1])group.traverse(o=>{if(o.isMesh)o.material=mats.door;});
+    for(const group of [fence.lod0,fence.lod1])group.traverse(o=>{if(o.isMesh)o.material=mats.fence;});
     const l=new THREE.LOD();l.addLevel(fence.lod0,0);l.addLevel(fence.lod1,230);root.add(l);
   }
   // Replace the T0 calibration object once real architecture occupies its ground.
@@ -366,12 +401,12 @@ export async function build(engine) {
   const previous=engine.groundHeight??(()=>0);
   engine.groundHeight=(x,z)=>{
     if(Math.abs(x-centreDoor)<passageHalfWidth&&z>=passageBack&&z<=passageFront)return passageY(z);
-    if(z>=passageFront&&z<=Math.max(...P.fences.flatMap(path=>path.map(p=>p[2])))&&(Math.abs(x)<YUJIE.section.road||Math.abs(x)>YUJIE.section.bank)&&Math.abs(x)<=YUJIE.section.edge)return forecourtY;
     for(const p of [P.platform,...P.wingPlatforms])if(Math.abs(x-p.center[0])<p.width/2-p.batter*p.height&&Math.abs(z-p.center[2])<p.depth/2-p.batter*p.height)return p.height+0.035;
     for(const s of P.stairs){
       if(Math.abs(x-s.x)<s.width/2&&z>=s.z-18&&z<=s.z)return s.rise+0.04;
       if(Math.abs(x-s.x)<s.width/2&&z>=s.z&&z<=s.z+s.run)return Math.max(P.forecourt.center[1]+0.03,s.rise*(1-Math.floor((z-s.z)/(s.run/Math.ceil(s.rise/0.16)))/Math.ceil(s.rise/0.16)));
     }
+    if(z>=passageFront&&z<=forecourtEnd&&(Math.abs(x)<YUJIE.section.road||Math.abs(x)>YUJIE.section.bank)&&Math.abs(x)<=YUJIE.section.edge)return forecourtY;
     if(Math.abs(x-P.forecourt.center[0])<=P.forecourt.width/2&&Math.abs(z-P.forecourt.center[2])<=P.forecourt.depth/2)return P.forecourt.center[1]+0.03;
     return previous(x,z);
   };

@@ -18,7 +18,7 @@ function willow(ctx,rng) {
   for(let y=16;y<=end;y+=16)ctx.lineTo(stem(y),y);
   ctx.stroke();
   let side=1;
-  for(let y=24;y<end-18;y+=rng.range(18,29)) {
+  for(let y=24;y<end-18;y+=rng.range(9,16)) {
     const taper=0.4+0.6*Math.sin(Math.PI*(y/end)*0.85);
     ctx.save();ctx.translate(stem(y),y);ctx.scale(16,1);
     leaf(ctx,0,0,rng.range(13,21)*taper,rng.range(1.7,2.5),Math.PI+side*rng.range(0.42,1.05),rng.pick(['#b5c18e','#a6b681','#94a66f','#c1c99c']));

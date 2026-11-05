@@ -35,8 +35,8 @@ function buildPaving(engine) {
     [southEnd, southShoulder, P.bridgeHalfWidth, P.width / 2]]) {
     apron(road, -w0, w0, z0, z1, -w1, w1);
   }
-  engine.add(road.mesh(pavingMaterial(engine, { layout: pavingLayoutGLSL(), ruts: 1, drains: 1 }), 'yujie:coursed-imperial-road'), { castShadow: false });
-  engine.add(lanes.mesh(pavingMaterial(engine, { variant: 'brick', layout: pavingLayoutGLSL(true) }), 'yujie:brick-lanes'), { castShadow: false });
+  engine.add(road.mesh(pavingMaterial(engine, { layout: pavingLayoutGLSL(), ruts: 1, drains: 1, repairs: 1 }), 'yujie:coursed-imperial-road'), { castShadow: false });
+  engine.add(lanes.mesh(pavingMaterial(engine, { variant: 'brick', layout: pavingLayoutGLSL(true), repairs: 1 }), 'yujie:brick-lanes'), { castShadow: false });
   engine.add(banks.mesh(proceduralMaterial({ name: 'yujie:orchard-soil', params: { roughness: 0.95 },
     // inferred: compacted pale silt with sparse grass, never a continuous lawn.
     color: `float s=cgVnoise2(cgP.xz*2.0); float soilPatch=cgVnoise2(cgP.xz*.37);
@@ -68,5 +68,12 @@ export async function build(engine) {
 
 export async function test(engine) {
   await build(engine);
-  return { views: [YUJIE_VIEWS.avenue, YUJIE_VIEWS.corridor, YUJIE_VIEWS.road, YUJIE_VIEWS.aerial, YUJIE_VIEWS.canal, YUJIE_VIEWS.funnel] };
+  // inferred: normal-perspective diagnostics along the lane at the two eye
+  // heights requested in W2A. These observe the same city and paving at all ranges.
+  // Use the uninterrupted southern reach: both the 40 m and 150 m inspection
+  // distances must remain brick lane, rather than crossing the bridge funnel.
+  const laneX=P.paving.laneTrack-3, z=P.crossings[2]+40;
+  const pavingViews=[1.6,3].map(eye=>({pos:[laneX,P.surfaceY+eye,z],
+    target:[laneX,P.surfaceY+.3,z+150],fov:40,near:.05}));
+  return { views: [YUJIE_VIEWS.avenue, YUJIE_VIEWS.corridor, YUJIE_VIEWS.road, YUJIE_VIEWS.aerial, YUJIE_VIEWS.canal, YUJIE_VIEWS.funnel,...pavingViews] };
 }

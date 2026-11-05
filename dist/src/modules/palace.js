@@ -2,29 +2,35 @@ import * as THREE from 'three';
 import { PALACE as P, PALACE_VIEWS } from '../world/plan.js';
 import { buildHall } from '../yingzao/hall.js';
 import { roofOrnaments } from '../yingzao/ornament.js';
-import { GeometryBatch, meshStats } from '../yingzao/geometry.js';
+import { GeometryBatch } from '../yingzao/geometry.js';
 import { instancePalaceTrees } from '../flora/instances.js';
 import { timberMaterial } from '../materials/timber.js';
 import { tileMaterial } from '../materials/tile.js';
 import { plasterMaterial } from '../materials/plaster.js';
 import { stoneMaterial } from '../materials/stone.js';
-import { pavingMaterial } from '../materials/paving.js';
 import { masonryMaterial } from '../materials/masonry.js';
 import { paintMaterial } from '../yingzao/paint.js';
 import { surfaceMaterial } from '../materials/shared.js';
-import { bake, placed, previewShadowProxy, PlanarLOD, roofVolume } from '../palace/batch.js';
+import { bake, placed, previewShadowProxy, PlanarLOD, roofVolume, palaceStats } from '../palace/batch.js';
 import { terrace, terraceGround, terraceCollision } from '../palace/stonework.js';
-import { courtStone, courtMist } from '../palace/surfaces.js';
+import { courtStone } from '../palace/surfaces.js';
+import { buildCourtMist } from '../palace/mist.js';
+import { courtBounce } from '../palace/bounce.js';
+import { preparePreviewTrees } from '../palace/trees.js';
 
 function materials(engine) {
   // inferred: surface wear and deterministic material variation for a maintained palace in use.
+  // inferred: deep copper-green glaze reflectance. Use the same pigment at every LOD;
+  // the shared, weakly green base glaze turned ochre under the warm morning illuminant.
+  const glaze=new THREE.Color(.45,.9,1.15);
   return {
-    timber: timberMaterial(engine, { baseY: P.groundY, wear: 0.8, variation: 27 }),
-    bracket: paintMaterial(engine, { style: 'wucai', wear: 0.7, variation: 27 }),
+    timber: courtBounce(engine,timberMaterial(engine, { baseY: P.groundY, wear: 0.8, variation: 27 }),P.court),
+    // Use the shared painted-timber palette without the old cyan multiplier.
+    bracket: courtBounce(engine,paintMaterial(engine, { style: 'wucai', wear: 0.55, variation: 27 }),P.court),
     stone: stoneMaterial(engine, { joints: 1, polished: 0.2, wear: 0.7, variation: 27, tint: 0xd7e3ef }),
     plaster: plasterMaterial(engine, { baseY: P.groundY, wear: 0.8, variation: 27 }),
-    tile: tileMaterial(engine, { wear: 0.35, variation: 27, tint: 0xb8ddd4 }),
-    ridge: tileMaterial(engine, { ribbed: false, wear: 0.35, variation: 27, tint: 0xb8ddd4 }),
+    tile: tileMaterial(engine, { variant:'green', tint:glaze, wear:0.35, variation:27 }),
+    ridge: tileMaterial(engine, { variant:'green', tint:glaze, ribbed:false, wear:0.35, variation:27 }),
   };
 }
 
@@ -59,19 +65,19 @@ function hallCollision(fp, model, entry) {
   }
 }
 
-function courtPaving(engine, mist) {
+function courtPaving(engine) {
   const batch=new GeometryBatch();
   // inferred: continuous service paving seven centimetres below court flags; its foundation
   // extends below the plain's relief so enclosure walls and court trees have solid ground.
   const e=P.extent,top=P.groundY-0.04;
   const base=new THREE.Mesh(new THREE.BoxGeometry(e.east-e.west,top+P.groundY,e.south-e.north),
-    mist(courtStone(engine,{service:true})));
+    courtStone(engine,{service:true}));
   base.name='palace-service-ground';
   base.position.set((e.east+e.west)/2,(top-P.groundY)/2,(e.south+e.north)/2);
   engine.add(base,{castShadow:false});
   // inferred: a continuous raised datum joins the rear of 宣德楼 to the gate and court.
-  for(const p of [P.court,P.rearApron,...P.innerCourts])batch.box(p.center,[p.width,0.06,p.depth]);
-  const paving=mist(courtStone(engine));
+  for(const p of [P.court,P.rearApron,...P.innerCourts,...P.serviceCourts])batch.box(p.center,[p.width,0.06,p.depth]);
+  const paving=courtStone(engine);
   const mesh=batch.mesh(paving,'palace-plain-courts');mesh.castShadow=false;
   mesh.userData.castShadow=false;engine.add(mesh);
   return mesh;
@@ -79,6 +85,14 @@ function courtPaving(engine, mist) {
 
 function innerFabric(engine, mats, gallery) {
   const levels=[new THREE.Group(),new THREE.Group(),new THREE.Group()];
+  // Far preview shadows keep roofs and enclosure walls; sub-pixel column rows do not need
+  // separate shadow triangles. This applies to the whole district in every camera.
+  const roofShadow=model=>{
+    const group=new THREE.Group();
+    for(const child of model.lod2.children)if(child.material===mats.tile||child.material===mats.ridge)group.add(child.clone());
+    return group;
+  };
+  const galleryShadow=roofShadow(gallery);
   const plaster=new GeometryBatch(),brick=new GeometryBatch(),tile=new GeometryBatch();
   // inferred: low 3.2 m court partitions, 5.2 m perimeter, and masonry splash courses.
   const addWall=(a,b,height=3.2)=>{
@@ -92,7 +106,7 @@ function innerFabric(engine, mats, gallery) {
   const e=P.extent;
   addWall([e.west,0],[e.west,e.north],5.2);addWall([e.west,e.north],[e.east,e.north],5.2);
   addWall([e.east,e.north],[e.east,0],5.2);
-  for(const court of P.innerCourts) {
+  for(const court of [...P.innerCourts,...P.serviceCourts]) {
     const [x,,z]=court.center,w=court.width/2,d=court.depth/2;
     for(const side of [-1,1]) {
       // inferred: plain enclosure walls, with 8 m side openings into service lanes.
@@ -100,7 +114,14 @@ function innerFabric(engine, mats, gallery) {
       const n=Math.floor((court.width-12)/36);
       for(let i=0;i<n;i++) {
         const entry={position:[x+(i-(n-1)/2)*36,P.groundY,z+side*(d-3.2)],rotation:side>0?Math.PI:0};
-        levels.forEach((g,l)=>g.add(placed(l===0?gallery.lod1.clone():l===1?gallery.far.clone():gallery.lod2.clone(),entry)));
+        levels.forEach((g,l)=>g.add(placed(l===0?gallery.lod1.clone():l===1?gallery.far.clone():galleryShadow.clone(),entry)));
+      }
+      // inferred: return galleries close each inner court in depth as well as across its ends.
+      // Their centres derive from the same documented court footprint; nothing is placed for a view.
+      const returns=Math.floor((court.depth-10)/36);
+      for(let i=0;i<returns;i++) {
+        const entry={position:[x+side*(w-3.2),P.groundY,z+(i-(returns-1)/2)*36],rotation:-side*Math.PI/2};
+        levels.forEach((g,l)=>g.add(placed(l===0?gallery.lod1.clone():l===1?gallery.far.clone():galleryShadow.clone(),entry)));
       }
     }
   }
@@ -109,12 +130,52 @@ function innerFabric(engine, mats, gallery) {
       ...entry,frontBays:Array(entry.bays).fill(entry.bayWidth),sideBays:Array(3).fill(entry.depth/3),
       caiGrade:entry.bays===9?1:entry.bays===7?2:3,tiao:entry.eaves===2?3:2,
     },mats);
-    // The four named ceremonial halls retain LOD1 roofs over walls and from the air.
-    // Lesser 宫署 and galleries use silhouettes outside the inner district.
+    // Every far building keeps curved LOD1 roofs over an enclosed lightweight body.
     const far=roofVolume(model,mats);
-    levels.forEach((g,l)=>g.add(placed(l===0?model.lod1.clone():l===1?far:model.lod2.clone(),entry)));
+    levels.forEach((g,l)=>g.add(placed(l===0?model.lod1.clone():l===1?far:roofShadow(model),entry)));
     engine.footprints.addRect(entry.position[0],entry.position[2],model.footprint.hw,model.footprint.hd,0,'palace-inner-hall');
   }
+  // inferred: repeated inner-office compounds, with a seven-bay hall, two roofed wings and
+  // a three-bay open gateway. Geometry prototypes and their curved roof buffers are shared.
+  const precinctSpecs={
+    hall:{frontBays:Array(7).fill(5.2),sideBays:[7,7],columnHeight:5.4,caiGrade:3,tiao:2,eaves:1},
+    wing:{frontBays:Array(5).fill(6.6),sideBays:[8.4],columnHeight:3.8,caiGrade:4,tiao:1,eaves:1},
+    longWing:{frontBays:Array(7).fill(6),sideBays:[8.4],columnHeight:4.2,caiGrade:3,tiao:1,eaves:1},
+    shortWing:{frontBays:Array(3).fill(3.2),sideBays:[5.4],columnHeight:3.6,caiGrade:6,tiao:1,eaves:1},
+    porch:{frontBays:Array(3).fill(4),sideBays:[3.2],columnHeight:3.5,caiGrade:6,tiao:1,eaves:1},
+    annex:{frontBays:Array(3).fill(4.8),sideBays:[3.6,3.6],columnHeight:4.2,caiGrade:6,tiao:1,eaves:1},
+    gate:{frontBays:Array(3).fill(4),sideBays:[4.8],columnHeight:3.8,caiGrade:6,tiao:1,eaves:1},
+  };
+  const precinctModels=new Map();
+  const precincts=[...P.precincts,...P.rearPrecincts];
+  for(const precinct of precincts) {
+    for(const entry of precinct.halls) {
+      if(!precinctModels.has(entry.kind)) {
+        const wing=entry.kind.endsWith('Wing')||entry.kind==='wing'||entry.kind==='porch',gate=entry.kind==='gate';
+        const fill=gate?{south:['wall','open','wall'],north:['wall','open','wall'],east:'wall',west:'wall'}:
+          wing?{south:'open',north:'wall',east:'open',west:'open'}:
+          {south:entry.kind==='annex'?['lattice','door','lattice']:['lattice','lattice','lattice','door','lattice','lattice','lattice'],
+            north:'wall',east:'wall',west:'wall'};
+        const model=hall(engine,precinctSpecs[entry.kind],mats,{klass:'tingtang',roof:wing?'xuanshan':'wudian',
+          roofClass:wing?'tongwa_langwu':'tongwa_tingtang',rafterDiameter:.0936,bayFill:fill});
+        precinctModels.set(entry.kind,{model,far:roofVolume(model,mats),shadow:roofShadow(model)});
+      }
+      const {model,far,shadow}=precinctModels.get(entry.kind);
+      levels.forEach((g,l)=>g.add(placed((l===0?model.lod1:l===1?far:shadow).clone(),entry)));
+      hallCollision(engine.footprints,model,entry);
+    }
+    const [x,,z]=precinct.center,w=precinct.width/2,d=precinct.depth/2;
+    addWall([x-w,z-d],[x+w,z-d]);
+    // Side passages connect the small courts to the district's transverse service lanes.
+    for(const s of [-1,1]) {
+      if(!P.rearPrecincts.includes(precinct)) {
+        addWall([x+s*w,z-d],[x+s*w,z-4]);addWall([x+s*w,z+4],[x+s*w,z+d]);
+      }
+      addWall([x+s*2,z+d],[x+s*w,z+d]);
+    }
+  }
+  console.log('[palace] office compounds '+JSON.stringify({courts:precincts.length,
+    roofs:precincts.reduce((n,p)=>n+p.halls.length,0),prototypes:precinctModels.size}));
   const walls=new THREE.Group();
   walls.add(plaster.mesh(mats.plaster,'palace-white-walls'));
   walls.add(brick.mesh(masonryMaterial(engine,{topY:3.88,wear:0.8,variation:27}),'palace-wall-footings'));
@@ -125,7 +186,7 @@ function innerFabric(engine, mats, gallery) {
   if(engine.quality.detail<1)for(const visible of bakedLevels.slice(0,2))previewShadowProxy(visible,bakedLevels[2]);
   bakedLevels.slice(0,2).forEach((baked,l)=>{
     // Baked geometry is in world coordinates; the LOD pivot sets only its distance origin.
-    // inferred: only the inner district's nearest 60 m keeps merged timber; distant roofs are silhouettes.
+    // inferred: retain merged frames within 60 m; enclosed far volumes keep curved roofs.
     baked.position.copy(lod.position).negate();lod.addLevel(baked,[0,60][l]);
   });
   return lod;
@@ -134,8 +195,7 @@ function innerFabric(engine, mats, gallery) {
 export async function build(engine) {
   const start=performance.now(),stages={};let last=start;
   const checkpoint=name=>{const now=performance.now();stages[name]=Math.round(now-last);last=now;};
-  const mats=materials(engine),mist=courtMist(engine,P.court),root=new THREE.Group();root.name='大庆殿与宫城';
-  Object.values(mats).forEach(mist);
+  const mats=materials(engine),root=new THREE.Group();root.name='大庆殿与宫城';
   const models=[];
   const main=hall(engine,P.hall,mats,{
     // inferred: a deeper 副阶 gives the lower structural roof a readable slope from the court.
@@ -145,22 +205,26 @@ export async function build(engine) {
   });
   addOrnaments(engine,main,mats,2.2);models.push(main);
   const hero=new PlanarLOD();hero.name='大庆殿';hero.position.set(...P.hall.position);
-  const mainLevels=[main.lod0,main.lod1,main.lod2].map((g,i)=>bake(g,'daqing-hall-LOD'+i));
+  // Low adaptive tiers may choose the final level at this district's normal aerial distance.
+  // Keep the full 举折 roof planes there, over a lightweight enclosed body, as in the other halls.
+  const mainLevels=[main.lod0,main.lod1,roofVolume(main,mats)].map((g,i)=>bake(g,'daqing-hall-LOD'+i));
   if(engine.quality.detail<1) {
     // Preserve the curved LOD1 roof beds; columns and infill use their silhouette geometry.
     const shadow=new THREE.Group();
-    for(const mesh of mainLevels[1].children)if(!mesh.isInstancedMesh&&mesh.material===mats.tile)shadow.add(mesh.clone());
+    for(const mesh of mainLevels[1].children)if(!mesh.isInstancedMesh&&!mesh.isBatchedMesh&&mesh.material===mats.tile)shadow.add(mesh.clone());
     for(const mesh of mainLevels[2].children)if(mesh.material!==mats.tile)shadow.add(mesh.clone());
     previewShadowProxy(mainLevels[0],shadow);
   }
-  // inferred: full timber inside 150 m; merged bearing bands to 600 m, silhouette beyond.
+  // inferred: full timber inside 150 m; merged bearing bands to 1400 m in plan, silhouette beyond.
   mainLevels.forEach((g,i)=>hero.addLevel(g,[0,150,1400][i]));root.add(hero);
   hallCollision(engine.footprints,main,P.hall);
   checkpoint('hero');
 
   const court=new THREE.Group(),shadowCourt=new THREE.Group();court.name='palace-court-fabric';
+  // inferred: exposed balustrade stone has cleaner, lightly polished edges than the stage wall.
+  const railMaterial=stoneMaterial(engine,{wear:.45,polished:.25,variation:29});
   for(const entry of [...P.terraces,...P.towerBases]) {
-    court.add(await terrace(engine,entry,mats.stone,mats.stone));
+    court.add(await terrace(engine,entry,mats.stone,railMaterial));
     shadowCourt.add(await terrace(engine,entry,mats.stone,mats.stone,{rails:false}));
     terraceCollision(engine.footprints,entry);
   }
@@ -169,11 +233,11 @@ export async function build(engine) {
   const gateway=hall(engine,P.gate,mats,{bayFill:gateFill});
   addOrnaments(engine,gateway,mats,1.1);
   court.add(placed(gateway.lod1,P.gate));hallCollision(engine.footprints,gateway,P.gate);models.push(gateway);
-  shadowCourt.add(placed(gateway.lod2,P.gate));
+  shadowCourt.add(placed(roofVolume(gateway,mats),P.gate));
   for(const entry of P.sideGates) {
     const model=hall(engine,entry,mats,{bayFill:{south:['wall','open','wall'],north:['wall','open','wall'],east:'wall',west:'wall'}});
     court.add(placed(model.lod1,entry));hallCollision(engine.footprints,model,entry);models.push(model);
-    shadowCourt.add(placed(model.lod2,entry));
+    shadowCourt.add(placed(roofVolume(model,mats),entry));
   }
   for(const entry of P.towers) {
     const model=hall(engine,entry,mats,{bayFill:'open'});
@@ -188,7 +252,7 @@ export async function build(engine) {
     }
     model.lod1.add(deck.mesh(mats.timber,'measuring-tower-deck'));
     court.add(placed(model.lod1,entry));hallCollision(engine.footprints,model,entry);models.push(model);
-    shadowCourt.add(placed(model.lod2,entry));
+    shadowCourt.add(placed(roofVolume(model,mats),entry));
   }
   const galleryModels=new Map();
   // inferred: 6 m gallery bays, 3.2 m clear depth, low six-grade open timber corridors.
@@ -207,7 +271,7 @@ export async function build(engine) {
   const courtLow=bake(shadowCourt,'palace-court-silhouette');
   if(engine.quality.detail<1)previewShadowProxy(courtMesh,courtLow);
   const courtLOD=new PlanarLOD();courtLOD.name='palace-court';courtLOD.position.set(...P.court.center);
-  // inferred: merged court architecture within 180 m of its centre; outer silhouette beyond.
+  // inferred: merged court architecture within 180 m; enclosed volumes and curved roofs beyond.
   for(const [i,g]of [courtMesh,courtLow].entries()) {
     g.position.copy(courtLOD.position).negate();courtLOD.addLevel(g,[0,180][i]);
   }
@@ -218,24 +282,25 @@ export async function build(engine) {
   // Preserve simplified shadows and the non-casting paving through Engine.add's traversal.
   root.traverse(o=>{if(o.isMesh){o.userData.castShadow=o.castShadow;o.userData.receiveShadow=o.receiveShadow;}});
   engine.add(root);
-  const paving=courtPaving(engine,mist);
+  const paving=courtPaving(engine);
   const previous=engine.groundHeight??(()=>0);
   engine.groundHeight=(x,z)=>{
     for(const entry of [...P.terraces].reverse().concat(P.towerBases)) {
       const y=terraceGround(entry,x,z);if(y!==null)return y;
     }
-    for(const p of [P.court,P.rearApron,...P.innerCourts])
+    for(const p of [P.court,P.rearApron,...P.innerCourts,...P.serviceCourts])
       if(Math.abs(x-p.center[0])<=p.width/2&&Math.abs(z-p.center[2])<=p.depth/2)return p.center[1]+0.03;
     if(x>=P.extent.west&&x<=P.extent.east&&z>=P.extent.north&&z<=P.extent.south)return P.groundY-0.04;
     return previous(x,z);
   };
   const trees=['huai','bai'].map(species=>instancePalaceTrees(engine,P.trees[species],{species,seed:'T7:'+species,height:species==='huai'?11:13}));
-  for(const tree of trees)tree.meshes.forEach(mesh=>mist(mesh.material));
+  trees.forEach(flora=>preparePreviewTrees(engine,flora));
+  const mist=buildCourtMist(engine,P.court);
   checkpoint('pavingTrees');
-  engine.registry.palace={root,hero,courtLOD,models,paving,trees,stats:mainLevels.map(meshStats),stages};
+  engine.registry.palace={root,hero,courtLOD,models,paving,trees,mist,stats:mainLevels.map(palaceStats),stages};
   console.log('[palace] stages ms '+JSON.stringify({...stages,total:Math.round(performance.now()-start),hallPrototypes:hallCaches.get(engine).size}));
   console.log('[palace] main hall LOD geometry '+JSON.stringify(engine.registry.palace.stats));
-  console.log('[palace] court '+JSON.stringify(meshStats(courtMesh)));
+  console.log('[palace] court '+JSON.stringify(palaceStats(courtMesh)));
   return engine.registry.palace;
 }
 

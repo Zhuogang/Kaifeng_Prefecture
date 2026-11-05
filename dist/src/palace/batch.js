@@ -1,5 +1,17 @@
 import * as THREE from 'three';
-import { GeometryBatch, meshStats } from '../yingzao/geometry.js';
+import { GeometryBatch } from '../yingzao/geometry.js';
+
+const compatibleGeometries=new WeakMap();
+function compatible(geometry) {
+  if(geometry.index&&geometry.attributes.memberUV&&geometry.attributes.tileCoord)return geometry;
+  if(!compatibleGeometries.has(geometry)) {
+    // Public ornaments use non-indexed buffers, while hall members use indexed buffers with
+    // construction attributes. Normalize each unique profile once before a material batch.
+    const batch=new GeometryBatch();batch.add(geometry);
+    compatibleGeometries.set(geometry,batch.geometry());
+  }
+  return compatibleGeometries.get(geometry);
+}
 
 // One draw per shared material for static fabric; repeated brackets/rail panels stay instanced.
 export function bake(source, name) {
@@ -50,17 +62,39 @@ export function bake(source, name) {
     }
   }
   for (const [material, batch] of batches) group.add(batch.mesh(material, material.name));
-  for (const e of repeated.values()) {
-    const mesh = new THREE.InstancedMesh(e.geometry, e.material, e.matrices.length);
-    mesh.name = e.name;
-    e.matrices.forEach((m, i) => mesh.setMatrixAt(i, m));
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.computeBoundingSphere();
-    mesh.castShadow = mesh.receiveShadow = true;
-    group.add(mesh);
+  const byMaterial=new Map();
+  for(const e of repeated.values()) {
+    if(!byMaterial.has(e.material))byMaterial.set(e.material,[]);
+    byMaterial.get(e.material).push(e);
   }
-  group.userData.stats = meshStats(group);
+  for(const [material,sourceEntries]of byMaterial) {
+    const entries=sourceEntries.map(e=>({...e,geometry:compatible(e.geometry)}));
+    const vertices=entries.reduce((sum,e)=>sum+e.geometry.attributes.position.count,0);
+    const indices=entries.reduce((sum,e)=>sum+(e.geometry.index?.count??e.geometry.attributes.position.count),0);
+    const count=entries.reduce((sum,e)=>sum+e.matrices.length,0);
+    const mesh=new THREE.BatchedMesh(count,vertices,indices,material);
+    mesh.name='palace-shared:'+material.name;mesh.sortObjects=false;
+    for(const e of entries) {
+      const id=mesh.addGeometry(e.geometry);
+      for(const matrix of e.matrices)mesh.setMatrixAt(mesh.addInstance(id),matrix);
+    }
+    mesh.userData.palaceInstances=entries;
+    mesh.computeBoundingSphere();mesh.castShadow=mesh.receiveShadow=true;group.add(mesh);
+  }
+  group.userData.stats = palaceStats(group);
   return group;
+}
+
+export function palaceStats(group) {
+  let triangles=0,calls=0;
+  group.traverse(o=>{
+    if(!o.isMesh)return;
+    calls++;
+    if(o.isBatchedMesh)for(const e of o.userData.palaceInstances)
+      triangles+=(e.geometry.index?.count??e.geometry.attributes.position.count)/3*e.matrices.length;
+    else triangles+=(o.geometry.index?.count??o.geometry.attributes.position.count)/3*(o.isInstancedMesh?o.count:1);
+  });
+  return{triangles,calls};
 }
 
 // Height alone must not switch an entire district to an almost flat silhouette.
@@ -108,7 +142,9 @@ export function previewShadowProxy(visible, simplified) {
   for (const original of simplified.children) {
     // Bracket paint does not change the overall silhouette; timber bearing bands remain.
     if (original.material.name.startsWith('paint-')) continue;
-    if (original.isInstancedMesh) {
+    if(original.isBatchedMesh)for(const e of original.userData.palaceInstances)
+      for(const matrix of e.matrices)batch.add(e.geometry,original.matrixWorld.clone().multiply(matrix));
+    else if (original.isInstancedMesh) {
       const matrix = new THREE.Matrix4();
       for (let i=0;i<original.count;i++) {
         original.getMatrixAt(i,matrix);

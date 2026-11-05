@@ -27,7 +27,7 @@ transformed.x += sin(position.y * 0.71) * inst.z * position.y * 0.035;
 if ((aFlora.x > 1.5 && aFlora.x < 2.5) || (aFlora.x > 5.5 && aFlora.x < 6.5)) {
   transformed = mix(aOrigin, transformed, step(aFlora.z, inst.y));
 }
-float phase = inst.x + aOrigin.x * 0.4 + aOrigin.z * 0.3;
+float phase = inst.x + aOrigin.x * 0.4 + aOrigin.z * 0.3 + aFlora.z * 6.2831853;
 float wind = aFlora.y * aFlora.y;
 transformed.xz += wind * vec2(0.23 * sin(uFloraTime * 0.85 + phase) + 0.07 * sin(uFloraTime * 1.9 + phase), 0.13 * cos(uFloraTime * 0.63 + phase));
 `;

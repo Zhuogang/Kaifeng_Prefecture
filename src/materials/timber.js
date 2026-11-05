@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { surfaceMaterial } from './shared.js';
 
-/** grainAxis is a WORLD-space fallback; stamped member coordinates align grain with each timber. */
+/** grainAxis is a WORLD-space fallback; stamped member coordinates align grain with each timber.
+ * fadedColor optionally supplies an sRGB pigment colour for the weathered paint layer.
+ */
 export function timberMaterial(engine, o = {}) {
   return surfaceMaterial(engine, `timber-${o.variant ?? 'vermilion'}`, o, /* glsl */`
     float h = max(0.0, cgP.y - t2BaseY);
@@ -27,7 +29,7 @@ export function timberMaterial(engine, o = {}) {
     float painted=${['unpainted','black'].includes(o.variant) ? '0.0' : '1.0'};
     // inferred: faded cinnabar exposes a dull, chalk-rich layer in broad irregular patches.
     float faded=smoothstep(0.34,0.66,macro)*t2Wear*(0.65+0.35*max(cgN.z,0.0))*painted;
-    vec3 washed=mix(t2TimberColor,vec3(0.26,0.19,0.14),0.85);
+    vec3 washed=mix(t2TimberColor,t2FadedColor,0.85);
     t2Albedo = mix(t2TimberColor,washed,faded);
     // inferred: broad rain streaks and sun fading vary over metres, fine grain remains millimetric.
     float rain=t2Noise(cgP*vec3(4.0,0.18,4.0)+t2Variation+9.0);
@@ -50,8 +52,9 @@ export function timberMaterial(engine, o = {}) {
     t2Occlusion = 1.0 - vT2Cavity*0.4-endDirt*0.12-joint*0.08;
   `, {
     uniforms: { t2TimberColor: { value: new THREE.Color(o.color ?? (o.variant === 'black' ? 0x242622 : 0x875442)) },
+      t2FadedColor: { value: o.fadedColor === undefined ? new THREE.Color(0.26,0.19,0.14) : new THREE.Color(o.fadedColor) },
       t2GrainAxis: { value: new THREE.Vector3(...(o.grainAxis ?? [0,1,0])).normalize() } },
     vertexHead: 'attribute float cavity; attribute vec2 memberUV,memberSize; attribute float memberType; varying float vT2Cavity,vT4WoodKind; varying vec2 vT4WoodUV,vT4WoodSize;', vertexPre: 'vT2Cavity = cavity; vT4WoodUV=memberUV; vT4WoodSize=memberSize; vT4WoodKind=memberType;',
-    head: 'uniform vec3 t2TimberColor, t2GrainAxis; varying float vT2Cavity,vT4WoodKind; varying vec2 vT4WoodUV,vT4WoodSize;', attributes: { cavity: [0], memberUV:[0.5,0.5],memberSize:[1,0.25],memberType:[0] }, extraNoise: engine.quality.detail>=1 ? 0 : 1,
+    head: 'uniform vec3 t2TimberColor, t2FadedColor, t2GrainAxis; varying float vT2Cavity,vT4WoodKind; varying vec2 vT4WoodUV,vT4WoodSize;', attributes: { cavity: [0], memberUV:[0.5,0.5],memberSize:[1,0.25],memberType:[0] }, extraNoise: engine.quality.detail>=1 ? 0 : 1,
   });
 }

@@ -29,16 +29,15 @@ const MORNING_GRADE = {
 
 export const TIME_PRESETS = {
   morning: {
-    // inferred: TL2 direct/fill separation and weather, starting from athenaion's
-    // original zenith, cloud extinction and ambient light; the clearing opens
-    // the sky above the city without selecting or reading a validation camera.
-    sun: { azimuth: SUN.azimuth, elevation: SUN.elevation, color: [1.0, 0.62, 0.34], intensity: 18 },
+    // inferred: W5 spectral balance fitted to the measured reference regions.
+    // Direct light stays warmer than the sky fill, without tinting stone orange.
+    sun: { azimuth: SUN.azimuth, elevation: SUN.elevation, color: [1.0, 0.75, 0.45], intensity: 12 },
     sky: { ...MORNING_SKY,
-      // inferred: pale daylight fitted to refs 1/5/8. Reduce the IBL multiplier
-      // as sky radiance rises, retaining warm direct light and cool recesses.
-      uZenith: [0.3, 0.4, 0.52], uSkyFalloff: 4.0,
+      // inferred: a slightly deeper blue zenith and stronger neutral sky fill;
+      // the lower hemisphere represents warm diffuse ground bounce.
+      uZenith: [0.28, 0.4, 0.63], uSkyFalloff: 4.0,
       uSkyLower: [1.4, 1.65, 2.1], uSkyHorizonWidth: 0.06,
-      uGround: [0.5, 0.46, 0.42], uEnvScale: 0.25, uEnvBlue: 0.1,
+      uGround: [0.6, 0.5, 0.4], uEnvScale: 0.8, uEnvBlue: 0.2,
       // inferred: optically thinner, softly sunlit low cumulus; the high veil
       // darkened the bright lower sky into broad grey smudges.
       uCloudCover: 0.26, uCloudScale: 4.0, uCloudBase: 2300, uCloudThick: 800,
@@ -46,10 +45,12 @@ export const TIME_PRESETS = {
       uCloudClearRadius: 12500,
       uCirrus: [0, 7500, 0.6],
     },
-    // inferred: less orange haze and a modest midtone lift, with highlight
-    // headroom for the brighter sky rather than a strong highlight boost.
+    // inferred: remove warm split toning and reduce shadow chroma. One shared
+    // luminance meter balances enclosed and open areas, within its existing
+    // 0.5–2 exposure-gain limits; no validation-camera settings are used.
     atmo: { ...MORNING_ATMO, uHazeColor: [1.2, 1.05, 0.94] },
-    grade: { ...MORNING_GRADE, uExposure: 0.6, uContrast: 1.85, uPivot: 0.55, uToe: 0.8,
+    grade: { ...MORNING_GRADE, uExposure: 0.85, uContrast: 2.1, uPivot: 0.55, uToe: 0.8,
+      uAutoExpo: 2.5, uAutoKey: 0.18, uHighTint: [0, 0, 0], uShadowSat: -0.9,
       uHighlights: 0.15, uAgxPunch: 1.0, uLift: [0.045, 0.045, 0.05], uShadowTint: [0, 0, 0.006],
       uSaturation: 0.96, uVibrance: 0.05, uLtmFine: 0.2, uLtmMid: 0.3, uLtmLarge: 0.18, uSharpen: 0.2 },
   },

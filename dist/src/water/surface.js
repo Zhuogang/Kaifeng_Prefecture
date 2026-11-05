@@ -13,7 +13,10 @@ export function createRiverSurface(engine, river) {
     vec2 delta=cgP.xz-vec2(${b.position[0].toFixed(4)},${b.position[2].toFixed(4)});
     float s=(delta.x*${Math.cos(b.yaw).toFixed(6)}-delta.y*${Math.sin(b.yaw).toFixed(6)})/${(b.length/2).toFixed(4)};
     float across=delta.x*${Math.sin(b.yaw).toFixed(6)}+delta.y*${Math.cos(b.yaw).toFixed(6)};
-    if(abs(s)<0.985 && abs(across)<${(b.width/2).toFixed(4)}*(1.0-0.72*pow(abs(s),3.0))-0.035)discard;
+    // Cut the hull at the river plane, not at its wider gunwale: the latter
+    // exposed empty wedges outside the immersed bow when seen from the west.
+    float immersed=clamp((${(river.waterY-b.position[1]+.24).toFixed(4)}-.18*pow(abs(s),3.0))/.69,0.0,1.0);
+    if(abs(s)<0.985 && abs(across)<${(b.width/2).toFixed(4)}*(1.0-0.72*pow(abs(s),3.0))*(.57+.43*immersed)-0.035)discard;
   }`).join('\n');
   const mat=proceduralMaterial({ name:'bianhe-silt-water',type:'physical',
     params:{roughness:0.17,metalness:0,ior:1.333,color:0xffffff},
@@ -28,23 +31,32 @@ export function createRiverSurface(engine, river) {
           float pier=length(max(abs(grid)-vec2(.31,.34),vec2(0.0)));
           d=min(d,pier);
         }
-        return exp(-d*6.0);
+        return exp(-d*4.0);
       }
       vec3 riverPlanar(vec3 p) {
         vec4 projected=riverReflectionMatrix*vec4(p,1.0);vec2 uv=projected.xy/projected.w;
         uv+=riverNormal.xz*0.060;
-        vec2 pixel=riverReflectionPixel*0.65;
-        return (texture2D(riverReflection,uv+pixel).rgb+texture2D(riverReflection,uv-pixel).rgb)*0.5;
+        // inferred: a half-texel reconstruction filter retains legible piers and
+        // boats. The calm surface needs no extra broad mip blur over its reflection.
+        vec2 pixel=riverReflectionPixel*0.25;
+        return (texture2D(riverReflection,uv+pixel).rgb
+          +texture2D(riverReflection,uv-pixel).rgb)*0.5;
       }`,
     color:`${boatCuts} float edge=riverHalfWidth-abs(cgP.z-riverCentre);
       float depth=2.2*(1.0-exp(-max(edge,0.0)*1.8));
-      vec3 bed=vec3(0.12,0.103,0.052),body=vec3(0.047,0.064,0.025);
-      vec3 trans=exp(-vec3(1.9,1.35,2.5)*depth);
-      diffuseColor.rgb=mix(body,bed,trans)*(0.90+0.20*cgVnoise2(cgP.xz*0.38))*(1.0-riverContact(cgP)*.42);`,
-    normal:`vec2 q=cgP.xz*vec2(2.4,9.0)+vec2(riverTime*0.07,riverTime*0.02);
+      // inferred: suspended sediment varies along slow east-west currents; these
+      // optical coefficients are independent of lighting, exposure and viewpoint.
+      vec2 flow=cgP.xz-vec2(riverTime*.03,0.0);
+      float silt=cgVfbm2(flow*vec2(.045,.16),3);
+      vec3 bed=vec3(0.12,0.103,0.052),body=mix(vec3(.043,.059,.031),vec3(.081,.071,.038),smoothstep(.28,.72,silt));
+      vec3 trans=exp(-mix(vec3(1.9,1.35,2.5),vec3(2.5,1.8,2.6),silt)*depth);
+      diffuseColor.rgb=mix(body,bed,trans)*(0.94+0.12*cgVnoise2(cgP.xz*.38))*(1.0-riverContact(cgP)*.55);`,
+    // inferred: millimetre, irregular capillary ripples without coherent wave
+    // trains or stretched noise. Their short correlation cannot form river-long stripes.
+    normal:`vec2 q=cgP.xz*5.5+vec2(riverTime*0.045,riverTime*0.032);
       float fp=max(length(dFdx(q)),length(dFdy(q)));
-      float h=(cgVnoise2(q)-0.5)*0.004*(1.0-smoothstep(0.4,1.5,fp));
-      h+=(cgVnoise2(q*2.7+vec2(19.3,6.7))-0.5)*0.0009*(1.0-smoothstep(0.3,1.0,fp*2.7));
+      float h=(cgVnoise2(q)-0.5)*0.0022*(1.0-smoothstep(0.4,1.5,fp));
+      h+=(cgVnoise2(q*1.9+vec2(19.3,6.7))-0.5)*0.0006*(1.0-smoothstep(0.3,1.0,fp*1.9));
       vec3 dx=dFdx(cgP),dy=dFdy(cgP),n=vec3(0,1,0),r1=cross(dy,n),r2=cross(n,dx);
       float det=dot(dx,r1);vec3 grad=sign(det)*(dFdx(h)*r1+dFdy(h)*r2);
       riverNormal=normalize(max(abs(det),1e-9)*n-grad);cgBump=riverNormal-n;`,
@@ -55,7 +67,7 @@ export function createRiverSurface(engine, river) {
     compile(shader,renderer);
     shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_end>',`#include <lights_fragment_end>
       float fresnel=0.0204+0.9796*pow(1.0-clamp(dot(normalize(riverNormal),cgV),0.0,1.0),5.0);
-      reflectedLight.indirectSpecular=mix(reflectedLight.indirectSpecular,riverPlanar(cgP)*fresnel*(1.0-riverContact(cgP)*.25),riverReflectionOn);`);
+      reflectedLight.indirectSpecular=mix(reflectedLight.indirectSpecular,riverPlanar(cgP)*fresnel*(1.0-riverContact(cgP)*.50),riverReflectionOn);`);
   };
   mat.userData.shaderKey+=':planar-river';mat.customProgramCacheKey=()=>mat.userData.shaderKey;
   const g=new THREE.PlaneGeometry(river.halfLength*2,river.width,256,12).rotateX(-Math.PI/2);

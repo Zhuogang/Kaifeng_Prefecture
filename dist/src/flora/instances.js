@@ -7,11 +7,11 @@ import { instancePetals } from './groundcover.js';
  * width, density, phase, tilt:[x,z]}. World callers supply plan.js positions.
  * LOD is distance-based in every camera, including moving explore cameras.
  */
-export function instanceTrees(engine, species, positions, { seed = species, height, collision = true, petals = true, materials = floraMaterials(engine) } = {}) {
+export function instanceTrees(engine, species, positions, { seed = species, height, crownWidth, collision = true, petals = true, materials = floraMaterials(engine) } = {}) {
   // inferred: bounded size/width/tint/phase variation and a small branch-shape warp.
   const rng=engine.rng('flora:'+seed);
   const builder=species==='willow'?buildWillow:BLOSSOMS[species]?buildBlossom:buildPalaceTree;
-  const model=builder({seed,species,height,rng:engine.rng('flora-model:'+seed)});
+  const model=builder({seed,species,height,crownWidth,rng:engine.rng('flora-model:'+seed)});
   const n=positions.length, group=new THREE.Group();
   group.name='flora:'+species;
   const items=positions.map((entry,i)=>{

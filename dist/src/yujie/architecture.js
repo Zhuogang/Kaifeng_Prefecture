@@ -28,7 +28,10 @@ export function buildCorridors(engine) {
     };
     material.userData.shaderKey += ':yujie-bay-wear';
   }
-  const spec = { ...hallTestSpec('corridor'), columnHeight: P.corridor.columnHeight, bayFill: 'open' };
+  // inferred: this official 御廊 uses structural 五铺作 (two jumps), rather than
+  // the one-jump small-corridor laboratory model. All arm/block dimensions and
+  // the matching roof bearing height remain generated from 营造法式.
+  const spec = { ...hallTestSpec('corridor'), tiao: 2, columnHeight: P.corridor.columnHeight, bayFill: 'open' };
   const hall = buildHall(spec, engine, { timber, bracket: timber, tile, ridge: tile, stone: floor, plaster });
   // Keep real public 铺作 independently instanced: selecting the shell LOD by a
   // 32 m module centre previously hid the brackets on nearby corridor bays.
@@ -57,7 +60,7 @@ export function buildCorridors(engine) {
       for (let i = 0; i < count; i++) {
         const x = sign * P.corridor.centerX, z = start + (i + 0.5) * length, yaw = sign * Math.PI / 2;
         const scale = length / localLength;
-        const m = matrix([x, P.surfaceY, z], yaw, [scale, 1, 1]); entries.push({ matrix: m });
+        const m = matrix([x, P.surfaceY, z], yaw, [scale, 1, 1]); entries.push({ matrix: m, yaw });
         modules.push({ x, start: start + i * length, end: start + (i + 1) * length });
         for (const obstacle of hall.footprint.obstacles) {
           const point = new THREE.Vector3(obstacle.x, 0, obstacle.z).applyMatrix4(m);
@@ -78,17 +81,23 @@ export function buildCorridors(engine) {
   const shadowGeometry=shadowBatch.geometry();
   const group = instanceLods(engine, 'yujie:corridors', levels, entries, [28, 140],
     {shadowLevels:[[shadowGeometry],[shadowGeometry],[]]});
-  // inferred: subdued 碾玉装 on the official gallery's large structural brackets,
-  // kept distinct from vermilion columns so the actual rolled arms read below the eaves.
-  const paint=paintMaterial(engine,{style:'nianyu',wear:.86,tint:new THREE.Color().setRGB(1.6,1.65,1.35)}), brackets=[];
+  // inferred: the official gallery uses faded 五彩遍装: red/ochre grounds
+  // with the shared paint family's softened blue-green 叠晕 at member edges.
+  const paint=paintMaterial(engine,{style:'wucai',wear:.86}), brackets=[];
   for(const kind of ['zhutou','bujian','zhuanjiao']) {
     const sets=[];
-    for(const entry of entries) for(const set of hall.layout.sets.filter(s=>s.kind===kind))
-      sets.push({matrix:entry.matrix.clone().multiply(matrix([set.x,set.y,set.z],set.angle))});
+    for(const entry of entries) for(const set of hall.layout.sets.filter(s=>s.kind===kind)) {
+      const position=new THREE.Vector3(set.x,set.y,set.z).applyMatrix4(entry.matrix);
+      // Fit set positions to the gallery run without scaling the prescribed
+      // 材 sections or 72/62/92 分 arms themselves.
+      sets.push({matrix:matrix(position.toArray(),entry.yaw+set.angle)});
+    }
     const detail=bracketGeometry(hall.layout.spec,kind), proxy=bracketGeometry({...hall.layout.spec,shadowProxy:true},kind);
     brackets.push(instanceLods(engine,'yujie:puzuo:'+kind,
       [[{geometry:detail,material:paint}],[{geometry:proxy,material:paint}],[]],sets,[80,140],
-      {shadowLevels:[[proxy],[proxy],[]]}));
+      // inferred: preview bearing/roof shadows are supplied by the shell's
+      // merged structural proxy; stills additionally shadow each rolled arm.
+      {shadow:engine.quality.detail>=1,shadowLevels:[[proxy],[proxy],[]]}));
   }
   console.log('[yujie] corridor shells '+JSON.stringify(levels.map(parts=>parts.reduce((sum,p)=>sum+(p.geometry.index?.count??p.geometry.attributes.position.count)/3,0))));
   return { group, brackets, modules, floorY: P.surfaceY + spec.platform.height };

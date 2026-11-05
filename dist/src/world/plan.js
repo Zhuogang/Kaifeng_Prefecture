@@ -176,13 +176,11 @@ export const PALACE = palaceEntry({
     ...[-1, 1].flatMap(sign => [70, 106].map(x => palaceEntry({ position: [sign * x, 0.68, -358], bays: 6 }))),
   ],
   innerHalls: [
-    palaceEntry({ name: '文德殿', position: [-106, 0.68, -426], bays: 7, bayWidth: 6.2, depth: 18, columnHeight: 6.6, eaves: 1 }),
-    palaceEntry({ name: '紫宸殿', position: [72, 0.68, -476], bays: 9, bayWidth: 6.4, depth: 23, columnHeight: 7.8, eaves: 2 }),
-    palaceEntry({ name: '垂拱殿', position: [-116, 0.68, -552], bays: 7, bayWidth: 5.6, depth: 16, columnHeight: 5.8, eaves: 1 }),
-    palaceEntry({ name: '皇仪殿', position: [128, 0.68, -593], bays: 7, bayWidth: 6, depth: 20, columnHeight: 6.4, eaves: 1 }),
-    ...[-1, 1].flatMap(sign => [145, 235, 325, 415, 505, 595].map((z, i) =>
-      palaceEntry({ name: '宫署', position: [sign * (i % 2 ? 256 : 234), 0.68, -z],
-        bays: 5, bayWidth: 5.2, depth: 12, columnHeight: 4.6, eaves: 1 }))),
+    // inferred: north-end placement within the rear courts, leaving smaller courts in front.
+    palaceEntry({ name: '文德殿', position: [-86, 0.68, -484], bays: 7, bayWidth: 6.2, depth: 18, columnHeight: 6.6, eaves: 1 }),
+    palaceEntry({ name: '紫宸殿', position: [86, 0.68, -535], bays: 9, bayWidth: 6.4, depth: 23, columnHeight: 7.8, eaves: 2 }),
+    palaceEntry({ name: '垂拱殿', position: [-86, 0.68, -616], bays: 7, bayWidth: 5.6, depth: 16, columnHeight: 5.8, eaves: 1 }),
+    palaceEntry({ name: '皇仪殿', position: [86, 0.68, -624], bays: 7, bayWidth: 6, depth: 20, columnHeight: 6.4, eaves: 1 }),
   ],
   innerCourts: [
     ...[-1, 1].flatMap(sign => [175, 265, 355, 445, 535, 625].map(z =>
@@ -200,9 +198,71 @@ export const PALACE = palaceEntry({
   },
 });
 
+// inferred: W3P subdivides the broad side precincts and front service aprons into office courts.
+// 东京梦华录 卷一 大内/内诸司 supports numerous halls and offices, not this unsurveyed layout.
+// The great audience court, district bounds and named inner halls retain their original dimensions.
+PALACE.serviceCourts = [-1,1].map(sign=>palaceEntry({center:[sign*243,PALACE.groundY,-77],width:190,depth:86}));
+PALACE.precincts = [...PALACE.innerCourts.slice(0,12),...PALACE.serviceCourts].flatMap((court,index) => [-1,1].map(side => {
+  const [cx,y,z]=court.center,x=cx+side*43,depth=court.depth-10,compact=depth<60;
+  const entry=(role,position,extra={})=>palaceEntry({name:'内诸司院落-'+index+'-'+side+'-'+role,position,...extra});
+  return palaceEntry({center:[x,y,z],width:78,depth,
+    halls:[
+      entry('正堂',[x,y,z-depth/2+14],{kind:'hall'}),
+      ...[-1,1].map(s=>entry('廊屋',[x+s*29,y,z+(compact?3:7)],{kind:compact?'shortWing':'wing',rotation:-s*Math.PI/2})),
+      entry('院门',[x,y,z+depth/2-9],{kind:'gate'}),
+      ...[-1,1].map(s=>entry('门廊',[x+s*25,y,z+depth/2-9],{kind:'porch'})),
+    ],
+  });
+}));
+
+// inferred: two modest reception courts flank the rear gate approach, leaving the
+// axial passage and 宣德楼's stair landings clear rather than paving the whole apron empty.
+PALACE.precincts.push(...[-1,1].map(sign=>{
+  const x=sign*(PALACE.rearApron.width/2-35),[,,z]=PALACE.rearApron.center,y=PALACE.groundY;
+  return palaceEntry({center:[x,y,z],width:66,depth:50,halls:[
+    palaceEntry({position:[x,y,z-13],kind:'annex'}),
+    ...[-1,1].map(side=>palaceEntry({position:[x+side*22,y,z+4],kind:'porch',rotation:-side*Math.PI/2})),
+    palaceEntry({position:[x,y,z+15],kind:'gate'}),
+  ]});
+}));
+
+// inferred: named rear halls stand at the north of their existing courts; smaller side
+// offices and roofed returns subdivide the remaining paving. Only 大庆殿 keeps its vast forecourt.
+PALACE.rearPrecincts = PALACE.innerCourts.slice(12).map(court=>{
+  const [x,y,z]=court.center,w=court.width/2,d=court.depth/2,compact=court.depth<80;
+  const halls=[palaceEntry({position:[x,y,z+d-14],kind:'gate'})];
+  for(const side of [-1,1]) {
+    const zs=compact?[z+2]:[z-d+51,z+d-37];
+    for(const zz of zs)halls.push(palaceEntry({position:[x+side*(w-19),y,zz],
+      kind:compact?'shortWing':'longWing',rotation:-side*Math.PI/2}));
+    if(!compact)for(const offset of [-16,16])halls.push(palaceEntry({position:[x+side*25,y,z+offset],kind:'annex'}));
+  }
+  return palaceEntry({...court,halls});
+});
+
+// inferred: dark 槐/柏 clumps in the open pockets of the inferred courts. Offsets leave
+// gateways, side passages, roofs and the great court's central processional space clear.
+const palaceClump=(x,z,offsets,scale=1)=>offsets.map(([dx,dz],i)=>({
+  position:[x+dx,PALACE.groundY+.03,z+dz],scale:scale*(.9+i*.065),width:.94,
+  tint:[.18,.35,.29],evidence:'inferred',source:'W4P / ART_BIBLE: 槐 and 柏 in palace courts; planting inferred',
+}));
+for(const p of PALACE.precincts) {
+  // The short northern compounds are already roof-filled; their entrances have no crown clearance.
+  if(p.width>70&&p.depth<60)continue;
+  const [x,,z]=p.center;
+  PALACE.trees.huai.push(...palaceClump(x,z,p.width<70?[[-8,-1],[-11,3],[-7,6]]:[[-10,0],[-6,5],[-13,8]],p.width<70?.8:.95));
+}
+for(const p of PALACE.rearPrecincts)for(const side of [-1,1]) {
+  const [x,,z]=p.center;
+  PALACE.trees.huai.push(...palaceClump(x+side*42,z,[[0,0],[-side*3,5],[side*1,-5]],.95));
+}
+for(const side of [-1,1])for(const z of [-140,-207,-272])
+  PALACE.trees.huai.push(...palaceClump(side*117,z,
+    [[0,0],[side*4,5],[-side*1,9],[-side*10,3],[-side*16,9],[-side*9,14]],1));
+
 export const PALACE_VIEWS = {
   // inferred: ref8-like frontal inspection inside the vast court, plus an eye-height long view.
-  front: { pos: [0, 2.31, -240], target: [0, 12.5, -320], fov: 58, near: 0.1 },
+  front: { pos: [0, 5.6, -258], target: [0, 12, -320], fov: 64, near: 0.1 },
   court: { pos: [8, 2.31, -115], target: [0, 9, -320], fov: 65, near: 0.1 },
   aerial: { pos: [85, 130, 90], target: [0, 12, -250], fov: 46, near: 0.1 },
   terrace: { pos: [32, 5.43, -291], target: [0, 10, -307], fov: 66, near: 0.05 },
@@ -220,14 +280,22 @@ export const CITY = {
   // inferred: W1 packed courtyard morphology; coverage is measured from the roof
   // rectangles, not increased by shrinking the 312 m avenue or palace reservation.
   fabric: {courtWidth:24, courtDepth:27, outerCourtWidth:29, outerCourtDepth:31,
-    lane:3.4, roofFraction:.95, northDepth:.30, southDepth:.24, wingDepth:.27,
+    lane:3.4, roofFraction:.97, northDepth:.35, southDepth:.30, wingDepth:.33,
     roofHalfWidth:7.8808, roofHalfDepth:4.3164, cornerLift:.12},
+  lighting: {corridorSpacing:16, corridorInset:1.4, lanternHeight:2.7,
+    // inferred: one permanent lamp every two gallery bays, on both wings.
+    galleryOffsets:[-18,-6,6,18].map(z=>[-4.2,3.1,z]),galleryIntensity:55,
+    // inferred: lamps also hang from the forward pavilion's south eave,
+    // illuminating its actual walk and wall rather than a validation viewpoint.
+    pavilionOffsets:[[-6.4,6.5,0],[-6.4,6.5,5.2],[0,6.5,5.2],[6.4,6.5,5.2]],pavilionIntensity:35,
+    officeOffsets:[[-3,2.8,5.2],[3,2.8,5.2]],
+    evidence:'inferred',source:'W1/W2C city: permanent hanging lanterns and warm gallery spill, lit only at bluehour'},
   evidence: 'inferred', source: 'T8: inner city approximately x ±1400, z ±1300, outer city to 4 km; ART_BIBLE avenue/palace reservations',
   offices: [
-    {name:'明堂颁朔布政府',position:[-228,0,112],halfWidth:48,halfDepth:46},
-    {name:'秘书省',position:[228,0,112],halfWidth:48,halfDepth:46},
-    {name:'景灵西宫',position:[-235,0,272],halfWidth:55,halfDepth:55},
-    {name:'景灵东宫',position:[235,0,272],halfWidth:55,halfDepth:55},
+    {name:'明堂颁朔布政府',position:[-270,0,91],halfWidth:100,halfDepth:76},
+    {name:'秘书省',position:[270,0,91],halfWidth:100,halfDepth:76},
+    {name:'景灵西宫',position:[-270,0,280],halfWidth:100,halfDepth:88},
+    {name:'景灵东宫',position:[270,0,280],halfWidth:100,halfDepth:88},
   ].map(o=>({...o,evidence:'inferred',source:'ART_BIBLE: named offices opposite 掖门 and along avenue; exact compound footprints inferred'})),
   houseSpec: {frontBays:[2.8,2.8,2.8,2.8,2.8],sideBays:[4.2],caiGrade:8,klass:'yuwu',tiao:1,
     columnHeight:2.9,roof:'xuanshan',tile:'banwa',jiaPerSlope:2,platform:{height:.18,margin:.3},
@@ -235,7 +303,25 @@ export const CITY = {
   officeSpec: {frontBays:[4.2,4.6,5,4.6,4.2],sideBays:[3.5,3.5],caiGrade:5,klass:'tingtang',tiao:2,
     columnHeight:5.2,roof:'wudian',tile:'banwa',platform:{height:.8,margin:1.1},
     bayFill:{south:'lattice',north:'wall',east:'wall',west:'wall'}},
+  // inferred: W3C replaces four tiny halls in each large reserved plate with
+  // six connected courts, a principal hall, offices, entrance halls and side ranges.
+  officeFabric:{columns:[-65,0,65],rows:[-35,35],referenceHalfDepth:76,surfaceY:YUJIE.surfaceY+.04,
+    northOffset:21,southOffset:24,wingOffset:24,wingZ:4,
+    entranceWidth:6,treeOffset:[10,6],lodDistances:[0,190,1100],
+    evidence:'inferred',source:'W3C: office compound reconstruction; street and river clearances retained'},
 };
+// inferred: bay counts, sizes and compound architecture are reconstructed; the
+// named institutions and avenue-side ordering follow 东京梦华录 卷二.
+CITY.officeModels={
+  principal:{...CITY.officeSpec,frontBays:[5.4,6,6.6,7.2,6.6,6,5.4],sideBays:[4.5,4.5,4.5,4.5],
+    caiGrade:3,tiao:3,columnHeight:6.2},
+  hall:{...CITY.officeSpec,frontBays:[5.2,5.2,5.2,5.6,5.2,5.2,5.2],sideBays:[5,5,5],columnHeight:5.2},
+  gate:{...CITY.officeSpec,frontBays:[4.4,4.4,4.8,5.2,4.8,4.4,4.4],sideBays:[4,4],
+    columnHeight:3.9,roof:'xuanshan',caiGrade:6,tiao:1},
+  range:{...CITY.officeSpec,frontBays:[4,4,4.4,4,4],sideBays:[3,3],columnHeight:3.8,
+    roof:'xuanshan',caiGrade:6,tiao:1,bayFill:{south:'open',north:'wall',east:'wall',west:'wall'}},
+};
+for(const spec of Object.values(CITY.officeModels))Object.assign(spec,{evidence:'inferred',source:CITY.officeFabric.source});
 export const CITY_WALLS = {
   evidence:'inferred',source:'东京梦华录 卷一 旧京城: named gates; T8: reconstructed inner-city enclosure and flat-lintel 朱雀门',
   halfWidth:1400,north:-1300,south:1300,height:7.2,depth:6,batter:.08,
@@ -253,9 +339,19 @@ export const TIETA = {
   profile:{baseRadius:4.8,topRadius:2.1,baseHeight:.6,firstStorey:5,storey:3.5,eaveProjection:.86},
 };
 export const CITY_VIEWS = {
-  aerial:{pos:[150,300,300],target:[180,20,-350],fov:75,near:.5},
-  gallery:{pos:[47.4,30,25],target:[-70,1,630],fov:75,near:.1,time:'bluehour'},
+  aerial:{pos:[250,170,300],target:[100,0,-150],fov:75,near:.5,time:'morning'},
+  // inferred: elevated camera over the 12 m east gallery walk, below the actual
+  // pavilion eave. Its outward/downward view clears the rail and shows both canals.
+  gallery:{pos:[43.35,17.5,53],target:[100,-25,350],fov:82,near:.1,time:'bluehour'},
   avenue:{pos:[-120,YUJIE.surfaceY+1.6,690],target:[270,7,820],fov:62,near:.1},
   roofs:{pos:[630,200,780],target:[270,0,180],fov:57,near:.1},
-  evidence:'inferred',source:'T8: 300 m aerial and gallery validation framings; no content consumes these cameras',
+  evidence:'inferred',source:'W2C/W3C validation framings; no content consumes these cameras; lead shot 4 is defined separately in shots.js',
+};
+
+// inferred: W4A's additional avenue-side blossom rows stand clear of gallery
+// eaves and cross-street openings. The textual near-canal orchard stays intact.
+export const YUJIE_GALLERY_PLANTING = {
+  centerX: YUJIE.section.blackFence - YUJIE.planting.height * .6,
+  spacing: YUJIE.corridor.bay * 5,
+  evidence: 'inferred', source: 'W4A: corridor-side blossom rows requested for the open gallery elevations; exact position and interval reconstructed',
 };

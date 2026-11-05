@@ -19,3 +19,4 @@ MODULE_ORDER.push('palace');
 MODULE_ORDER.push('yujie');
 
 MODULE_ORDER.push('city', 'walls', 'tieta');
+MODULE_ORDER.push('flora');

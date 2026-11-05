@@ -78,7 +78,7 @@ export function buildBlossom({ seed = 'blossom', species = 'peach', height = 6, 
   function grow(start,dir,length,radius,depth) {
     const end=start.clone().addScaledVector(dir,length),mid=mix(start,end,0.48).add(V(rng.range(-0.025,0.025)*h,-0.018*h,rng.range(-0.025,0.025)*h));
     const branch={path:[start,mid,end],radius,depth};branches.push(branch);
-    if(depth>=2) sprays.push({p:mix(mid,end,0.65),dir,depth,random:rng.random()});
+    sprays.push({p:mix(mid,end,0.65),dir,depth,random:rng.random()});
     if(depth===4)return;
     const yaw=Math.atan2(dir.z,dir.x);
     for(let k=0;k<(depth===0?3:2);k++) {
@@ -89,28 +89,51 @@ export function buildBlossom({ seed = 'blossom', species = 'peach', height = 6, 
   }
   for(let j=0;j<7;j++) {
     const a=j*2.399+rng.range(-0.3,0.3);
-    grow(trunk[2].clone(),V(Math.cos(a),rng.range(0.6,1.1),Math.sin(a)).normalize(),h*sp.spread*rng.range(0.65,0.9),h*0.018,0);
+    // inferred: stagger the scaffold forks down the upper trunk, with flowering
+    // laterals throughout the crown instead of a single bare stem and top tuft.
+    grow(mix(trunk[1],trunk[2],rng.range(0.5,1)),V(Math.cos(a),rng.range(0.6,1.1),Math.sin(a)).normalize(),h*sp.spread*rng.range(0.65,0.9),h*0.018,0);
+  }
+  // inferred: short flowering laterals along the older scaffold wood fill the
+  // lower/inner crown. Keep their woody shoots up close; the middle LOD uses
+  // the same twig-and-flower sprays instead of a bare fan under terminal tufts.
+  const laterals=[];
+  for(const branch of branches.filter(b=>b.depth<=1)) {
+    const [start,mid,end]=branch.path,dir=end.clone().sub(start),yaw=Math.atan2(dir.z,dir.x);
+    for(const t of branch.depth===0?[0.22,0.42,0.62]:[0.35]) {
+      const base=t<0.5?mix(start,mid,t*2):mix(mid,end,(t-0.5)*2),a=yaw+rng.range(-0.8,0.8);
+      const tip=base.clone().addScaledVector(V(Math.cos(a)*0.6,rng.range(0.55,0.95),Math.sin(a)*0.6).normalize(),h*rng.range(0.08,0.14));
+      laterals.push([base,tip]);
+      sprays.push({p:mix(base,tip,0.7),depth:-1,random:rng.random()});
+    }
   }
   const gs=[new Geometry(),new Geometry(),new Geometry()];
   for(let l=0;l<2;l++) {
     const g=gs[l],r=rng.fork('blossoms-lod'+l);
     g.tube(trunk,[h*0.034,h*0.024,h*0.019],wood,{sides:l?5:11,gnarl:0.35,smooth:l?1:3});
     for(const b of branches) {
-      if(l && b.depth>0)continue;
+      if(l && b.depth>1)continue;
       g.tube(b.path,[b.radius,b.radius*0.6,b.radius*0.19],wood,{sides:l?3:b.depth<2?6:3,smooth:l?1:2,sway:b.depth*0.06,gnarl:0.2});
     }
+    if(!l)for(const path of laterals)g.tube(path,[h*0.0018,h*0.0004],wood,{sides:5,smooth:1,sway:0.2});
+    let tip=0;
     sprays.forEach(s=>{
-      if(l && s.depth!==3)return;
+      // inferred: the middle LOD retains secondary branches and flowers at
+      // every crown tier, retaining one in four terminal shoots. Two simple
+      // crossed sprays plus an individual bloom keep the 100-tree row cheap.
+      if(l && (s.depth===0 || (s.depth===4 && tip++%4)))return;
       if(l) {
-        for(let k=0;k<2;k++) {
-          const q=point(r,s.p,h*0.012),size=h*0.20*r.range(0.85,1.2);
-          g.card(q,size,size*1.06,V(...r.sphere()),tint(petal,r),{kind:6,roll:r.range(0,TAU),sway:0.3,random:s.random,ao:0.68+r.random()*0.3});
+        // inferred: overlapping inner laterals need one spray; exposed outer
+        // shoots retain crossed sprays for a full silhouette from every side.
+        for(let k=0;k<(s.depth<0?1:2);k++) {
+          const q=point(r,s.p,h*0.012),size=h*0.18*r.range(0.85,1.2);
+          g.card(q,size,size*1.06,V(...r.sphere()),tint(petal,r),{kind:6,roll:r.range(0,TAU),sway:0.3,random:s.random,ao:0.68+r.random()*0.3,segments:1});
         }
+        g.flower(s.p,sp.flower,V(...r.sphere()),petal,0.3,s.random,-1);
       } else {
         // inferred: individual tiny flowers occupy all five branching orders at
         // walking distance; the middle/far LODs aggregate them into alpha sprays.
-        g.card(s.p,h*0.10,h*0.105,V(...r.sphere()),petal,{kind:6,roll:r.range(0,TAU),sway:0.3,random:s.random,ao:0.85});
-        for(let k=0;k<76;k++) {
+        g.card(s.p,h*0.12,h*0.126,V(...r.sphere()),petal,{kind:6,roll:r.range(0,TAU),sway:0.3,random:s.random,ao:0.85});
+        for(let k=0;k<56;k++) {
           const d=V(...r.sphere()),q=s.p.clone().addScaledVector(d,h*r.range(0.006,0.065));
           g.flower(q,sp.flower*r.range(0.7,1.1),d,tint(petal,r),0.3,s.random,-1);
           if(k%40===0)g.leaf(q,h*0.012,h*0.004,V(...r.sphere()),color('#9ba67d'),0.3,r.range(0,TAU));

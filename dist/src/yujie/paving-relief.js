@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { YUJIE as P } from '../world/plan.js';
-import { pavingMaterial } from '../materials/paving.js';
+import { pavingMaterial, PAVING_BRICK_SIZE, PAVING_STONE_SIZE, PAVING_ROW_JITTER } from '../materials/paving.js';
 import { reaches, plazaEnd, onXuandeStructure, pavingLayoutGLSL } from './layout.js';
 
 const fract = x => x - Math.floor(x);
@@ -31,7 +31,7 @@ export function addPavingRelief(engine) {
   const geometry = dressedTop(), matrix = new THREE.Matrix4();
   const meshes = [false, true].map(brick => {
     const mesh = new THREE.InstancedMesh(geometry, pavingMaterial(engine, {
-      variant: brick ? 'brick' : 'bluestone', layout: pavingLayoutGLSL(brick), ruts: 1, drains: 1,
+      variant: brick ? 'brick' : 'bluestone', layout: pavingLayoutGLSL(brick), ruts: 1, drains: 1, repairs: 1,
     }), 3000);
     mesh.count = 0; group.add(mesh); return mesh;
   });
@@ -41,13 +41,15 @@ export function addPavingRelief(engine) {
     if (p.x === last[0] && p.y === last[1] && p.z === last[2]) return;
     last = p.toArray();
     meshes.forEach((mesh, kind) => {
-      let count = 0; const sx = kind ? .36 : .624, sz = kind ? .18 : .468, radius = 6;
+      let count = 0; const [sx,sz] = kind ? PAVING_BRICK_SIZE : PAVING_STONE_SIZE, radius = 6;
       if (p.y - engine.groundHeight(p.x, p.z) < 8) {
-        const row0 = Math.floor((p.z - radius) / sz), row1 = Math.ceil((p.z + radius) / sz);
-        const cell0 = Math.floor((p.x - radius) / sx) - 1, cell1 = Math.ceil((p.x + radius) / sx) + 1;
+        const u=kind?p.z:p.x, v=kind?p.x:p.z;
+        const row0 = Math.floor((v - radius) / sz), row1 = Math.ceil((v + radius) / sz);
+        const cell0 = Math.floor((u - radius) / sx) - 1, cell1 = Math.ceil((u + radius) / sx) + 1;
         for (let row = row0; row <= row1; row++) for (let cell = cell0; cell <= cell1; cell++) {
-          const offset = (hash(row, 17.1) - .5) * sx * .38;
-          const x = (cell + .5 - ((row % 2 + 2) % 2) * .5) * sx - offset, z = (row + .5) * sz;
+          const offset = (hash(row, 17.1) - .5) * sx * PAVING_ROW_JITTER;
+          const cu=(cell+.5-((row%2+2)%2)*.5)*sx-offset, cv=(row+.5)*sz;
+          const x=kind?cv:cu, z=kind?cu:cv;
           const d = Math.hypot(x - p.x, z - p.z);
           if (d >= radius || !reaches.some(([a,b]) => z >= a && z <= b) || Math.abs(x) > P.section.edge) continue;
           if (onXuandeStructure(x,z)) continue;
@@ -56,7 +58,7 @@ export function addPavingRelief(engine) {
           const brick = z >= plazaEnd && Math.abs(x) > P.section.bank && !corridor;
           if (brick !== !!kind) continue;
           const fade = 1 - THREE.MathUtils.smoothstep(d, 3, radius), h = (.001 + hash(cell, row) * .003) * fade;
-          matrix.makeScale(sx - .007, h / .003, sz - .007); matrix.setPosition(x, engine.groundHeight(x,z) + .0002, z);
+          matrix.makeScale((kind?sz:sx)-.007, h/.003, (kind?sx:sz)-.007); matrix.setPosition(x, engine.groundHeight(x,z) + .0002, z);
           mesh.setMatrixAt(count++, matrix);
         }
       }

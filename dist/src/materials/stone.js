@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { ATMO } from '../core/atmosphere.js';
 
 export function stoneMaterial(engine, o = {}) {
-  return surfaceMaterial(engine, 'bluestone', o, /* glsl */`
+  const mat=surfaceMaterial(engine, 'bluestone', o, /* glsl */`
     float mottle = t2Fbm(cgP*vec3(8.0,11.0,8.0)+t2Variation,0.65);
     float stain = t2Noise(cgP*0.7+t2Variation);
     float runoff=t2Noise(vec3((cgP.x+cgP.z)*3.7,cgP.y*0.32,t2Variation+7.3));
@@ -16,7 +16,9 @@ export function stoneMaterial(engine, o = {}) {
     float splash = (1.0-smoothstep(t2Waterline+0.10,t2Waterline+0.85,cgP.y))
       *(0.35+stain*0.65)*t2Wear;
     float algae = max(wet,splash)*north*t2Wear*(0.5+mottle*0.5);
-    t2Albedo = mix(vec3(0.08,0.10,0.12),vec3(0.25,0.27,0.28),mottle)*(0.78+stain*0.44);
+    // inferred: nearly neutral dressed blue-grey stone; warmth comes from the live
+    // sun, not ochre pigment underneath it. Keep mineral blooms equally neutral.
+    t2Albedo = mix(vec3(0.13,0.135,0.14),vec3(0.25,0.255,0.26),mottle)*(0.88+stain*0.24);
     t2Albedo *= 1.0+tool*0.045*(1.0-polish);
     // inferred: rain dissolves lime and darkens narrow vertical channels below coping.
     float rain=smoothstep(0.52,0.70,runoff)*t2Wear;
@@ -24,23 +26,58 @@ export function stoneMaterial(engine, o = {}) {
     t2Albedo = mix(t2Albedo,vec3(0.045,0.067,0.029),algae*0.7)*(1.0-wet*0.32);
     // inferred: large mineral blooms, granular weathering and relief recess staining.
     float bloom = smoothstep(0.50,0.68,stain)*t2Wear;
-    t2Albedo = mix(t2Albedo,vec3(0.39,0.365,0.29),bloom*0.42*(1.0-wet));
+    t2Albedo = mix(t2Albedo,vec3(0.31,0.315,0.32),bloom*0.42*(1.0-wet));
     float crust=smoothstep(0.46,0.63,mottle)*(0.22+stain*0.78)*t2Wear;
-    t2Albedo=mix(t2Albedo,vec3(0.42,0.395,0.33),crust*0.44*(1.0-splash));
+    t2Albedo=mix(t2Albedo,vec3(0.34,0.345,0.35),crust*0.44*(1.0-splash));
     t2Albedo*=1.0-splash*0.35;
     vec4 bond = t2Bond(uv, t6BlockSize,0.005,t2Variation);
-    t2Albedo *= mix(1.0,0.65+bond.y*0.42,t6Joints);
-    float joint = bond.x*t6Joints*(1.0-max(cgN.y,0.0));
+    float jointWeight=t6Joints*step(t6JointBaseY,cgP.y);
+    t2Albedo *= mix(1.0,0.65+bond.y*0.42,jointWeight);
+    float joint = bond.x*jointWeight*(1.0-max(cgN.y,0.0));
     t2Albedo *= (1.0-joint*0.35)*(1.0-vT6Cavity*0.62);
     t2Occlusion = 1.0-vT6Cavity*0.60-joint*0.14;
     t2Rough = 0.85-polish*0.38-wet*0.25;
     t2Height = ((mottle-0.5)*0.0015 + tool*0.00025)*(1.0-polish*0.75)
-      +t2JointRelief(bond.z,0.004,cgP)*bond.w*t6Joints*(1.0-max(cgN.y,0.0));
+      +t2JointRelief(bond.z,0.004,cgP)*bond.w*jointWeight*(1.0-max(cgN.y,0.0));
   `, { uniforms: { t2Waterline: { value: o.waterline ?? -10000 }, t2Polished: { value: o.polished ?? 0.65 },
-      t6Joints: { value: o.joints ?? 0 }, t6BlockSize: { value: o.blockSize ?? [0.936,0.468] } },
+      t6Joints: { value: o.joints ?? 0 }, t6JointBaseY: { value: o.jointBaseY ?? -10000 },
+      t6BlockSize: { value: o.blockSize ?? [0.936,0.468] } },
     vertexHead: 'attribute float stoneCavity; varying float vT6Cavity;', vertexPre: 'vT6Cavity=stoneCavity;',
-    head: 'uniform float t2Waterline,t2Polished,t6Joints; uniform vec2 t6BlockSize; varying float vT6Cavity;',
+    head: 'uniform float t2Waterline,t2Polished,t6Joints,t6JointBaseY; uniform vec2 t6BlockSize; varying float vT6Cavity;',
     attributes: { stoneCavity: [0] }, extraNoise:1 });
+  if(o.deckShadow) {
+    // The river's plan-derived deck also gives the real bridge a precise contact
+    // shadow. CSM still supplies trees, towers, rails and other world occluders;
+    // its large city cascades cannot resolve a close beam/shaft junction sharply.
+    const previous=mat.onBeforeCompile;
+    mat.onBeforeCompile=(shader,renderer)=>{
+      previous(shader,renderer);Object.assign(shader.uniforms,o.deckShadow);
+      shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>
+        #ifndef RIVER_DECK_UNIFORMS
+        #define RIVER_DECK_UNIFORMS
+        uniform vec4 reflectionDeck;uniform float reflectionCamber,reflectionDeckOn;uniform vec3 reflectionSun;
+        #endif
+        float stoneDeckVisibility(vec3 p) {
+          if(reflectionDeckOn<0.5||reflectionSun.y<=0.01||p.y>=reflectionDeck.w+reflectionCamber)return 1.0;
+          float t=(reflectionDeck.w+reflectionCamber-p.y)/reflectionSun.y;
+          vec3 hit=p+reflectionSun*t;
+          float u=(hit.z-reflectionDeck.z)/reflectionDeck.y;
+          float y=reflectionDeck.w+reflectionCamber*max(0.0,1.0-u*u);
+          t=(y-p.y)/reflectionSun.y;hit=p+reflectionSun*t;
+          vec2 inset=reflectionDeck.xy-abs(vec2(hit.x,hit.z-reflectionDeck.z));
+          float edge=min(inset.x,inset.y);
+          // inferred: 0.01-radian solar cone, with pixel coverage at silhouette edges.
+          float feather=max(fwidth(edge),max(0.01,t*0.01));
+          return 1.0-smoothstep(-feather,feather,edge)*step(0.0,t);
+        }`)
+        .replace('#include <lights_fragment_end>',`#include <lights_fragment_end>
+          float stoneDeckSun=stoneDeckVisibility(cgP);
+          reflectedLight.directDiffuse*=stoneDeckSun;reflectedLight.directSpecular*=stoneDeckSun;`);
+    };
+    mat.userData.analyticDeckShadow=true;mat.userData.shaderKey+=':analytic-deck-contact';
+    mat.customProgramCacheKey=()=>mat.userData.shaderKey;
+  }
+  return mat;
 }
 
 /** Directional self-shadowing of the generated relief field. This follows the live sun,
