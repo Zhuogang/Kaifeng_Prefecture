@@ -73,24 +73,34 @@
       border-radius: 2px; color: var(--ink); background: #efe5d3dc; padding: 6px 14px; min-width: 44px; min-height: 44px; font: 20px/1.4 var(--scroll-serif); }
     #scroll-prev { left: 24px; } #scroll-next { right: 24px; }
     #scroll-position { position: absolute; bottom: 44px; left: 50%; transform: translateX(-50%); font: 22px/1 var(--scroll-serif); text-shadow: 0 1px 6px var(--paper); }
-    #scroll-hint { position: absolute; bottom: 17px; left: 50%; transform: translateX(-50%); white-space: nowrap;
-      font: 10px/1.5 var(--scroll-serif); letter-spacing: .08em; text-shadow: 0 1px 5px var(--paper); }
-    #scroll-caption { position: absolute; bottom: 90px; right: 5vw; max-width: 240px; opacity: 0; transition: opacity 1.2s;
-      text-shadow: 0 0 2px var(--paper), 0 0 5px var(--paper), 0 0 12px var(--paper); }
+    #scroll-hint { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); white-space: nowrap;
+      padding: 4px 10px; color: #302a20; background: rgb(233 223 202 / 94%); box-shadow: 0 2px 8px #302a2026;
+      font: 10px/1.5 var(--scroll-serif); letter-spacing: .08em; opacity: 1; transition: opacity .5s, visibility 0s; }
+    #scroll-hint.dismissed { opacity: 0; visibility: hidden; transition: opacity .5s, visibility 0s .5s; }
+    #scroll-caption { position: absolute; bottom: 90px; right: 24px; display: flex; flex-direction: row-reverse; align-items: flex-end;
+      gap: 12px; max-width: calc(100vw - 36px); color: #302a20; opacity: 0; transition: opacity 1.2s; }
+    body[data-scroll-scene="0"] #scroll-caption { bottom: auto; top: 12px; right: 18px; align-items: flex-start; }
     #scroll-caption.visible { opacity: 1; }
-    .scroll-vertical { display: flex; flex-direction: row-reverse; align-items: flex-start; gap: 16px; }
-    #scroll-caption-name, #scroll-caption-line { writing-mode: vertical-rl; margin: 0; font: 17px/1.9 var(--scroll-serif); letter-spacing: .14em; max-height: 24vh; }
-    #scroll-caption-name { font-size: 23px; color: #7b4436; }
-    #scroll-caption-gloss { margin: 18px 0 0; max-width: 280px; font: 12px/1.6 var(--scroll-serif);
-      background: #e9dfcab0; box-shadow: 0 0 10px 6px #e9dfcab0; }
+    .scroll-vertical { writing-mode: vertical-rl; height: 160px; flex: 0 0 auto; padding: 12px;
+      background: rgb(233 223 202 / 94%); box-shadow: 0 3px 12px #302a202e, inset 0 0 0 5px #e9dfca, inset 0 0 0 6px #8b7a5a80;
+      font: 16px/1.75 var(--scroll-serif); letter-spacing: .12em; }
+    body[data-scroll-scene="0"] .scroll-vertical { height: clamp(126px, calc(30vh - 36px), 240px); }
+    #scroll-caption-name, #scroll-caption-line { display: inline; writing-mode: vertical-rl; margin: 0; font: inherit; }
+    #scroll-caption-name { font-size: 23px; margin-inline-end: 14px; }
+    #scroll-caption-gloss { box-sizing: border-box; margin: 0; flex: 0 1 240px; width: 240px; min-width: 0; padding: 10px 12px;
+      font: 14px/1.5 var(--scroll-serif); background: rgb(233 223 202 / 94%); box-shadow: 0 3px 12px #302a2026; }
+    body[data-scroll-scene="0"] #scroll-caption-gloss { flex-basis: 340px; width: 340px; }
     #scroll-performance { position: absolute; left: 16px; top: 16px; margin: 0; padding: 10px 12px; color: #fff6e5; background: #272c2de8;
       border-radius: 3px; font: 13px/1.7 ui-monospace, Consolas, monospace; white-space: pre; }
     #scroll-error { position: fixed; z-index: 30; top: 40%; left: 10%; right: 10%; text-align: center; color: var(--ink); font: 16px/1.8 var(--scroll-serif); }
     @media (max-width: 600px) {
-      #scroll-caption { bottom: 110px; right: 20px; max-width: 210px; }
-      #scroll-caption-name, #scroll-caption-line { font-size: 15px; max-height: 160px; }
-      #scroll-caption-name { font-size: 20px; }
-      #scroll-caption-gloss { font-size: 11px; max-width: 210px; margin-top: 12px; }
+      #scroll-caption { bottom: 100px; right: 14px; gap: 10px; max-width: calc(100vw - 28px); }
+      body[data-scroll-scene="0"] #scroll-caption { top: 14px; right: 14px; }
+      .scroll-vertical { padding: 10px; font-size: 15px; }
+      body[data-scroll-scene="0"] .scroll-vertical { height: 160px; }
+      #scroll-caption-name { font-size: 21px; }
+      #scroll-caption-gloss { padding: 10px; }
+      body[data-scroll-scene="0"] #scroll-caption-gloss { flex-basis: 240px; width: 240px; }
       #scroll-prev { left: 14px; } #scroll-next { right: 14px; }
       #scroll-hint { font-size: 9px; }
       #scroll-performance { top: 14px; left: 14px; font-size: 11px; }
@@ -98,6 +108,7 @@
     @media (prefers-reduced-motion: reduce) {
       #scroll-cover { transition-timing-function: linear; }
       #scroll-caption { transition-duration: .2s; }
+      #scroll-hint, #scroll-hint.dismissed { transition-duration: .2s, 0s; }
     }
   </style>
   <script type="importmap">

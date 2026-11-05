@@ -5,6 +5,8 @@ import { paintCamera } from '../paint/playback.js';
 // inferred: paper/ink colours and caption anchors in index.html,
 // 0.25 pixel-ratio steps, four-per-second pointer easing, and the scrub gains
 // below are experience design choices rather than historical reconstructions.
+// inferred: the U1b slip dimensions, inner-rule treatment and ink (#302a20)
+// compose a title slip; its paper matches the opening at the specified 94%.
 const SCENES = ['paint_xuande', 'paint_zhouqiao'];
 const TEXT = [
   { name: '宣德樓', lines: [
@@ -23,6 +25,7 @@ export async function bootScroll(params) {
   const started = performance.now(), scene = params.get('scene') === '1' ? 1 : 0;
   const direct = params.has('scene'), reduced = matchMedia('(prefers-reduced-motion: reduce)');
   document.body.classList.add('interactive', 'scroll');
+  document.body.dataset.scrollScene = String(scene);
   $('loading').hidden = true;
   $('scroll-opening').hidden = direct;
   $('scroll-ui').hidden = true;
@@ -32,6 +35,16 @@ export async function bootScroll(params) {
   let engine, previous, raf, lastInput = -Infinity, elapsed = 0, captionOverride = null, captionLine = -1;
   let phase = 0, yaw = 0, pitch = 0, wantedYaw = 0, wantedPitch = 0;
   let windowMs = 0, samples = 0, drag = null;
+  let hintDismissed = false;
+  try { hintDismissed = sessionStorage.getItem('kaifeng:scroll-hint-dismissed') === '1'; } catch { /* dismissal still works in this document */ }
+  const hint = $('scroll-hint');
+  hint.classList.toggle('dismissed', hintDismissed);
+  hint.setAttribute('aria-hidden', String(hintDismissed));
+  const dismissHint = () => {
+    if (!active || hintDismissed) return;
+    hintDismissed = true; hint.classList.add('dismissed'); hint.setAttribute('aria-hidden', 'true');
+    try { sessionStorage.setItem('kaifeng:scroll-hint-dismissed', '1'); } catch { /* dismissal still works in this document */ }
+  };
   const status = () => ({ frameMs, fps: frameMs ? 1000 / frameMs : 0, pixelRatio: ratio, calls, triangles });
   const visibleCaption = () => active && !leaving && (captionOverride ?? (elapsed >= 2 && elapsed < 12 || elapsed >= 14 && elapsed < 24));
   const fail = message => {
@@ -149,6 +162,7 @@ export async function bootScroll(params) {
       }
     }
     elapsed += delta / 1000;
+    if (elapsed >= 8) dismissHint();
     if (!reduced.matches && !drag && now - lastInput >= 4000 && !leaving) {
       // inferred: a 48-second round trip matches the existing painted playback.
       phase += dt * Math.PI / 24; fraction = .5 - .5 * Math.cos(phase);
@@ -167,6 +181,8 @@ export async function bootScroll(params) {
   $('scroll-prev').addEventListener('click', () => navigate(scene - 1));
   $('scroll-next').addEventListener('click', () => navigate(scene + 1));
   addEventListener('resize', resize);
+  for (const type of ['pointerdown', 'pointermove', 'wheel', 'keydown'])
+    addEventListener(type, dismissHint, { capture: true, passive: true });
   document.addEventListener('visibilitychange', () => {
     cancelAnimationFrame(raf); previous = undefined; windowMs = 0; samples = 0;
     if (!document.hidden && active && !lost) raf = requestAnimationFrame(loop);
