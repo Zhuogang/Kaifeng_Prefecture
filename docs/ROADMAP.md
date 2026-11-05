@@ -1,21 +1,24 @@
 # Roadmap
 
-Each task goes through the gates in `CONTRACT.md`. Tasks in the same wave touch separate files and can run
-at the same time.
+The painted impression, on branch `impression`. `docs/IMPRESSION.md` is the brief. Each task passes the lead's gate.
 
-| Wave | Task | Delivers | Status |
-|---|---|---|---|
-| 0 | T0 | Engine, render tools, walk and fly | Done |
-| 1 | T1 | `src/yingzao/`: any Song timber hall from parameters, with LODs | Done, see backlog |
-| 1 | T2 | `src/materials/`, 彩画, 鸱尾 and roof ornaments | Done, see backlog |
-| 1 | T3 | `src/flora/`: willow, blossom trees, lotus, palace trees, cranes | Done, see backlog |
-| 2 | T4 | 宣德楼: masonry platform, reliefs, doors, 朵楼, 阙亭, palace wall | Done, see backlog |
-| 2 | T5 | 御街: paving, 杈子, 御沟, 御廊 at the real 312 m | Done, see backlog |
-| 2 | T6 | 州桥, carved walls, 汴河, boats, twin 阙 | Done, see backlog |
-| 3 | T7 | 大庆殿 court, galleries, palace halls | Done, see backlog |
-| 3 | T8 | Inner-city roofs, 朱雀门, inner wall, 铁塔, horizon | Done, see backlog |
-| 4 | T9 | Browser delivery: baking, loading by district, quality tiers, vendored three.js, static build | Done, see backlog |
-| 4 | T10 | Look-dev against `refs/generated/`: light, grade, composition, final fixes | Done, see backlog |
-| 4 | T11 | Evidence view, README, hosted-ready build, final stills | Done, see backlog |
+| Task | Delivers | Status |
+|---|---|---|
+| P0 to P3 | `src/paint/` toolkit, 州桥 composed to `refs/style/c2.png` | Done, see backlog |
+| S1 to S2 | 宣德楼 composed to `refs/style/c1.png`, shared blossom | Done, see backlog |
+| S3 to S4 | Broken colour, braided bark, surface polish on both scenes | Done, see backlog |
+| U1, U1b | The scroll: opening, drift, scrub, paper sweep, captions from 《東京夢華錄》, frame-rate readout | Done |
 
-Later, not in slice 1: crowds, the rest of the city (虹桥, 相国寺, 樊楼, 艮岳, 金明池), day and night cycle.
+## Waiting on the client
+
+1. **Frame rate on a real GPU.** Press `P`. Everything so far has run in software, and this sets the budget for further scenes.
+2. **Is a scroll the right format?** It's a thin layer, so it's cheap to change.
+3. **More scenes?** Proposed: 御街, 大庆殿 at dawn, the 汴河 with boats, and a night market. Each needs a target image the client approves first, as c1 and c2 were.
+
+## Later
+
+Crowds, and the rest of the city.
+
+## The earlier photoreal version
+
+`main` holds the finished walkable city, and on this branch `?world=1` still opens it. Its tasks T0 to T11 are done, with faults listed in the backlog.

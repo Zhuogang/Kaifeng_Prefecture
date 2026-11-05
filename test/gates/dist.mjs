@@ -17,7 +17,7 @@ try {
   const page = await browser.newPage(); const errs = [];
   page.on('pageerror', (e) => errs.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
   const t0 = Date.now();
-  await page.goto(`http://127.0.0.1:${srv.address().port}${SUB}?quality=preview&w=640&h=360`, { waitUntil: 'load', timeout: 600000 });
+  await page.goto(`http://127.0.0.1:${srv.address().port}${SUB}?world=1&quality=preview&w=640&h=360`, { waitUntil: 'load', timeout: 600000 });
   await page.waitForFunction('window.__READY || window.__RENDER_ERROR', { timeout: 600000 });
   const err = await page.evaluate(() => window.__RENDER_ERROR); if (err) fail('render error: ' + err); else pass(`interactive in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   const walked = await page.evaluate(() => { const a = window.__explore.position(); window.__explore.step(1, new Set(['w'])); const b = window.__explore.position(); return Math.hypot(a[0] - b[0], a[2] - b[2]); });

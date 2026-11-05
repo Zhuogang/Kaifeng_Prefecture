@@ -6,7 +6,7 @@ import { launchBrowser } from '../../tools/browser.mjs';
 const server = await startServer(0), browser = await launchBrowser({ width: 640, height: 360 });
 try {
   const page = await browser.newPage();
-  await page.goto(`http://127.0.0.1:${server.port}/?quality=preview&w=640&h=360`, { waitUntil: 'load' });
+  await page.goto(`http://127.0.0.1:${server.port}/?world=1&quality=preview&w=640&h=360`, { waitUntil: 'load' });
   await page.waitForFunction('window.__READY || window.__RENDER_ERROR', { timeout: 120000 });
   const [a, b] = await page.evaluate(() => {
     const e = window.engine, cam = e.camera;

@@ -5,7 +5,7 @@ import { launchBrowser } from '../../tools/browser.mjs';
 const server = await startServer(0), browser = await launchBrowser({ width: 320, height: 180 });
 try {
   const page = await browser.newPage();
-  await page.goto(`http://127.0.0.1:${server.port}/?quality=preview&w=320&h=180`, { waitUntil: 'load', timeout: 600000 });
+  await page.goto(`http://127.0.0.1:${server.port}/?world=1&quality=preview&w=320&h=180`, { waitUntil: 'load', timeout: 600000 });
   await page.waitForFunction('window.__READY || window.__RENDER_ERROR', { timeout: 600000 });
   const out = await page.evaluate(() => {
     const e = window.engine, fp = e.footprints, h = e.groundHeight, STEP = 0.5, MAXRISE = 0.45;
