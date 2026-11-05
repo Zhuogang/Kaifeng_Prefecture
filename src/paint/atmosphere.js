@@ -104,19 +104,25 @@ export function paintedWater(engine,time,reflectionScene,{width=1536,height=864,
         reflected=reflected*.72+(texture2D(tDiffuse,pa.xy/pa.w).rgb+texture2D(tDiffuse,pb.xy/pb.w).rgb)*.14;
         // inferred: bright jade pigment raises dark reflected objects and
         // lowers bright ones through mixing, never by scaling the mirror dark.
-        vec3 body=mix(linearColor(vec3(.43,.55,.47)),linearColor(vec3(.58,.66,.55)),noise(p*.18));
-        ${river?'body=mix(body,linearColor(vec3(.43,.56,.52)),smoothstep(1.,18.,p.y)*.35);':''}
+        vec3 body=mix(linearColor(vec3(.34,.51,.45)),linearColor(vec3(.53,.65,.52)),noise(p*.18));
+        ${river?'body=mix(body,linearColor(vec3(.26,.48,.47)),smoothstep(1.,18.,p.y)*.45);':''}
         float skyOpening=smoothstep(.008,.13,reflected.b-reflected.r);
         // Actual blue/cream sky exposed in the two open tower passages caused
         // the teal-white patches after the former tint. Neutralise its chroma.
         reflected=mix(reflected,body,skyOpening*.78);
         float warmStone=smoothstep(.01,.07,reflected.r-reflected.b)*(1.-smoothstep(1.25,1.65,reflected.r/max(.001,reflected.g)));
         reflected=mix(reflected,linearColor(vec3(.64,.59,.46)),warmStone*.16);
+        float warmReflection=smoothstep(.05,.26,reflected.r-reflected.b);
+        reflected*=mix(vec3(1.),vec3(1.18,1.04,.82),warmReflection*.25);
         float mirror=${river?'(.46+.22*strokes)*(1.-smoothstep(1.,18.,p.y)*.55)':'.40+.20*strokes'};
         vec3 c=mix(body,reflected,mirror);
         c+=linearColor(vec3(.68,.65,.50))*(1.-strokes)*.055;
         float glint=smoothstep(.74,.94,fine)*smoothstep(.45,.74,noise(p*vec2(.37,3.7)+8.));
         c+=linearColor(vec3(.73,.75,.62))*glint*.055;
+        // inferred: independent horizontal pigment loads follow the same
+        // depth-scaled river coordinates as the reflection strokes.
+        c=brokenColor(c,q,${river?'vec2(.70,.45),mix(2.8,.75,front)':'vec2(.35,.25),2.8'},vec3(1.40,1.08,.55),vec3(.60,1.02,1.50),vec3(.72,1.12,1.08),vec3(1.35,1.10,.68));
+        ${river?'c*=1.+pigmentDab(q*vec2(.8,.55)+5.)*mix(1.4,.05,front);':''}
         float bankEdge=(${QUAY.intercept.toFixed(6)})+p.y*${QUAY.slope.toFixed(6)};
         float bankShade=exp(-max(0.,p.x-bankEdge)*.8)*smoothstep(-13.,0.,p.y);
         float hullHalf=${(BOAT.width*.5).toFixed(6)}*(1.-.72*pow(min(abs(along),1.),3.))*.70;

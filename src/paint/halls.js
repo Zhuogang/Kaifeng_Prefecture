@@ -24,10 +24,24 @@ export function paintedHalls(engine,batches,reflected,{timberColor='#bd6236',orn
     const h=hallTemplates.get(key);
     const paintShape=hero?heroPaint:(!distant&&!specOverride?smallPaint:null);
     const roofDatum=h.layout.spec.columnHeight+bracketHeight(h.layout.spec)+.25;
-    const shapeGeometry=(g)=>{
+    const shapeGeometry=(g,k)=>{
       if(!paintShape)return g;
       const copy=g.clone(),p=copy.attributes.position;
       for(let i=0;i<p.count;i++)if(p.getY(i)>roofDatum-.4)p.setY(i,roofDatum+(p.getY(i)-roofDatum)*(paintShape.roofStretch||1));
+      // inferred: stout paint-only columns retain the source lean/taper and
+      // grid; ridge cross-sections grow without moving their authored paths.
+      const types=copy.attributes.memberType;
+      for(let i=0;i<p.count;i++){
+        if(k==='ridge'){
+          const n=copy.attributes.normal;p.setXYZ(i,p.getX(i)+n.getX(i)*.045,p.getY(i)+n.getY(i)*.045,p.getZ(i)+n.getZ(i)*.045);
+        }
+        if(types?.getX(i)===4){
+          const y=p.getY(i);let nearest,dist=Infinity;
+          for(const c of h.layout.columns){const d=(p.getX(i)-c.x)**2+(p.getZ(i)-c.z)**2;if(d<dist){dist=d;nearest=c;}}
+          const c=nearest,t=(y-c.baseY)/(c.topY-c.baseY),x=c.x+(c.headX-c.x)*t,z=c.z+(c.headZ-c.z)*t;
+          p.setX(i,x+(p.getX(i)-x)*1.25);p.setZ(i,z+(p.getZ(i)-z)*1.25);
+        }
+      }
       copy.computeVertexNormals();return copy;
     };
     const placement = new THREE.Matrix4().makeScale(scale, scale, scale); placement.setPosition(...pos);
@@ -36,11 +50,11 @@ export function paintedHalls(engine,batches,reflected,{timberColor='#bd6236',orn
     visibleHall.traverse(o => {
       if (!o.isMesh) return;
       const k = o.material.name;
-      const g=shapeGeometry(o.geometry);batches[matFamily[k]].add(g, placement.clone().multiply(o.matrixWorld),heroPaint&&hero&&k==='bracket'?'#593d34':matColor[k],k==='window'?.72:1,0,k==='tile'?(tileProfile?30:13):(k==='timber'&&paintShape?33:null));if(g!==o.geometry)g.dispose();
+      const g=shapeGeometry(o.geometry,k);batches[matFamily[k]].add(g, placement.clone().multiply(o.matrixWorld),heroPaint&&hero&&k==='bracket'?'#593d34':matColor[k],k==='window'?.72:1,0,k==='tile'?(tileProfile?30:13):(k==='timber'&&paintShape?33:k==='bracket'&&paintShape?26:null));if(g!==o.geometry)g.dispose();
     });
     h.lod2.updateMatrixWorld(true);
     h.lod2.traverse(o=>{
-      if(o.isMesh){const k=o.material.name;const g=shapeGeometry(o.geometry);reflected[matFamily[k]].add(g,placement.clone().multiply(o.matrixWorld),matColor[k],k==='window'?.72:1,0,k==='tile'?(tileProfile?30:13):(k==='timber'&&paintShape?33:null));if(g!==o.geometry)g.dispose();}
+      if(o.isMesh){const k=o.material.name;const g=shapeGeometry(o.geometry,k);reflected[matFamily[k]].add(g,placement.clone().multiply(o.matrixWorld),matColor[k],k==='window'?.72:1,0,k==='tile'?(tileProfile?30:13):(k==='timber'&&paintShape?33:k==='bracket'&&paintShape?26:null));if(g!==o.geometry)g.dispose();}
     });
     if (hero||paintShape) for (const s of h.layout.sets) {
       const feature=hero&&!!heroPaint&&s.side==='south'&&s.kind==='zhutou';

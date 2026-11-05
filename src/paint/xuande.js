@@ -32,7 +32,8 @@ export function composeXuande(engine,time){
   both('timber',[x,5.532824,5.04],[6.30,.60,1.00],'#974a37',.82,true,22);
   both('timber',[x-2.50,2.9,4.78],[.30,5.8,1.4],'#654739',.63,false,22);
   both('timber',[x+2.50,2.9,4.78],[.30,5.8,1.4],'#654739',.63,false,22);
-  for(const dx of [-.85,.85])for(let j=0;j<6;j++)both('timber',[x+dx,.8+j*.78,4.18],[.045,.045,.045],'#b08b53',.8);
+  // 門皆金釘朱漆: rows of gilt nails; inferred six-by-six spacing.
+  for(const dx of [-1.75,-1.05,-.35,.35,1.05,1.75])for(let j=0;j<6;j++)both('timber',[x+dx,.8+j*.78,4.22],[.055,.055,.045],'#d2a45c',1,false,35);
   both('timber',[x,2.9,4.20],[.07,5.8,.10],'#6b3d32',.8);
  }
  both('stone',[3.0,12.10,-.6],[40.8,.28,9.3],'#bfb196',1,true);

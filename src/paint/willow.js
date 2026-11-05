@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {Geometry,V} from '../flora/geometry.js';
+import {barkRelief} from './bark.js';
 
 // inferred: parameterised pollarded willow, growth-following roots and botanical
 // leaf/clump dimensions. Leaves stay within 25 degrees of their strand.
@@ -9,29 +10,11 @@ import {Geometry,V} from '../flora/geometry.js';
       [V(),V(-.2,h*.16,0),V(.3,h*.33,0),V(.1,h*.46,0)];
     wood.tube(hero?[V(0,-.24,0),V(.01,.40,-.08),...trunk.slice(1)]:trunk, hero ? [1.65,1.35,1.02,.85,.61,.25] : [h * .052, h * .04, h * .035, h * .018], new THREE.Color('#635c50'), { sides: 10, gnarl: .6, smooth: 4 });
     if(hero){
-      // inferred: irregular burls and interrupted ridges break the trunk's
-      // contour without the old evenly spaced, full-length comb of tubes.
+      // Remove the stuck-on burls. Preserve their random draws so the accepted
+      // crown and every leaf retain their positions.
       for(let j=0;j<11;j++){
-        const f=rng.range(.10,.74),segment=Math.min(3,Math.floor(f*4)),t=f*4-segment;
-        const center=trunk[segment].clone().lerp(trunk[segment+1],t),axis=trunk[segment+1].clone().sub(trunk[segment]).normalize();
-        const a=j*2.399,out=V(Math.cos(a),0,Math.sin(a));out.addScaledVector(axis,-out.dot(axis)).normalize();
-        const radius=THREE.MathUtils.lerp([1.15,1.02,.85,.61][segment],[1.02,.85,.61,.25][segment],t);
-        center.addScaledVector(out,radius*.88);
-        const rotation=new THREE.Quaternion().setFromUnitVectors(V(0,1,0),axis);
-        const burlStart=wood.p.length/3;
-        wood.ellipsoid(center,V(rng.range(.17,.30),rng.range(.28,.60),rng.range(.12,.22)),new THREE.Color('#68452c'),{detail:1,rotation});
-        // inferred: unwrap each burl about the parent branch axis as well.
-        const inverse=rotation.clone().invert();
-        for(let k=burlStart;k<wood.p.length/3;k++){
-          const q=V(...wood.p.slice(k*3,k*3+3)).sub(center).applyQuaternion(inverse);
-          wood.uv[k*2]=Math.atan2(q.z,q.x)*radius;wood.uv[k*2+1]=f*17+q.y;
-        }
-        if(j<5){
-          const begin=center.clone().addScaledVector(axis,-.45),end=center.clone().addScaledVector(axis,.65).addScaledVector(out,-.12);
-          wood.tube([begin,center.clone().addScaledVector(out,.12),end],[.12,.16,.035],new THREE.Color('#65452b'),{sides:7,gnarl:.8,smooth:3});
-        }
+        rng.range(.10,.74);rng.range(.17,.30);rng.range(.28,.60);rng.range(.12,.22);
       }
-
       wood.tube([trunk[1],V(-.8,6.8,-1.5),V(-1.3,13,-3.0)],[.68,.43,.15],new THREE.Color('#69442b'),{sides:12,gnarl:.7,smooth:5});
       // inferred: buttressed roots spread over the quay and turn into the ground.
       for(let i=0;i<4;i++){
@@ -91,5 +74,12 @@ import {Geometry,V} from '../flora/geometry.js';
         leaves.ellipsoid(center,size,color,{detail:0,kind:12,sway:.10});
       }
     }
-    return {wood:wood.build(),leaves:leaves.build()};
+    // inferred: radial relief uses the same braided field as the fragment
+    // material, with a low-frequency footprint and no extra silhouette meshes.
+    if(hero)for(let i=0;i<wood.p.length/3;i++){
+      const relief=(barkRelief(wood.uv[i*2],wood.uv[i*2+1])-.35)*.20;
+      for(let k=0;k<3;k++)wood.p[i*3+k]+=wood.n[i*3+k]*relief;
+    }
+    const bark=wood.build();if(hero)bark.computeVertexNormals();
+    return {wood:bark,leaves:leaves.build()};
   }
