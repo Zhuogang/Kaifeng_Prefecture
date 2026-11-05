@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import {PNG} from 'pngjs';
 import {launchBrowser,observeErrors} from '../browser.mjs';
 import {startServer} from '../serve.mjs';
-const scene=process.argv[2]||'xuande',out=`out/D1b/${scene}`;
+const scene=process.argv[2]||'xuande',root=process.argv[3]||'out/D1b',out=`${root}/${scene}`;
 if(!['xuande','zhouqiao'].includes(scene))throw new Error('Expected xuande or zhouqiao');
 fs.mkdirSync(out,{recursive:true});
 const w=640,h=360,sheet=new PNG({width:w*5,height:h*3});

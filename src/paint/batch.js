@@ -18,7 +18,7 @@ const up = new THREE.Vector3(0, 1, 0);
 export class PaintBatch {
   constructor() { this.p = []; this.n = []; this.c = []; this.uv = []; this.data = []; this.wind = []; this.kind = []; this.idx = []; }
   add(g, matrix = new THREE.Matrix4(), color = '#ffffff', ao = 1, sway = 0, paintKind = null) {
-    const p = g.attributes.position, n = g.attributes.normal, uv = g.attributes.memberUV || g.attributes.uv;
+    const p = g.attributes.position, n = g.attributes.normal, uv = g.attributes.paintUV || g.attributes.memberUV || g.attributes.uv;
     const tile=g.attributes.tileCoord;
     const size = g.attributes.memberSize, colors = g.attributes.color, data = g.attributes.aFlora;
     const origin = g.attributes.aOrigin, canopy = g.attributes.aCanopy;
@@ -29,7 +29,8 @@ export class PaintBatch {
       v.fromBufferAttribute(p, i).applyMatrix4(matrix); this.p.push(v.x, v.y, v.z);
       v.fromBufferAttribute(n, i).applyMatrix3(normalMatrix).normalize(); this.n.push(v.x, v.y, v.z);
       this.c.push(c.r * (colors ? colors.getX(i) : 1), c.g * (colors ? colors.getY(i) : 1), c.b * (colors ? colors.getZ(i) : 1));
-      if(paintKind===30&&tile)this.uv.push(tile.getX(i)*.26,tile.getY(i)*.35);
+      if(g.attributes.paintUV)this.uv.push(uv.getX(i),uv.getY(i));
+      else if(paintKind===30&&tile)this.uv.push(tile.getX(i)*.26,tile.getY(i)*.35);
       else this.uv.push((uv?.getX(i) || 0) * (size?.getX(i) || 1), (uv?.getY(i) || 0) * (size?.getY(i) || 1));
       // inferred: vertex AO and branch flex replace a noisy screen-space occlusion pass.
       this.data.push(ao * (canopy?.getX(i) ?? 1), data ? data.getY(i) : sway,
@@ -39,8 +40,10 @@ export class PaintBatch {
       // two transcendental evaluations at every vertex of every frame.
       this.wind.push(Math.cos(phase*.6)*.075*flex,Math.sin(phase*.6)*.075*flex,
         Math.cos(phase*.5)*.045*flex,Math.sin(phase*.5)*.045*flex);
-      const tag=paintKind===33&&g.attributes.memberType?(g.attributes.memberType.getX(i)===4?33:34):paintKind;
-      this.kind.push(tag ?? data?.getX(i) ?? 0);
+      const member=g.attributes.memberType?.getX(i);
+      const tag=paintKind===33&&g.attributes.memberType?(member===4?33:34):paintKind===47?(member===4?47:0):
+        paintKind===40?(member===2?41:member===3?42:40):paintKind;
+      this.kind.push(g.attributes.paintPart?.getX(i) ?? tag ?? data?.getX(i) ?? 0);
     }
     if (g.index) for (const i of g.index.array) this.idx.push(start + i);
     else for (let i = 0; i < p.count; i++) this.idx.push(start + i);
@@ -61,5 +64,21 @@ export class PaintBatch {
     g.setIndex(this.idx); g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, material); mesh.name = name; mesh.userData.noPatch = true;
     return mesh;
+  }
+}
+
+// Repeated eave caps and rafter ends share geometry and one draw per family.
+export class PaintInstances {
+  constructor(geometry,kind){
+    const batch=new PaintBatch();batch.add(geometry,undefined,'#ffffff',1,0,kind);
+    this.geometry=batch.mesh(null,'template').geometry;this.matrices=[];this.colors=[];
+  }
+  add(matrix,color){this.matrices.push(matrix.clone());this.colors.push(new THREE.Color(color));}
+  mesh(material,name){
+    if(!this.matrices.length){this.geometry.dispose();material.dispose();return null;}
+    const mesh=new THREE.InstancedMesh(this.geometry,material,this.matrices.length);
+    this.matrices.forEach((m,i)=>{mesh.setMatrixAt(i,m);mesh.setColorAt(i,this.colors[i]);});
+    mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;mesh.computeBoundingSphere();
+    mesh.name=name;mesh.userData.noPatch=true;return mesh;
   }
 }

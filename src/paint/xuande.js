@@ -42,7 +42,7 @@ export function composeXuande(engine,time,viewAt){
  // Side towers and joining galleries.
  wall(-38,-27,-5,12.0,1.8);wall(34,46,-5,12.0,1.8);
  wall(-27,-18,-6,10.4,1.2);wall(25,34,-6,10.4,1.2);
- const halls=paintedHalls(engine,batches,reflected,{timberColor:'#9e513d',ornamentHeight:3.1,smallOrnamentScale:.55,tileProfile:true,ornamentProfile:'fishTail',smallPaint:{roofStretch:1.4},heroPaint:{bracketScale:[1.85,1.0,1.0],roofStretch:1.18},
+ const halls=paintedHalls(engine,batches,reflected,{time,profile:'xuande',timberColor:'#9e513d',ornamentHeight:3.1,smallOrnamentScale:.55,tileProfile:true,ornamentProfile:'fishTail',smallPaint:{roofStretch:1.4},heroPaint:{bracketScale:[1.85,1.0,1.0],roofStretch:1.18},
   heroSpec:{frontBays:[4.4,4.6,4.6,5.2,4.6,4.6,4.4],sideBays:[4.6,4.6],columnHeight:4.5,caiGrade:2,tiao:3,bayFill:'open'},
   smallSpec:{frontBays:[2.5,2.8,2.5],sideBays:[1.3,1.3],columnHeight:5.3,caiGrade:4,tiao:2,bayFill:'open'},
   palette:{bracket:'#a4644d',plaster:'#584a40',window:'#7a6351'}});
@@ -70,9 +70,11 @@ export function composeXuande(engine,time,viewAt){
   }
  }
  for(const x of [-12.6,17.0])rail(x,1.2,69,2.4,0,1.0);
- for(const [x,w,y]of [[3.3,40,12.25],[-35.5,9,12.2],[40,9,12.2]]){
-  for(let i=0;i<=w;i+=1.2)both('timber',[x-w/2+i,y+.7,4.0],[.11,1.4,.13],'#b66e50');
-  for(const dy of [.35,1.15])both('timber',[x,y+dy,4.0],[w,.13,.15],'#b06a4a');
+ // inferred: wing rails stand on their own pavilion terrace fronts; the main
+ // hall retains its original avenue-facing rail position.
+ for(const [x,w,y,z]of [[3.3,40,12.25,4.0],[-35.5,9,12.2,-3.25],[40,9,12.2,-3.25]]){
+  for(let i=0;i<=w;i+=1.2){both('timber',[x-w/2+i,y+.7,z],[.11,1.4,.13],'#b66e50');both('timber',[x-w/2+i,y+1.44,z],[.17,.08,.18],'#ba7956');}
+  for(const dy of [.35,1.15])both('timber',[x,y+dy,z],[w,.13,.15],'#b06a4a');
  }
  // Pale avenue slabs and narrow stone canal kerbs. Dapple is material-local.
  stone.box([9.6,-.44,41],[47.8,.25,90],'#a49e93',1);

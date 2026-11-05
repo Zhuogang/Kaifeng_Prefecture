@@ -97,9 +97,18 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao'}={
         // Flex is in object space; brush coordinates below use the undeformed surface.
         p.x+=dot(paintWind.xy,paintWindTime.xy);
         p.z+=dot(paintWind.zw,paintWindTime.zw);
-        vP=(modelMatrix*vec4(position,1.0)).xyz;
-        vN=normalize(mat3(modelMatrix)*normal);vC=color;vData=paintData;vUv=uv;vKind=paintKind;
-        gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);
+        vec4 surface=vec4(position,1.),moved=vec4(p,1.);vec3 localNormal=normal;
+        #ifdef USE_INSTANCING
+          surface=instanceMatrix*surface;moved=instanceMatrix*moved;
+          localNormal=mat3(instanceMatrix)*localNormal;
+        #endif
+        vP=(modelMatrix*surface).xyz;
+        vN=normalize(mat3(modelMatrix)*localNormal);vC=color;
+        #ifdef USE_INSTANCING_COLOR
+          vC*=instanceColor;
+        #endif
+        vData=paintData;vUv=uv;vKind=paintKind;
+        gl_Position=projectionMatrix*modelViewMatrix*moved;
       }`,
     fragmentShader: /* glsl */`
       uniform vec3 paintSun;
@@ -109,6 +118,22 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao'}={
       void main(){
         vec3 n=normalize(vN); if(!gl_FrontFacing)n=-n;
         float variation=0.0, wash=0.0; ${code}
+        ${kind==='roof'?`
+          float rowFade=0.,rowPhase=0.;
+          if(abs(vKind-50.)<.5){
+            vec2 dx=dFdx(vUv),dy=dFdy(vUv);
+            float pixels=1./max(max(abs(dx.x),abs(dy.x)),.00001);
+            rowFade=smoothstep(1.5,3.,pixels);rowPhase=(vUv.x+noise(vUv*vec2(.20,.7))*.045)*6.2831853;
+            // inferred: rounded cover-tile relief in the actual surface frame,
+            // with broad irregular loads crossing the rows rather than a comb.
+            float det=dx.x*dy.y-dx.y*dy.x;
+            if(abs(det)>.0000001){
+              vec3 across=normalize((dFdx(vP)*dy.y-dFdy(vP)*dx.y)/det);
+              float load=.65+.35*noise(vUv*vec2(.35,.8));
+              n=normalize(n+across*sin(rowPhase)*.30*rowFade*load);
+            }
+          }
+        `:''}
         float light=smoothstep(-.15,.70,dot(n,paintSun));
         ${kind==='stone'?'float pigmentSun=light;':''}
         ${kind === 'leaf' ? 'light=.26+.28*abs(dot(n,paintSun))+.28*noise(vP.xz*.45);' : ''}
@@ -206,7 +231,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao'}={
             float scrape=max(0.,dab(vec2(local.x*3.4,(vP.y+local.y*.25)*15.)));
             c=mix(c,linearColor(vec3(.67,.52,.35)),scrape*2.3);
           }
-          if(vKind>9.5){
+          if(vKind>9.5&&abs(vKind-47.)>.5){
             c=mix(linearColor(vec3(.27,.22,.15)),linearColor(vec3(.48,.39,.26)),light);
             c*=.88+.14*noise(vP.xz*9.+vP.y*4.);
           }
@@ -413,6 +438,95 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao'}={
         ${kind==='roof'&&profile==='xuande'?'c=mix(vec3(dot(c,vec3(.2126,.7152,.0722))),c,.90)+linearColor(vec3(.14,.10,.05))*.15;':''}
         ${kind==='timber'&&profile==='xuande'?'if(vKind>34.5&&vKind<35.5)c=mix(linearColor(vec3(.48,.29,.09)),linearColor(vec3(.88,.67,.30)),.40+.60*light);':''}
         ${kind==='stone'&&profile==='zhouqiao'?'if(abs(vKind-37.)<.5)c*=1.-smoothstep(.15,.75,n.y)*.45;':''}
+        ${kind==='roof'?`
+          if(abs(vKind-57.)<.5)c*=mix(.74,1.13,max(n.y,0.));
+          if(abs(vKind-50.)<.5){
+            float gutter=pow(.5-.5*cos(rowPhase),7.);
+            float acrossWash=noise(vUv*vec2(.14,.65)+5.);
+            float rowLoad=hash21(vec2(floor(vUv.x),13.))-.5;
+            c*=1.+rowFade*(.035-gutter*.30+(acrossWash-.5)*.32+rowLoad*.09);
+            c+=linearColor(vec3(.20,.23,.28))*pow(max(0.,cos(rowPhase)),7.)*rowFade*.20;
+            float along=vUv.y/.35,aa=max(.015,fwidth(along));
+            float lap=1.-smoothstep(.018-aa,.055+aa,min(fract(along),1.-fract(along)));
+            float lapFade=1.-smoothstep(.45,.67,fwidth(along));
+            c*=1.-lap*.11*rowFade*lapFade;
+            vec2 cell=floor(vec2(vUv.x,vUv.y/.65));
+            float broken=smoothstep(.95,.99,hash21(cell+19.));
+            float end=fract(vUv.y/.65),a=max(.02,fwidth(end));
+            float chip=smoothstep(.10-a,.23+a,end)*(1.-smoothstep(.38-a,.54+a,end));
+            c=mix(c,c*vec3(.68,.75,.82)+linearColor(vec3(.14,.14,.13))*.08,broken*chip*rowFade*lapFade*.65);
+          }
+        `:''}
+        ${kind==='timber'?`
+          if(vKind>39.5&&vKind<45.5){
+            // inferred: the existing vermilion palette receives darker arm
+            // undersides and a narrow warm top face; dou accents stay muted.
+            float armLight=max(light,max(n.y,0.)*.50);
+            c=mix(vC*vec3(.53,.50,.58),vC*vec3(1.58,1.34,1.06),armLight);
+            c*=1.-max(-n.y,0.)*.42;
+            c*=1.-pow(abs(n.x),3.)*.22;
+            c+=vC*vec3(.27,.17,.08)*max(n.y,0.)*.18;
+            if(abs(vKind-41.)<.5){
+              c*=.72;
+              float accent=smoothstep(.74,.92,noise(vP.xz*.73+4.));
+              c=mix(c,c*vec3(1.08,1.10,.83),accent*.35);
+            }
+            if(abs(vKind-44.)<.5)c*=vec3(.47,.44,.49);
+            if(abs(vKind-45.)<.5)c*=vec3(.58,.54,.58);
+            c*=1.+variation*.22+wash*.06;
+          }
+          if(abs(vKind-46.)<.5){
+            // inferred: recessed six-leaf doors, lower framed panels and a
+            // rectangular upper lattice. All frequencies are surface anchored.
+            vec2 grid=vUv/vec2(.34,.42),aa=max(fwidth(grid),vec2(.005));
+            vec2 e=min(fract(grid),1.-fract(grid));
+            vec2 lines=1.-smoothstep(vec2(.025)-aa,vec2(.06)+aa,e);
+            float visible=1.-smoothstep(.45,.67,max(aa.x,aa.y));
+            float lattice=max(lines.x,lines.y)*visible*smoothstep(1.95,2.10,vUv.y);
+            float leaf=vUv.x/.72,la=max(.004,fwidth(leaf));
+            float seam=1.-smoothstep(.015-la,.035+la,min(fract(leaf),1.-fract(leaf)));
+            c=linearColor(vec3(.43,.31,.26))*(.94+.10*noise(vUv*vec2(1.7,.35)));
+            c*=1.-seam*.17;
+            float inset=smoothstep(.07,.12,min(fract(leaf),1.-fract(leaf))*.72)*smoothstep(.12,.20,vUv.y)*(1.-smoothstep(1.78,1.90,vUv.y));
+            c*=1.-inset*.18;
+            c=mix(c,linearColor(vec3(.54,.36,.26)),lattice*.35);
+            float panel=1.-smoothstep(.025,.065,abs(vUv.y-1.05));
+            c=mix(c,linearColor(vec3(.48,.32,.24)),panel*.65);
+          }
+          if(abs(vKind-47.)<.5||abs(vKind-33.)<.5){
+            // inferred: sparse vertical scumbles on the existing round columns.
+            vec2 grain=vUv*vec2(11.,.32);
+            float fade=1.-smoothstep(.45,.67,max(length(dFdx(grain)),length(dFdy(grain))));
+            c*=1.+(noise(grain+3.)-.5)*.10*fade;
+          }
+        `:''}
+        ${kind==='stone'&&profile==='zhouqiao'?`
+          if(abs(vKind-52.)<.5){
+            // inferred: individual ashlar faces keep the approved warm stone,
+            // with quiet cool sides and a continuous dark water-contact stain.
+            float sun=smoothstep(-.20,.72,dot(n,paintSun));
+            c=mix(linearColor(vec3(.46,.43,.39)),linearColor(vec3(.78,.68,.51)),sun);
+            float load=clamp(dot(vC,vec3(.2126,.7152,.0722))/.48,.90,1.10);
+            c*=load*(1.+variation*.26+wash*.06);
+            c=brokenColor(c,q,vec2(1.8,2.2),.75,vec3(1.22,1.02,.80),vec3(.83,1.0,1.24));
+            c=mix(c,linearColor(vec3(.18,.24,.22)),(1.-smoothstep(.015,.19,vP.y))*.88);
+            c*=1.-smoothstep(2.55,3.1,bridgeY)*.22;
+          }
+          if(abs(vKind-53.)<.5)c=mix(vC*vec3(.68,.68,.72),vC*vec3(1.16,1.10,.96),light);
+          if(abs(vKind-56.)<.5)c=linearColor(vec3(.29,.31,.30));
+          if(abs(vKind-55.)<.5)c=mix(vC*vec3(.75,.73,.74),vC*vec3(1.17,1.09,.95),light)*(1.+variation*.25+wash*.06);
+          if(abs(vKind-54.)<.5){
+            // inferred: shallow cloud curls and a recessed border in each
+            // solid huaban. The relief is filtered in stone-local metres.
+            vec2 p=vec2(mod(vUv.x,.70)-.35,vUv.y-.235);
+            float curve=abs(p.y-.055*sin(p.x*11.)),aa=max(.006,fwidth(curve));
+            float cut=1.-smoothstep(.008-aa,.022+aa,curve);
+            float oval=abs(length(p/vec2(.24,.14))-1.),oa=max(.025,fwidth(oval));
+            cut=max(cut,(1.-smoothstep(.04-oa,.12+oa,oval))*.55);
+            float edge=min(vUv.y,.47-vUv.y),frame=1.-smoothstep(.018,.045,edge);
+            c*=1.-cut*.14-frame*.13;
+          }
+        `:''}
         // inferred: painted aerial wash, deliberately independent of view direction.
         float haze=smoothstep(35.0,140.0,-vP.z)*.68;
         c=mix(c,linearColor(vec3(.76,.75,.69)),haze);
