@@ -29,15 +29,15 @@ const MORNING_GRADE = {
 
 export const TIME_PRESETS = {
   morning: {
-    // inferred: W5 spectral balance fitted to the measured reference regions.
-    // Direct light stays warmer than the sky fill, without tinting stone orange.
-    sun: { azimuth: SUN.azimuth, elevation: SUN.elevation, color: [1.0, 0.75, 0.45], intensity: 12 },
+    // inferred: W6 restores golden direct light between the previous look rounds.
+    // Sun position remains the art bible's south-east morning direction.
+    sun: { azimuth: SUN.azimuth, elevation: SUN.elevation, color: [1.0, 0.6, 0.28], intensity: 15 },
     sky: { ...MORNING_SKY,
-      // inferred: a slightly deeper blue zenith and stronger neutral sky fill;
-      // the lower hemisphere represents warm diffuse ground bounce.
-      uZenith: [0.28, 0.4, 0.63], uSkyFalloff: 4.0,
+      // inferred: preserve the blue zenith while opening enclosed areas with
+      // sky fill. Warm lower-hemisphere bounce colours vertical surfaces.
+      uZenith: [0.27, 0.39, 0.63], uSkyFalloff: 4.0,
       uSkyLower: [1.4, 1.65, 2.1], uSkyHorizonWidth: 0.06,
-      uGround: [0.6, 0.5, 0.4], uEnvScale: 0.8, uEnvBlue: 0.2,
+      uGround: [0.7, 0.28, 0.08], uEnvScale: 1.3, uEnvBlue: 0.2,
       // inferred: optically thinner, softly sunlit low cumulus; the high veil
       // darkened the bright lower sky into broad grey smudges.
       uCloudCover: 0.26, uCloudScale: 4.0, uCloudBase: 2300, uCloudThick: 800,
@@ -45,12 +45,11 @@ export const TIME_PRESETS = {
       uCloudClearRadius: 12500,
       uCirrus: [0, 7500, 0.6],
     },
-    // inferred: remove warm split toning and reduce shadow chroma. One shared
-    // luminance meter balances enclosed and open areas, within its existing
-    // 0.5–2 exposure-gain limits; no validation-camera settings are used.
+    // inferred: gentler midtone contrast and metering open the corridor without
+    // bleaching shadow pigments. Every view uses this same morning grade.
     atmo: { ...MORNING_ATMO, uHazeColor: [1.2, 1.05, 0.94] },
-    grade: { ...MORNING_GRADE, uExposure: 0.85, uContrast: 2.1, uPivot: 0.55, uToe: 0.8,
-      uAutoExpo: 2.5, uAutoKey: 0.18, uHighTint: [0, 0, 0], uShadowSat: -0.9,
+    grade: { ...MORNING_GRADE, uExposure: 0.65, uContrast: 1.65, uPivot: 0.5, uToe: 0.7,
+      uAutoExpo: 1.2, uAutoKey: 0.3, uHighTint: [0.008, 0.003, -0.004], uShadowSat: 0,
       uHighlights: 0.15, uAgxPunch: 1.0, uLift: [0.045, 0.045, 0.05], uShadowTint: [0, 0, 0.006],
       uSaturation: 0.96, uVibrance: 0.05, uLtmFine: 0.2, uLtmMid: 0.3, uLtmLarge: 0.18, uSharpen: 0.2 },
   },

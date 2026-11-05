@@ -342,8 +342,8 @@
     },
     {
       "path": "src/world/looks.js",
-      "bytes": 6472,
-      "sha256": "9c684f3edc57126f6dc580bfd4ee3104c1a1c8a8529b3935bea8c8f2145d1c84"
+      "bytes": 6406,
+      "sha256": "f57113544e57e3b1ed5607e98c729a329c695a42b10bc62e907c8c6356ab4680"
     },
     {
       "path": "src/world/plan.js",
