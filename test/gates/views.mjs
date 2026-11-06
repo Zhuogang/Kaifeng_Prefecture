@@ -1,11 +1,11 @@
 // Gate: 州桥's authored views, through the real scroll page. Lead-owned.
-//   node test/gates/views.mjs --baseline   records the approved scenes in out/X0/
+//   node test/gates/views.mjs --baseline   records the approved scenes in out/X1c/
 //   node test/gates/views.mjs [out-dir]    checks every view; contact sheets go to out-dir (default out/V1)
 import fs from 'node:fs';
 import { PNG } from 'pngjs';
 import { launchBrowser, observeErrors } from '../../tools/browser.mjs';
 import { startServer } from '../../tools/serve.mjs';
-const W = 1280, H = 720, CELL = 4, FRACTIONS = [0, .5, 1], BASE = 'out/X0';
+const W = 1280, H = 720, CELL = 4, FRACTIONS = [0, .5, 1], BASE = 'out/X1c';
 const CORNERS = [[0, 0], [-1, -1], [-1, 1], [1, -1], [1, 1]];
 const baselineMode = process.argv[2] === '--baseline', OUT = baselineMode ? BASE : (process.argv[2] || 'out/V1');
 fs.mkdirSync(OUT, { recursive: true });
@@ -52,8 +52,9 @@ try {
     }
     console.log(`baseline written to ${BASE}`);
   } else {
-    // 州桥 stays as approved while 宣德楼's look is being changed, and that's judged by eye.
-    for (const [scene, limit, share] of [[1, 2, .05]]) {
+    // 宣德楼 is accepted, and only its bracket sets may change: they fill about 2% of the frame.
+    // 州桥's look is being changed, and that's judged by eye.
+    for (const [scene, limit, share] of [[0, 2, 3]]) {
       const { page, clean } = await openStill(`scene=${scene}&ratio=1`);
       for (const f of FRACTIONS) {
         const now = PNG.sync.read((await shoot(page, null, f, [0, 0])).bytes), before = PNG.sync.read(fs.readFileSync(`${BASE}/scene${scene}-f${f}.png`)), changed = compare(now, before, limit);

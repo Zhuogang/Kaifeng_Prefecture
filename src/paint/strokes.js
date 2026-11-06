@@ -73,8 +73,8 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false,profile='z
       }
       vec2 coordinates(vec3 n){
         ${xuande?`
-        ${kind==='plaster'?'return planeUV(vP,n)*vec2(.65,1.15);':kind==='timber'?`
-          if(abs(vKind-21.)<.5||abs(vKind-22.)<.5)return planeUV(vP,n)*vec2(1.,.22);
+        ${kind==='bark'?'if(vDetail.w>2.5)return vUv*vec2(1.7,.75);':kind==='plaster'?'return planeUV(vP,n)*vec2(.65,1.15);':kind==='timber'?`
+          if(abs(vKind-21.)<.5||abs(vKind-22.)<.5)return planeUV(vP,n)*vec2(1.,.10);
           if(abs(vKind-71.)<.5)return vec2(vP.z*.20,vP.y+vP.x*.17);
           if(abs(vKind-72.)<.5)return vec2(vP.x+vP.z*.37,vP.y*.22);
         `:''}`:''}
@@ -223,7 +223,7 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false,profile='z
           gl_FragColor=vec4(c,1.);return;
         }`:''}
         ${kind==='timber'&&xuande?`
-        if(abs(vKind-21.)>.5&&abs(vKind-22.)>.5&&abs(vKind-35.)>.5&&abs(vKind-71.)>.5&&abs(vKind-72.)>.5&&abs(vKind-79.)>.5){
+        if(abs(vKind-21.)>.5&&abs(vKind-22.)>.5&&abs(vKind-35.)>.5&&abs(vKind-71.)>.5&&abs(vKind-72.)>.5&&abs(vKind-79.)>.5&&abs(vKind-80.)>.5){
           vec3 c=xuandeFineTimber(n);
           c=mix(c,linearColor(vec3(.76,.75,.69)),smoothstep(35.,140.,-vP.z)*.68);
           gl_FragColor=vec4(c,1.);return;
@@ -278,7 +278,7 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false,profile='z
         // inferred: nearest dyadic scales straddle 4.5 pixels for bark/boat
         // and seven pixels elsewhere, at 1080p.
         // Their coordinates never move; only the smooth LOD weight changes.
-        float octave=clamp(log2(1./max(footprint*${xuande?(kind==='plaster'?'12.':kind==='bark'?'4.5':kind==='timber'?'5.':'8.'):kind==='bark'?'4.5':kind==='timber'?'(towerDetailView()?3.5:4.5)':'7.'}*paintPixelScale,1.e-7)),-12.,12.);
+        float octave=clamp(log2(1./max(footprint*${xuande?(kind==='plaster'?'(abs(vKind-82.)<.5?6.:12.)':kind==='bark'?'(vDetail.w>2.5?16.:4.5)':kind==='timber'?'5.':'8.'):kind==='bark'?'4.5':kind==='timber'?'(towerDetailView()?3.5:4.5)':'7.'}*paintPixelScale,1.e-7)),-12.,12.);
         float scale=exp2(floor(octave)),weight=smoothstep(0.,1.,fract(octave));
         // A runtime material diagnostic measures the layer against the same
         // pigments and structural detail with one continuous light sample.
@@ -286,6 +286,7 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false,profile='z
         if(paintMarkStrength>.5){
           PaintMark a=getMark(q,scale,n,tangent,bitangent,normalU,normalV,uvU,uvV);
           PaintMark b=getMark(q,scale*2.,n,tangent,bitangent,normalU,normalV,uvU,uvV);
+          ${xuande&&kind==='plaster'?`if(abs(vKind-82.)<.5){a.load=texture2D(paintMarks,q*scale/64.).a;b.load=texture2D(paintMarks,q*scale*2./64.).a;}`:''}
           c=mix(shadeMark(a),shadeMark(b),weight);
         }else{
           PaintMark plain;plain.p=vP;plain.n=n;plain.uv=vUv;plain.load=.5;plain.pick=.5;

@@ -83,7 +83,8 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
         const tiles=copy.attributes.tileCoord,uv=[],detail=[];
         for(let i=0;i<p.count;i++){
           uv.push(tiles.getX(i)*.26/pitch,tiles.getW(i));
-          detail.push(tiles.getX(i)*.26/pitch+rows*.5,tiles.getY(i),tiles.getZ(i),tiles.getW(i));
+          // X1b: one painted run per 2.5 source rows, also on the hip faces.
+          detail.push(profile==='xuande'?tiles.getX(i)/2.5:tiles.getX(i)*.26/pitch+rows*.5,tiles.getY(i),tiles.getZ(i),tiles.getW(i));
         }
         copy.setAttribute('paintUV',new THREE.Float32BufferAttribute(uv,2));
         copy.setAttribute('paintDetail',new THREE.Float32BufferAttribute(detail,4));
@@ -179,6 +180,11 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
         for(let i=0;i<part.count;i++)tags.push(part.getX(i)===2?41:part.getX(i)===3?42:
           part.getX(i)===1&&Math.abs(size.getX(i)/f-62)<.1?44:
           part.getX(i)===1&&Math.abs(size.getY(i)/f-21)<.1?45:40);
+        // X1b: retain the source corner 昂, but let their pointed noses fall
+        // into the shaded cluster instead of reading as orange thorns.
+        if(profile==='xuande'&&s.kind==='zhuanjiao'){const at=detail.attributes.position;for(let i=0;i<part.count;i++)if(part.getX(i)===3){
+          // inferred: and shorten them, so the corner reads as a cluster and not as thorns.
+          tags[i]=92;at.setX(i,at.getX(i)*.56);at.setZ(i,at.getZ(i)*.56);}}
         detail.setAttribute('paintPart',new THREE.Float32BufferAttribute(tags,1));
         if(profile==='zhouqiao'||profile==='xuande'){
           const uv=detail.attributes.memberUV||detail.attributes.uv,info=[];

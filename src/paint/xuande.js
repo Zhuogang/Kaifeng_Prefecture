@@ -33,13 +33,22 @@ export function composeXuande(engine,time,viewAt){
  outline.lineTo(-21.241779,0);outline.closePath();
  const platform=new THREE.ExtrudeGeometry(outline,{depth:9,steps:1,bevelEnabled:false}),pp=platform.attributes.position;
  for(let i=0;i<pp.count;i++)pp.setZ(i,-pp.getZ(i)+3.8+(1-pp.getY(i)/12)*2.1);
- platform.computeVertexNormals();plaster.add(platform,undefined,'#c8a16c',1,0,20);reflected.plaster.add(platform,undefined,'#c8a16c',1,0,20);platform.dispose();
+ platform.computeVertexNormals();plaster.add(platform,undefined,'#c8a16c',1,0,82);reflected.plaster.add(platform,undefined,'#c8a16c',1,0,20);platform.dispose();
  for(const x of centers){
   both('timber',[x,2.8,3.90],[4.60,5.6,.10],'#4c302a',.8,false,79);
   for(const side of [-1,1])both('timber',[x+side*1.165,2.8,4.0],[2.27,5.6,.32],'#994d3e',.86,false,21);
   softened('timber',[x,5.532824,5.04],[6.30,.60,1.00],'#974a37',22,.055);
-  both('timber',[x-2.50,2.9,4.78],[.30,5.8,1.4],'#654739',.63,false,22);
-  both('timber',[x+2.50,2.9,4.78],[.30,5.8,1.4],'#654739',.63,false,22);
+  for(const side of [-1,1]){
+   // inferred: a narrow full-height reveal follows the battered opening;
+   // no upright is left buried behind the lower wall. Keep its old mirror.
+   const reveal=new THREE.BoxGeometry(.16,5.8,.08),p=reveal.attributes.position;
+   for(let i=0;i<p.count;i++){
+    const y=p.getY(i)+2.9;
+    p.setXYZ(i,p.getX(i)+x+side*(opening/2-.15*y/5.8-.08),y,p.getZ(i)+3.8+(1-y/12)*2.1+.025);
+   }
+   reveal.computeVertexNormals();timber.add(reveal,undefined,'#654739',1,0,80);reveal.dispose();
+   reflected.timber.box([x+side*2.50,2.9,4.78],[.30,5.8,1.4],'#654739',.63,0,false,22);
+  }
   // 門皆金釘朱漆: rows of gilt nails; inferred six-by-six spacing.
   for(const dx of [-1.75,-1.05,-.35,.35,1.05,1.75])for(let j=0;j<6;j++)both('timber',[x+dx,.8+j*.78,4.22],[.085,.085,.05],'#d2a45c',1,false,35);
  }
@@ -112,7 +121,7 @@ export function composeXuande(engine,time,viewAt){
   const g=broadleafGeometry(engine.rng(`D4-xuande-grove-${sign}-${i}`),{height:h}),m=new THREE.Matrix4().makeTranslation(x,0,z);
   bark.add(g.wood,m);leaf.add(g.leaves,m);reflected.leaf.add(g.leaves,m);g.wood.dispose();g.leaves.dispose();
  }
- function tree(x,z,h,white=false,hero=false,far=false){const options={height:h,hero,white,detailRng:engine.rng(`D4-blossom-details-${x}-${z}`)},seed=engine.rng(`S1-blossom-${x}-${z}`),g=far?distantBlossomGeometry(seed,options):blossomGeometry(seed,options),m=new THREE.Matrix4().makeTranslation(x,0,z);bark.add(g.wood,m,'#ffffff',hero?.78:1);leaf.add(g.flowers,m);reflected.bark.add(g.wood,m);reflected.leaf.add(g.reflectionFlowers||g.flowers,m);g.wood.dispose();g.flowers.dispose();g.reflectionFlowers?.dispose();}
+ function tree(x,z,h,white=false,hero=false,far=false){const options={height:h,hero,white,detailRng:engine.rng(`D4-blossom-details-${x}-${z}`),heroRepairRng:hero?engine.rng('X1b-xuande-hero-bark'):null},seed=engine.rng(`S1-blossom-${x}-${z}`),g=far?distantBlossomGeometry(seed,options):blossomGeometry(seed,options),m=new THREE.Matrix4().makeTranslation(x,0,z);bark.add(g.wood,m,'#ffffff',hero?.78:1);leaf.add(g.flowers,m);reflected.bark.add(g.reflectionWood||g.wood,m);reflected.leaf.add(g.reflectionFlowers||g.flowers,m);g.wood.dispose();g.reflectionWood?.dispose();g.flowers.dispose();g.reflectionFlowers?.dispose();}
  tree(-22,48,22,false,true);tree(-34,23,12.5,true);
  for(let i=0;i<12;i++){tree(-34+rng.range(-4,4),5+i*4.2,rng.range(5.7,9.5),i%3===0);tree(29+rng.range(-2,5),3+i*4,rng.range(5,8),i%3===1);}
  // inferred: smaller blossom rows recede along both banks beyond the

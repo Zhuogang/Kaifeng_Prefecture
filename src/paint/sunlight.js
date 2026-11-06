@@ -137,9 +137,13 @@ export function installContactAO(engine,time,{profile='zhouqiao'}={}){
   p.copyMat.fragmentShader=p.copyMat.fragmentShader.replace('n.rgb *= 1.0 - uAO * (ws > 1e-5 ? sum / ws : 0.0);',
     'n.rgb *= mix(vec3(1.),vec3(.43,.40,.60),uAO*(ws > 1e-5 ? sum / ws : 0.0));');
   if(profile==='xuande'){
+    // inferred: retain the resolved W1 radii, but fade before the distant
+    // wall. Subpixel AO there self-occludes flat planes; baked frame/eave
+    // shadows already supply the crevices. Tighten the depth bilateral too.
+    p.copyMat.fragmentShader=p.copyMat.fragmentShader.replace('z * 0.015','z * 0.001');
     // Same contact pass, extended to this scene's hall distance. Exclude the
     // accepted canal plane from accumulation tint; its material stays legacy.
-    p.aoMat.fragmentShader=p.aoMat.fragmentShader.replace('smoothstep(20.0, 55.0, -p.z)','smoothstep(70.0, 115.0, -p.z)');
+    p.aoMat.fragmentShader=p.aoMat.fragmentShader.replace('smoothstep(20.0, 55.0, -p.z)','smoothstep(30.0, 65.0, -p.z)');
     p.copyMat.uniforms.paintClipToWorld={value:new THREE.Matrix4()};
     p.copyMat.fragmentShader=p.copyMat.fragmentShader.replace('varying vec2 vUv;','varying vec2 vUv; uniform mat4 paintClipToWorld;')
       .replace('n.rgb *= mix(vec3(1.),vec3(.43,.40,.60),uAO*(ws > 1e-5 ? sum / ws : 0.0));',

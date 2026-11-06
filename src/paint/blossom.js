@@ -17,11 +17,12 @@ function flower(g,p,r,normal,color,rng,hero){
  }
  const core=new THREE.Color('#c99a4e');g.flower(p.clone().addScaledVector(n,.008),r*.13,n,core,.13,0,0);
 }
-export function blossomGeometry(rng,{height=7,hero=false,white=false,detailRng=null}={}){
+export function blossomGeometry(rng,{height=7,hero=false,white=false,detailRng=null,heroRepairRng=null}={}){
  const wood=new Geometry(),bloom=new Geometry(),h=height,clusters=[];
  if(hero){bloom.reflectionProxy=new Geometry();bloom.reflectionIndex=0;}
  const trunk=hero?[V(-1,-1,0),V(-.5,h*.21,-.6),V(1.3,h*.43,-1.6),V(6.2,h*.65,-2.1),V(13.2,h*.80,-2.8),V(21.2,h*.84,-3.2)]:[V(),V(.16,h*.18,0),V(-.2,h*.32,-.2),V(.2,h*.47,0)];
  wood.tube(trunk,hero?[1.95,1.65,1.14,.75,.40,.06]:[h*.034,h*.027,h*.019,h*.008],new THREE.Color('#48423c'),{sides:hero?16:8,gnarl:hero?.35:.75,smooth:5});
+ const trunkVertices=wood.p.length/3;
  const colors=white?['#f1dbc0','#f3e2ca','#dbb4a9','#fff0d3']:['#ed9d9f','#f8bab0','#db7e92','#f5c6b4'];
  for(let i=0;i<(hero?38:15);i++){
   const a=i*2.399,from=hero?trunk[Math.min(5,1+i%5)]:trunk[1].clone().lerp(trunk[3],(i%5)/5),r=h*rng.range(.25,.48);
@@ -71,17 +72,47 @@ export function blossomGeometry(rng,{height=7,hero=false,white=false,detailRng=n
    }
   }
  }
+ if(hero&&heroRepairRng){
+  // inferred: four real forks enter existing flower clusters. Only this
+  // separate label is consumed; accepted flower positions/counts stay exact.
+  const curve=new THREE.CatmullRomCurve3(trunk,false,'centripetal'),radii=[1.95,1.65,1.14,.75,.40,.06];
+  const tips=[V(1,h*1.00,-1),V(7,h*1.06,-1.6),V(15,h*1.05,-2),V(21,h*.95,-2.5)];
+  for(const [i,t]of [.46,.61,.77,.90].entries()){
+   const from=curve.getPoint(t),j=Math.min(4,Math.floor(t*5)),r=THREE.MathUtils.lerp(radii[j],radii[j+1],t*5-j);
+   // inferred: each limb leans with the branch, then bends back, so none reads as a pole.
+   const tip=tips[i],lean=from.clone().lerp(tip,.34).add(V(heroRepairRng.range(1.1,1.9),.25,heroRepairRng.range(-.25,.25))),bend=from.clone().lerp(tip,.68).add(V(heroRepairRng.range(-.95,-.35),.3,heroRepairRng.range(-.25,.25)));
+   const base=r*heroRepairRng.range(.35,.60);
+   wood.tube([from,lean,bend,tip],[base,base*.68,r*.20,.014],new THREE.Color('#48423c'),{sides:10,gnarl:.5,smooth:6});
+  }
+ }
  if(hero)for(let i=0;i<wood.p.length/3;i++){
   const relief=(barkRelief(wood.uv[i*2],wood.uv[i*2+1])-.5)*.10;
   for(let k=0;k<3;k++)wood.p[i*3+k]+=wood.n[i*3+k]*relief;
  }
+ // The accepted mirror keeps the old main trunk, gaining only the new limbs.
+ const reflectionWood=hero&&heroRepairRng?wood.build():null;reflectionWood?.computeVertexNormals();
+ if(hero&&heroRepairRng){
+  // inferred: slow 10-12% centre/radius changes each stay below the brief's 15%.
+  // Deform only the original main-arc rings, leaving flowers alone.
+  const curve=new THREE.CatmullRomCurve3(trunk,false,'centripetal'),radii=[1.95,1.65,1.14,.75,.40,.06],phase=heroRepairRng.range(0,6.283);
+  for(let i=0;i<trunkVertices-1;i++){
+   const t=Math.floor(i/17)/25,j=Math.min(4,Math.floor(t*5)),r=THREE.MathUtils.lerp(radii[j],radii[j+1],t*5-j),center=curve.getPoint(t);
+   const swell=1+.12*Math.sin(t*21+phase),shift=V(.05*r*Math.sin(t*17+phase),.07*r*Math.cos(t*19+phase),.05*r*Math.sin(t*14+phase));
+   const p=V(...wood.p.slice(i*3,i*3+3)).sub(center).multiplyScalar(swell).add(center).add(shift);
+   for(let k=0;k<3;k++)wood.p[i*3+k]=p.getComponent(k);
+  }
+ }
  const bark=wood.build();if(hero){
   // inferred: keep the original growth normals for the X1 visible bark,
   // as on the W2b hero trunk. Legacy reflection normals remain unchanged.
-  const detail=[];for(let i=0;i<wood.n.length;i+=3)detail.push(wood.n[i],wood.n[i+1],wood.n[i+2],2);
+  const detail=[];for(let i=0;i<wood.n.length;i+=3)detail.push(wood.n[i],wood.n[i+1],wood.n[i+2],heroRepairRng?3:2);
   bark.setAttribute('paintDetail',new THREE.Float32BufferAttribute(detail,4));bark.computeVertexNormals();
  }
- return {wood:bark,flowers:bloom.build(),reflectionFlowers:hero?bloom.reflectionProxy.build():null};
+ if(hero&&heroRepairRng)for(let i=0;i<bloom.c.length/3;i++){
+  // inferred: coral pigment only, including its shade; green/gold stay.
+  const kind=bloom.data[i*3];if(kind===2||kind===86){bloom.c[i*3]*=.98;bloom.c[i*3+1]*=.92;bloom.c[i*3+2]*=.83;}
+ }
+ return {wood:bark,reflectionWood,flowers:bloom.build(),reflectionFlowers:hero?bloom.reflectionProxy.build():null};
 }
 export function scatteredPetals(rng,{count=220,x=[-7,14],z=[2,67],scale=1}={}){
  const g=new Geometry();for(let i=0;i<count;i++){const p=V(rng.range(...x),.075,rng.range(...z));g.leaf(p,rng.range(.065,.16)*scale,rng.range(.05,.12)*scale,V(Math.cos(i),0,Math.sin(i)),new THREE.Color(rng.pick(['#efadae','#f6c5b6','#d9959c'])),0,0,2);}
