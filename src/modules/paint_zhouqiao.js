@@ -4,6 +4,7 @@ import { paintedSky, paintedWater } from '../paint/atmosphere.js';
 import {VIEWS,WATER,BACKDROP} from '../paint/composition.js';
 import { compose } from '../paint/scene.js';
 import {createSunlight,bakeSunlight,installContactAO} from '../paint/sunlight.js';
+import {bakeMarks} from '../paint/marks.js';
 
 // inferred: wider sideways travel and a .6 m rise; the falling target keeps
 // the entire near boat below the bridge even at the upward look corner.
@@ -15,6 +16,7 @@ export async function build(engine) {
   installPaintOutput(engine,{profile:'zhouqiao'});
   const time = { value: engine.time, viewIndex:{value:0} };
   createSunlight(engine,time);
+  bakeMarks(engine,time);
   installContactAO(engine,time);
   engine.registry.paint.lightTime=time;
   engine.onUpdate(t => { time.value = t;time.windTime?.value.set(Math.sin(t*.55),Math.cos(t*.55),Math.sin(t*.43),Math.cos(t*.43)); });
@@ -22,7 +24,7 @@ export async function build(engine) {
   const reflectionScene = compose(engine, time, paintView);
   bakeSunlight(engine,time);
   reflectionScene.add(backdrop.clone());
-  paintedWater(engine,time,reflectionScene,WATER);
+  paintedWater(engine,time,reflectionScene,{...WATER,profile:'zhouqiao'});
   // inferred: 50 seconds preserves the former dolly's gentle travel speed.
   paintPlayback(engine,paintView,50);
   const paint=engine.registry.paint;

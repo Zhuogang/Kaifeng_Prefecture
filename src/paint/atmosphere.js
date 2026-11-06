@@ -55,7 +55,7 @@ export async function paintedSky(engine,{shiftU=0,backdrop='bd1',heightOffset=0,
   return mesh;
 }
 
-export function paintedWater(engine,time,reflectionScene,{distortion=.48,bounds=null,river=true}={}) {
+export function paintedWater(engine,time,reflectionScene,{distortion=.48,bounds=null,river=true,profile='xuande'}={}) {
   const buffer=engine.renderer.getDrawingBufferSize(new THREE.Vector2());
   // D1b: full quality retains the approved reflection's sampling density.
   // The old 1536×864 target is a floor; large drawing buffers still resize it.
@@ -177,6 +177,18 @@ export function paintedWater(engine,time,reflectionScene,{distortion=.48,bounds=
         float beyondBridge=(1.-smoothstep(-35.,-26.,p.y-(${BRIDGE.skew.toFixed(6)})*p.x-(${BRIDGE.offset.toFixed(6)})));
         beyondBridge*=smoothstep(${(BRIDGE.start-3).toFixed(6)},${(BRIDGE.start-1).toFixed(6)},p.x)*(1.-smoothstep(${(BRIDGE.end+1).toFixed(6)},${(BRIDGE.end+3).toFixed(6)},p.x));
         body=mix(body,linearColor(vec3(.60,.70,.61)),beyondBridge*.75);
+        ${profile==='zhouqiao'?`
+        // inferred: the under-span cream band yields to deep green. A
+        // shallow distance from each real front pier anchors its dark foot;
+        // the gold mirror breaks out further toward the viewer.
+        float bridgeZ=p.y-(${BRIDGE.skew})*p.x-(${BRIDGE.offset});
+        float span=smoothstep(${(BRIDGE.start-3).toFixed(6)},${BRIDGE.start.toFixed(6)},p.x)*(1.-smoothstep(${BRIDGE.end.toFixed(6)},${(BRIDGE.end+3).toFixed(6)},p.x));
+        float nearBridge=span*smoothstep(-43.,-34.,bridgeZ)*(1.-smoothstep(-7.,2.,bridgeZ));
+        float foot=span*exp(-max(0.,bridgeZ+17.)*.20)*smoothstep(-28.,-23.,bridgeZ);
+        float corridor=paintView>4.5&&paintView<5.5?0.:1.;nearBridge*=corridor;foot*=corridor;
+        body=mix(body,linearColor(vec3(.34,.44,.34)),nearBridge*.94);
+        reflected=mix(reflected,reflected*vec3(.29,.34,.29),foot*.88);
+        `:''}
         `:''}
         if(paintView>4.5&&paintView<5.5)body=linearColor(vec3(.27,.365,.35))*(.94+.12*noise(p*.18));
         float skyOpening=smoothstep(.008,.13,reflected.b-reflected.r);
@@ -200,6 +212,7 @@ export function paintedWater(engine,time,reflectionScene,{distortion=.48,bounds=
         float calm=${river?'1.-smoothstep(-14.,-2.,p.y)':'0.'};
         float mirror=${river?'mix((.46+.22*strokes)*(1.-smoothstep(1.,18.,p.y)*.55),.86,calm)':'.40+.20*strokes'};
         ${river?'mirror=mix(mirror,.36,beyondBridge);':''}
+        ${profile==='zhouqiao'?'mirror=mix(mirror,.72,nearBridge);':''}
         if(paintView>4.5&&paintView<5.5)mirror=.86;
         vec3 c=mix(body,reflected,mirror);
         c+=linearColor(vec3(.68,.65,.50))*(1.-strokes)*mix(.055,.015,calm);

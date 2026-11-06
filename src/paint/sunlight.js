@@ -8,12 +8,15 @@ export const SUNLIGHT_GLSL = /* glsl */`
 uniform sampler2DShadow paintShadowMap;
 uniform mat4 paintShadowMatrix;
 uniform float paintShadowStrength,paintSunEnergy;
-float castShade(vec3 p,vec3 n){
+float castShadeAt(vec3 p,vec3 n,vec3 receiver){
   vec3 q=(paintShadowMatrix*vec4(p,1.)).xyz;
   // Compare against the receiver plane at each filter tap. Comparing
   // every offset against the centre pixel's depth self-shadowed sloping
   // rails into a checker pattern. The bias below covers bilinear texels.
-  vec3 plane=cross(dFdx(q),dFdy(q));
+  // A mark centre is constant inside its stroke. Derive the receiver plane
+  // from the continuous surface, even when sampling light at that centre.
+  vec3 r=(paintShadowMatrix*vec4(receiver,1.)).xyz;
+  vec3 plane=cross(dFdx(r),dFdy(r));
   vec2 slope=abs(plane.z)>1.e-12?-plane.xy/plane.z:vec2(0.);
   if(dot(n,paintSun)<=.015||paintShadowStrength==0.)return 1.;
   if(any(lessThan(q,vec3(0.)))||any(greaterThan(q,vec3(1.))))return 1.;
@@ -31,6 +34,7 @@ float castShade(vec3 p,vec3 n){
   }
   return mix(1.,shade/5.,paintShadowStrength);
 }
+float castShade(vec3 p,vec3 n){return castShadeAt(p,n,p);}
 // inferred: two pigments retain a little warm bounce and open-sky violet in
 // shade. Angular sun energy, rather than a global curve, separates the planes.
 vec3 stoneLight(vec3 pigment,vec3 n,float sun,float pier,float wall){

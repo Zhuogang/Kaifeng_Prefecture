@@ -167,7 +167,9 @@ export function compose(engine, time, viewAt) {
     // inferred: larger ashlar facing and a tall flat timber reveal frame retain
     // the approved tan base and vermilion posts while giving the doorway depth.
     const facingRng=engine.rng(`D2-tower-facing-${x}-${z}`);
-    for(const sign of [-1,1])for(let row=0;row<8;row++)for(let col=0;col<3;col++){
+    // W2: the ashlar facing stops at the plinth; the existing cream
+    // plaster body above it no longer has a grid of stone veneers.
+    for(const sign of [-1,1])for(let row=0;row<2;row++)for(let col=0;col<3;col++){
       const center=[sign*(3.78+col*.95),.64+(row+.5)*.63,3.31];
       const g=new THREE.BoxGeometry(.93,.61,.13),mm=new THREE.Matrix4().makeTranslation(...center);
       const pigment=new THREE.Color('#d0b18a').multiplyScalar(facingRng.range(.96,1.04));

@@ -4,6 +4,7 @@ import { SUN, dirFromAzEl } from '../world/plan.js';
 import { BARK_GLSL } from './bark.js';
 import { PAINTED_STONE_GLSL } from './stonework.js';
 import {ZHOU_SUN,SUNLIGHT_GLSL} from './sunlight.js';
+import {strokeMaterial} from './strokes.js';
 
 // inferred: pigment ramps, stroke fields, ragged coverage and painted occlusion
 // are art direction. Zhouqiao uses W1 sunlight; Xuande keeps the art-bible sun.
@@ -67,6 +68,9 @@ export function dappleGLSL({height=8,wind=.12,scale=[1.05,.8]}={}){
 }
 
 export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',reflection=false,bank=false}={}) {
+  // W2 replaces Zhouqiao's soft procedural washes with one mark-lit path.
+  // Xuande retains the complete approved material implementation below.
+  if(profile==='zhouqiao'&&kind!=='leaf')return strokeMaterial(time,kind,{reflection,bank});
   time.windTime??={value:new THREE.Vector4(0,1,0,1)};
   const code = {
     stone: `vec2 q=abs(n.y)>.65?vP.xz:vec2(abs(n.x)>.65?vP.z:vP.x,vP.y);
@@ -219,7 +223,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             gl_FragColor=vec4(twig,1.);return;
           }
         `:''}
-        ${profile==='zhouqiao'?`float shadowing=castShade(vP,n);float sunlight=max(dot(n,paintSun),0.)*shadowing;`:''}
+        ${profile==='zhouqiao'?`float shadowing=castShade(vP,${kind==='leaf'?'dot(n,paintSun)<0.?-n:n':'n'});float sunlight=max(dot(n,paintSun),0.)*shadowing;`:''}
         ${kind==='leaf'?`
           // Closed canopy lobes need neither cutout coverage nor the near
           // flower brush field. Reject hidden backs before shading their wash.
@@ -238,10 +242,14 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
           // inferred: willow spears use a simple measured pigment ramp. Skip
           // the unrelated blossom/card brush fields before shading dense whips.
           if(abs(vKind-83.)<.5||abs(vKind-91.)<.5){
-            float light=.18+(.28*abs(dot(n,paintSun))+.28*noise(vP.xz*.45))*shadowing;
-            vec3 c=vC*mix(vec3(.72,.79,.72),vec3(1.10,1.07,.85),light)*(.82+.18*vData.x);
-            float grey=dot(c,vec3(.2126,.7152,.0722));
-            c=mix(vec3(grey),c,abs(vKind-83.)<.5?.88:.80)*(abs(vKind-83.)<.5?.90:1.06);
+            // inferred: deeper saturated interior, with a coherent value
+            // per whip from its existing seeded pigment and canopy exposure.
+            float leafShadow=shadowing;
+            float light=clamp((.28+.85*abs(dot(n,paintSun)))*leafShadow,0.,1.);
+            float whip=clamp(dot(vC,vec3(.2126,.7152,.0722))/.30,.58,1.30);
+            vec3 shaded=linearColor(vec3(.31,.355,.17))*(.72+.28*whip);
+            vec3 lit=linearColor(vec3(.75,.75,.38))*(.78+.22*whip);
+            vec3 c=mix(shaded,lit,light)*(.72+.28*vData.x);
             c=mix(c,linearColor(vec3(.76,.75,.69)),smoothstep(35.,140.,-vP.z)*.68);
             float edge=abs(vUv.x-.5)*2.,aa=max(.06,fwidth(edge));
             // inferred: distant whips retain fractional leaf coverage below
