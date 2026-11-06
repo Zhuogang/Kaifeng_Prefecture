@@ -52,8 +52,8 @@ try {
     }
     console.log(`baseline written to ${BASE}`);
   } else {
-    // 宣德楼 stays as approved, and view 1 of 州桥 keeps its composition.
-    for (const [scene, limit, share] of [[0, 2, .05], [1, 8, 1.5]]) {
+    // 宣德楼 stays as approved. 州桥's look is being changed on the client's request, so it's judged by eye.
+    for (const [scene, limit, share] of [[0, 2, .05]]) {
       const { page, clean } = await openStill(`scene=${scene}&ratio=1`);
       for (const f of FRACTIONS) {
         const now = PNG.sync.read((await shoot(page, null, f, [0, 0])).bytes), before = PNG.sync.read(fs.readFileSync(`${BASE}/scene${scene}-f${f}.png`)), changed = compare(now, before, limit);
