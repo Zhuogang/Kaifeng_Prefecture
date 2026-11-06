@@ -3,9 +3,10 @@ import { TOWERS, BRIDGE, MOORING, BOAT, CAMERA } from './composition.js';
 import { SUN, dirFromAzEl } from '../world/plan.js';
 import { BARK_GLSL } from './bark.js';
 import { PAINTED_STONE_GLSL } from './stonework.js';
+import {ZHOU_SUN,SUNLIGHT_GLSL} from './sunlight.js';
 
 // inferred: pigment ramps, stroke fields, ragged coverage and painted occlusion
-// are art direction for this proof; the sun direction follows the art bible.
+// are art direction. Zhouqiao uses W1 sunlight; Xuande keeps the art-bible sun.
 
 export const BRUSH = /* glsl */`
 float hash21(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
@@ -91,7 +92,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
   }[kind];
   const mat = new THREE.ShaderMaterial({
     name: 'gouache-' + kind, vertexColors: true, side: THREE.DoubleSide, alphaToCoverage: kind === 'leaf',
-    uniforms: { paintTime: time, paintWindTime:time.windTime, paintView:time.viewIndex??{value:0},paintSun: { value: new THREE.Vector3(...dirFromAzEl(SUN.azimuth, SUN.elevation)) } },
+    uniforms: { paintTime: time, paintWindTime:time.windTime, paintView:time.viewIndex??{value:0},paintSun: { value: profile==='zhouqiao'?ZHOU_SUN.clone():new THREE.Vector3(...dirFromAzEl(SUN.azimuth, SUN.elevation)) },...(profile==='zhouqiao'?time.sunlight?.uniforms:{}) },
     vertexShader: /* glsl */`
       uniform float paintTime,paintView; uniform vec4 paintWindTime; attribute vec4 paintWind; attribute vec3 paintData; attribute float paintKind;
       varying vec3 vP,vN,vC,vData; varying vec2 vUv; varying float vKind;
@@ -134,6 +135,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
       uniform float paintTime,paintView;
       varying vec3 vP,vN,vC,vData; varying vec2 vUv; varying float vKind;
       ${BRUSH}
+      ${profile==='zhouqiao'?SUNLIGHT_GLSL:''}
       void main(){
         vec3 n=normalize(vN); if(!gl_FrontFacing)n=-n;
         ${bank?`
@@ -217,12 +219,13 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             gl_FragColor=vec4(twig,1.);return;
           }
         `:''}
+        ${profile==='zhouqiao'?`float shadowing=castShade(vP,n);float sunlight=max(dot(n,paintSun),0.)*shadowing;`:''}
         ${kind==='leaf'?`
           // Closed canopy lobes need neither cutout coverage nor the near
           // flower brush field. Reject hidden backs before shading their wash.
           if(abs(vKind-84.)<.5||abs(vKind-85.)<.5||abs(vKind-89.)<.5){
             if(!gl_FrontFacing)discard;
-            float dome=smoothstep(-.45,.85,dot(n,paintSun));
+            float dome=smoothstep(-.45,.85,dot(n,paintSun))${profile==='zhouqiao'?'*shadowing':''};
             vec3 canopy=vC*mix(vec3(.57,.65,.62),vec3(1.13,1.07,.83),dome);
             float leafLoad=noise(vP.xz*2.1+vP.y*.7)*.70+noise(vP.xy*4.3)*.30;
             canopy*=.84+.27*leafLoad;
@@ -235,7 +238,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
           // inferred: willow spears use a simple measured pigment ramp. Skip
           // the unrelated blossom/card brush fields before shading dense whips.
           if(abs(vKind-83.)<.5||abs(vKind-91.)<.5){
-            float light=.26+.28*abs(dot(n,paintSun))+.28*noise(vP.xz*.45);
+            float light=.18+(.28*abs(dot(n,paintSun))+.28*noise(vP.xz*.45))*shadowing;
             vec3 c=vC*mix(vec3(.72,.79,.72),vec3(1.10,1.07,.85),light)*(.82+.18*vData.x);
             float grey=dot(c,vec3(.2126,.7152,.0722));
             c=mix(vec3(grey),c,abs(vKind-83.)<.5?.88:.80)*(abs(vKind-83.)<.5?.90:1.06);
@@ -267,7 +270,8 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             }
           }
         `:''}
-        float light=smoothstep(-.15,.70,dot(n,paintSun));
+        ${profile==='zhouqiao'&&kind==='roof'?'sunlight=max(dot(n,paintSun),0.)*shadowing;':''}
+        float light=${profile==='zhouqiao'?`clamp(sunlight*${kind==='stone'?'paintSunEnergy':'1.45'},0.,1.)`:'smoothstep(-.15,.70,dot(n,paintSun))'};
         ${kind==='stone'?'float pigmentSun=light;':''}
         ${kind === 'leaf' ? 'light=.26+.28*abs(dot(n,paintSun))+.28*noise(vP.xz*.45);' : ''}
         vec3 shadow=vC*vec3(.38,.48,.74)+linearColor(vec3(.20,.17,.29))*.35;
@@ -277,19 +281,19 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
         ${kind === 'stone' ? `
           // inferred: warm limestone planes; cool pigment is confined to soft cast shade.
           shadow=vC*vec3(.50,.47,.42);lit=vC*vec3(1.20,1.10,.92);
-          c=mix(shadow,lit,light)*(1.+variation*.36+wash*.06);
+          c=${profile==='zhouqiao'?'stoneLight(vC,n,sunlight,0.,0.)':'mix(shadow,lit,light)'}*(1.+variation*.36+wash*.06);
           float joint=1.-smoothstep(.006,.024,abs(mod(vP.y+.09,.66)-.33));
           if(vP.z< -12. && abs(n.y)<.5)c*=1.-joint*.065;
           if(!masonry)c*=.92+.16*noise(q*vec2(5.7,8.));
         ` : ''}
         ${kind === 'plaster' ? `
-          shadow=vC*vec3(.70,.58,.48);lit=vC*vec3(1.60,1.35,1.00);
+          ${profile==='zhouqiao'?'shadow=vC*vec3(.32,.29,.36);lit=vC*vec3(1.18,1.02,.85);':'shadow=vC*vec3(.70,.58,.48);lit=vC*vec3(1.60,1.35,1.00);'}
           c=mix(shadow,lit,light)*(1.+variation*.32+wash*.07);
           float course=1.-smoothstep(.008,.028,abs(mod(vP.y,.59)-.295));
           c*=1.-course*.055;
-          float bankShadow=(1.-smoothstep(2.8,3.4,vP.y))*(1.-smoothstep(-32.,-29.,vP.z));
+          ${profile==='xuande'?`float bankShadow=(1.-smoothstep(2.8,3.4,vP.y))*(1.-smoothstep(-32.,-29.,vP.z));
           bankShadow*=smoothstep(-25.,-20.,vP.x)*(1.-smoothstep(33.,38.,vP.x));
-          if(abs(vKind-66.)>.5)c=mix(c,c*vec3(.18,.26,.26),bankShadow*.90);
+          if(abs(vKind-66.)>.5)c=mix(c,c*vec3(.18,.26,.26),bankShadow*.90);`: ''}
         ` : ''}
         ${kind === 'leaf' ? 'c=mix(c,c*vec3(.70,.96,1.13),(1.-light)*.6);c*=.67+.63*smoothstep(.42,.76,noise(vP.xz*.45));' : ''}
         ${kind === 'roof' ? `
@@ -323,7 +327,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             float gv=(dFdy(plate)*duX.x-dFdx(plate)*duY.x)/determinant;
             barkNormal=normalize(n-across*clamp(gu,-8.,8.)*.10-along*clamp(gv,-3.,3.)*.045);
           }
-          float sunSide=smoothstep(.02,.72,dot(barkNormal,paintSun))*smoothstep(-.10,.25,dot(n,paintSun));
+          float sunSide=smoothstep(.02,.72,dot(barkNormal,paintSun))*smoothstep(-.10,.25,dot(n,paintSun))${profile==='zhouqiao'?'*shadowing':''};
           c=mix(middle,ridge,sunSide*(.35+.65*plate))*(.82+plate*.25);
           c=mix(c,linearColor(vec3(.13,.09,.09)),pow(crevice,2.)*.90);
           float lichen=smoothstep(.62,.80,noise(q*vec2(.35,.12)+7.));
@@ -347,54 +351,20 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
           }
         ` : ''}
         ${kind === 'stone'&&profile==='zhouqiao' ? `float bridgeY=vP.y-(${BRIDGE.fall.toFixed(6)})*vP.x,bridgeZ=vP.z-(${BRIDGE.skew.toFixed(6)})*vP.x-(${BRIDGE.offset.toFixed(6)});
-          float underDeck=(1.-smoothstep(2.1,2.95,bridgeY))*smoothstep(1.2,2.95,bridgeY)*(1.-smoothstep(-15.9,-15.4,bridgeZ));
-          c=mix(c,c*vec3(.61,.68,.86),underDeck*.52);
-          // inferred: occluded beam soffit and fascia; the unshaded low-detail
-          // deck was the cream mass mirrored beyond the column reflections.
-          float beam=(1.-smoothstep(3.70,3.82,bridgeY))*smoothstep(2.78,2.95,bridgeY);
-          beam*=smoothstep(-23.6,-23.0,bridgeZ)*(1.-smoothstep(-15.8,-15.3,bridgeZ));
-          if(n.y<.35||vN.y<-.35)c=mix(c,c*vec3(.34,.38,.40),beam*.82);
-          float backWall=(1.-smoothstep(-26.,-24.,bridgeZ))*(1.-smoothstep(3.,3.8,vP.y));
-          backWall*=(1.-smoothstep(${BRIDGE.end.toFixed(6)},${(BRIDGE.end+5).toFixed(6)},vP.x))*smoothstep(${(BRIDGE.start-4).toFixed(6)},${BRIDGE.start.toFixed(6)},vP.x);
-          c=mix(c,c*vec3(.25,.31,.32),backWall*.86);
-          // inferred: the broad front face is warm shade; the narrow sun face
-          // and chipped arris retain cream light, making each shaft read solid.
-          float shaft=(1.-smoothstep(2.85,3.1,bridgeY))*(1.-smoothstep(-15.9,-15.4,bridgeZ));
-          if(abs(vN.y)<.35){
-            float faceSun=smoothstep(.02,.55,dot(n,paintSun));
-            vec3 pier=mix(linearColor(vec3(.42,.37,.35)),linearColor(vec3(.76,.64,.44)),faceSun);
-            pier*=(.90+.17*noise(q*vec2(3.2,4.4)))*.92;
-            pier*=1.-smoothstep(2.35,3.05,bridgeY)*.62;
-            pier=mix(pier,linearColor(vec3(.17,.22,.21)),(1.-smoothstep(.02,.24,vP.y))*.85);
-            c=mix(c,pier,shaft);
-          }
-          if(bridgeY>3.65&&bridgeY<5.2)c*=mix(vec3(.82,.78,.75),vec3(1.11,1.05,.89),light);
-          float bridgeShadow=(1.-smoothstep(27.,33.,abs(vP.x)))*(1.-smoothstep(-22.9,-22.3,bridgeZ))*(1.-smoothstep(2.3,3.3,bridgeY));
-          c=mix(c,linearColor(vec3(.25,.32,.35)),bridgeShadow*.85);
           vec3 postP=vP-vec3(${MOORING.position.map(x=>x.toFixed(6)).join(',')});
           if(abs(postP.x)<${(MOORING.width*.6).toFixed(6)}&&abs(postP.z)<${(MOORING.width*.6).toFixed(6)}&&postP.y>0.){
             float stain=noise(q*vec2(13.,2.9))*.7+noise(q*vec2(23.,9.))*.3;
             c*=mix(.41,.77,smoothstep(.26,.72,stain));
             c+=linearColor(vec3(.65,.59,.47))*max(0.,dab(q*vec2(18.,7.)))*.25;
           }
-          float quayShade=(1.-smoothstep(.65,1.5,abs(vP.x+14.)))*smoothstep(-19.,-16.,vP.z)*(1.-smoothstep(-5.,-3.,vP.z));
-          c=mix(c,c*vec3(.49,.50,.63),quayShade*.80);
           float moss=(1.-smoothstep(.08,.72,vP.y))*smoothstep(.36,.72,noise(vP.xz*3.));
           c=mix(c,linearColor(vec3(.29,.35,.23)),moss*.52);
-          if(vP.z>-7. && n.y>.5){
-            ${dappleGLSL(dapple)}
-            float grey=dot(c,vec3(.2126,.7152,.0722));c=mix(vec3(grey),c,.64);
-            pigmentSun=dapple;
-          }` : ''}
+        ` : ''}
         ${profile==='zhouqiao'&&['timber','plaster'].includes(kind) ? TOWERS.map(([x,z,s]) => `{
           vec3 p=(vP-vec3(${x.toFixed(6)},3.6,${z.toFixed(6)}))/${s.toFixed(6)};
-          float roofShade=(1.-smoothstep(7.,9.,abs(p.x)))*(1.-smoothstep(4.5,6.5,abs(p.z)));
-          roofShade*=smoothstep(6.9,8.8,p.y)*(1.-smoothstep(10.8,11.8,p.y));
-          float lintelShade=(1.-smoothstep(3.2,4.4,abs(p.x)))*smoothstep(4.5,5.4,p.y)*(1.-smoothstep(6.0,6.4,p.y));
-          c=mix(c,c*vec3(.52,.56,.63),max(roofShade*.58,lintelShade*.65));
           ${kind==='plaster'?`
           if(vKind>10.5&&vKind<11.5&&abs(p.x)<6.5&&abs(p.z)<4.){
-            // inferred: quiet coursed tan masonry with a falling eave shadow.
+            // inferred: quiet coursed tan masonry under the baked eave shadow.
             float u=abs(n.x)>.60?p.z:p.x;
             float row=p.y/.42,cell=u/.80+mod(floor(row),2.)*.5;
             float joint=min(fract(row),1.-fract(row)),ja=max(.012,fwidth(row));
@@ -403,12 +373,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             course=max(course,(1.-smoothstep(.014,.045,stagger))*.42);
             c*=1.-course*.12;
             c*=.95+.09*noise(vec2(floor(cell),floor(row)));
-            c=mix(c,c*vec3(.46,.42,.43),smoothstep(3.1,5.7,p.y)*.76);
-            float inside=1.-smoothstep(3.25,3.43,abs(p.x));
-            float glow=exp(-pow((p.z+.3)/1.8,2.));
-            vec3 recess=c*mix(.37,.80,smoothstep(-3.4,1.1,p.z));
-            recess+=linearColor(vec3(.42,.26,.12))*glow*.11;
-            c=mix(c,recess,inside*.85);
+
           }` : ''}
         }`).join('\n') : ''}
         ${kind==='timber'&&profile==='zhouqiao'?'if(vP.z<0.)c*=1.17;':''}
@@ -547,7 +512,6 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
         `:''}
         ${kind==='roof'&&profile==='xuande'?'c=mix(vec3(dot(c,vec3(.2126,.7152,.0722))),c,.90)+linearColor(vec3(.14,.10,.05))*.15;':''}
         ${kind==='timber'&&profile==='xuande'?'if(vKind>34.5&&vKind<35.5)c=mix(linearColor(vec3(.48,.29,.09)),linearColor(vec3(.88,.67,.30)),.40+.60*light);':''}
-        ${kind==='stone'&&profile==='zhouqiao'?'if(abs(vKind-37.)<.5)c*=1.-smoothstep(.15,.75,n.y)*.45;':''}
         ${kind==='roof'?`
           if(abs(vKind-57.)<.5)c*=mix(.74,1.13,max(n.y,0.));
           if(abs(vKind-50.)<.5){
@@ -571,7 +535,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
           if(vKind>39.5&&vKind<45.5){
             // inferred: the existing vermilion palette receives darker arm
             // undersides and a narrow warm top face; dou accents stay muted.
-            float armLight=max(light,max(n.y,0.)*.50);
+            float armLight=${profile==='zhouqiao'?'light':'max(light,max(n.y,0.)*.50)'};
             c=mix(vC*vec3(.53,.50,.58),vC*vec3(1.58,1.34,1.06),armLight);
             c*=1.-max(-n.y,0.)*.42;
             c*=1.-pow(abs(n.x),3.)*.22;
@@ -657,7 +621,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             float fade=1.-smoothstep(.6,1.4,max(length(dFdx(grain*vec2(.65,24.))),length(dFdy(grain*vec2(.65,24.)))));
             vec3 dry=mix(linearColor(vec3(.33,.28,.23)),linearColor(vec3(.56,.44,.30)),wash);
             c=mix(dry*vec3(.50,.53,.62),dry*vec3(1.45,1.27,1.08),light*.65+.15);
-            ${dappleGLSL(dapple)}
+            float dapple=light;
             float scrape=noise(grain*vec2(.85,24.)+vec2(noise(local*.8)*1.8,0.));
             float scrapeFade=1.-smoothstep(.6,1.4,max(length(dFdx(grain*vec2(.85,24.))),length(dFdy(grain*vec2(.85,24.)))));
             c=mix(c,linearColor(vec3(.70,.56,.39)),max(smoothstep(.53,.78,worn)*fade*.24,smoothstep(.42,.66,scrape)*scrapeFade*(.20+.40*dapple)));
@@ -679,9 +643,12 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
         ${kind==='stone'&&profile==='zhouqiao'?`
           if(masonry&&vKind<66.){
             // inferred: broad per-block pigment, warm lit fronts and cool
-            // dark sides; the only deep shade is directly under the deck.
-            float sun=smoothstep(.03,.72,dot(n,paintSun));
-            c=mix(vC*vec3(.39,.42,.48),vC*vec3(1.00,1.00,1.03),sun);
+            // shaded sides. W1 supplies cast shade from the real geometry.
+            float sun=sunlight;
+            c=stoneLight(vC,n,sun,abs(vKind-52.)<.5?1.:0.,0.);
+            // W1: the paving's two pigments follow c2, lit ochre over
+            // violet-grey shade; its existing slab finish stays intact.
+            if(abs(vKind-62.)<.5&&n.y>.65)c=mix(linearColor(vec3(.40,.392,.443)),linearColor(vec3(.79,.65,.55)),clamp(sun*1.45,0.,1.));
             vec2 stoneQ=q,stoneSize=vec2(1.45,.62);
             if(abs(vKind-52.)<.5){stoneQ.y=bridgeY;stoneSize=vec2(1.20,.64);}
             if(abs(vKind-65.)<.5)stoneSize=vec2(2.4,.72);
@@ -691,15 +658,8 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             c=paintedStone(c,stoneQ,stoneSize,vec4(joints,.14,.55,.16),vec2(.006,.020));`}
             if(abs(vKind-52.)<.5){
               c=mix(c,linearColor(vec3(.18,.24,.22)),(1.-smoothstep(.015,.19,vP.y))*.88);
-              // inferred: the same falling deck shades the upper 0.5 m of
-              // each shaft; consistent face light separates the piers below.
-              float top=2.95+.18*max(0.,1.-pow(vP.x/30.,2.));
-              c=mix(c,linearColor(vec3(.26,.225,.205)),smoothstep(top-.60,top-.10,bridgeY)*.86);
             }
-            if(abs(vKind-61.)<.5){
-              if(n.y<-.4)c=linearColor(vec3(.23,.19,.17))*(.94+wash*.10);
-              else c*=.60;
-            }
+
             if(abs(vKind-53.)<.5)c*=1.14;
             if(abs(vKind-56.)<.5)c=linearColor(vec3(.28,.24,.21));
             if(abs(vKind-63.)<.5)c*=1.10+max(n.y,0.)*.18;
@@ -716,31 +676,19 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             float inset=smoothstep(.035,.075,edge);c*=1.-inset*.26-cut*.18-frame*.15;
           }
           if(vKind>69.5&&vKind<75.5){
-            float sun=max(smoothstep(.25,.85,dot(n,paintSun)),max(n.y,0.)*.72);
-            c=mix(vC*vec3(.42,.44,.53),vC*vec3(1.05,1.04,1.07),sun);
+            float sun=sunlight;
+            c=stoneLight(vC,n,sun,0.,abs(vKind-74.)<.5?1.:0.);
             float quayYaw=${Math.atan(.884).toFixed(6)};
             vec2 local=mat2(cos(quayYaw),sin(quayYaw),-sin(quayYaw),cos(quayYaw))*(vP.xz-vec2(-13.81,0.));
             vec2 stoneQ=vec2(local.y,vP.y),stoneSize=vec2(1.65,.68);
-            vec3 undappled=c;${dappleGLSL(dapple)}c=undappled;
-            if(abs(vKind-70.)<.5||abs(vKind-73.)<.5||abs(vKind-75.)<.5){
-              // inferred: finer overlapping leaf gaps cross both the close
-              // slabs and their kerb, instead of one broad soft light patch.
-              dapple=smoothstep(.38,.68,noise(canopy*vec2(2.8,2.3))*.65+noise(canopy*6.2)*.35);
-            }
-            if(abs(vKind-73.)<.5||abs(vKind-75.)<.5){
-              // D4c: the specified grey-brown faces and warm tops, crossed by
-              // the same projected leaf shade as the paving and moored boat.
-              vec3 face=linearColor(vec3(.560784,.513725,.447059)),top=linearColor(vec3(.803922,.741176,.623529));
-              c=mix(face*.67,face,sun);c=mix(c,top,max(n.y,0.));
-              c*=mix(vec3(.60,.62,.80),vec3(1.12,1.03,.90),dapple);
-            }
+            float dapple=clamp(sun*paintSunEnergy,0.,1.);
             if(abs(vKind-75.)<.5){stoneQ=vec2(q.x,vP.y-${(MOORING.position[1]-.10).toFixed(6)});stoneSize=vec2(.62,.63);}
             if(abs(vKind-73.)<.5)stoneSize=vec2(1.2,.36);
             if((abs(vKind-73.)<.5||abs(vKind-75.)<.5)&&abs(n.y)>.65)stoneQ=local;
             if(abs(vKind-70.)<.5){
               // inferred: smaller worn slabs carry peach light across cool
               // violet shade; their thin joints stay subordinate to the dapple.
-              c=mix(linearColor(vec3(.40,.40,.49)),linearColor(vec3(.91,.73,.60)),dapple);
+              c=mix(linearColor(vec3(.40,.392,.443)),linearColor(vec3(.79,.65,.55)),dapple);
               stoneQ=local;stoneSize=vec2(1.05,.78);
             }
             ${reflection?'c*=1.+(noise(stoneQ*.5)-.5)*.10;':`float joints=(abs(vKind-73.)<.5||abs(vKind-75.)<.5)?0.:abs(vKind-70.)<.5?.62:.35;
@@ -770,8 +718,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             }`}
             float moss=(1.-smoothstep(.08,.62,vP.y))*smoothstep(.38,.70,noise(vP.xz*vec2(1.3,.9)));
             c=mix(c,linearColor(vec3(.30,.37,.25)),moss*.58);
-            float canopyShade=(1.-smoothstep(.65,1.5,abs(vP.x+14.)))*smoothstep(-19.,-16.,vP.z)*(1.-smoothstep(-5.,-3.,vP.z));
-            if(abs(vKind-74.)<.5)c*=mix(vec3(1.),vec3(.58,.61,.75),canopyShade*.80);
+
           }
         `:''}
         ${kind==='stone'&&profile==='xuande'?`
@@ -781,13 +728,14 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
           }
         `:''}
         ${kind==='plaster'&&profile==='zhouqiao'?`if(abs(vKind-66.)<.5){
-          c=linearColor(vec3(.77,.69,.56))*(.93+.10*noise(q*.45));
+          c=paintView>4.5&&paintView<5.5?linearColor(vec3(.77,.69,.56)):stoneLight(linearColor(vec3(.77,.69,.56)),n,sunlight,0.,0.);c*=.93+.10*noise(q*.45);
           if(paintView>4.5&&paintView<5.5){
             // inferred: sunlit, coursed bank closes the corridor in open light.
             c=paintedStone(c,vec2(abs(n.x)>.65?vP.z:vP.x,vP.y),vec2(2.6,.65),vec4(.22,.12,.35,.10),vec2(.008,.024));
             c=mix(c,linearColor(vec3(.48,.53,.37)),(1.-smoothstep(.05,.50,vP.y))*.35);
           }
         }`:''}
+        ${kind==='timber'&&profile==='zhouqiao'?`if(abs(vKind-46.)<.5||abs(vKind-58.)<.5)c*=mix(vec3(.50,.50,.65),vec3(1.12,1.07,1.),light);`:''}
         ${kind==='leaf'?`
           // inferred: willow leaves keep three coherent whip values; closed
           // crowns receive soft directional light instead of cutout noise.
@@ -834,7 +782,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
 
 // A soft bright wash at quarter resolution; no full-resolution image filter.
 // The engine's accumulation/AA remains intact.
-export function installPaintOutput(engine) {
+export function installPaintOutput(engine,{profile='xuande'}={}) {
   engine.quality.ao = false;
   engine.quality.bloom = false;
   engine.renderer.shadowMap.enabled = false;
@@ -842,9 +790,11 @@ export function installPaintOutput(engine) {
   const pipeline = engine.pipeline;
   const addSample = pipeline.addSample.bind(pipeline);
   pipeline.addSample = (scene, camera) => {
-    // Live tier changes can restore the generic AO setting after this module
-    // builds. The painted scene always uses its authored surface occlusion.
-    pipeline.quality.ao = false;
+    // Live tier changes can restore generic AO. Zhouqiao selects its small
+    // contact pass here; Xuande and the accepted corridor retain no SSAO.
+    const light=engine.registry.paint?.lightTime;
+    pipeline.quality.ao = profile==='zhouqiao'&&light?.contactAO&&light.viewIndex.value!==5;
+    if(pipeline.quality.ao){pipeline.quality.aoSamples=8;pipeline.quality.aoSettleSamples=8;pipeline.quality.aoStrength=.85;}
     return addSample(scene, camera);
   };
   const vertexShader='varying vec2 vUv; void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}';
