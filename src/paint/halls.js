@@ -41,6 +41,8 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
   const ornaments = chiwei({height:ornamentHeight}); // Includes its source-model 拒鹊子.
   const hallTemplates=new Map();
   const bracketInstances=new Map();
+  // inferred: independent set pigments preserve all geometry/placement RNG.
+  const setPigments=engine.rng('X2-bracket-sets-'+profile);
   const capSource=new THREE.CircleGeometry(.075,6),rafterSource=new THREE.BoxGeometry();
   if(profile==='zhouqiao'||profile==='xuande'){
     const uv=capSource.attributes.uv;
@@ -77,14 +79,16 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
     const ridgePaths=[[[-model.r,model.baseY+model.sectionY(0),0],[model.r,model.baseY+model.sectionY(0),0]]];
     if(model.kind!=='xuanshan')for(const side of ['south','north'])for(const u of [-1,1])ridgePaths.push(model.rows(side,1).map(t=>model.point(side,u,t)));
     const shapeGeometry=(g,k)=>{
-      if(!paintShape&&k!=='tile'&&k!=='ridge')return k==='timber'?g.clone():g;
+      if(!paintShape&&k!=='tile'&&k!=='ridge'&&!(profile==='zhouqiao'&&hero&&k==='plaster'))return k==='timber'?g.clone():g;
       const copy=g.clone(),p=copy.attributes.position;
       if(k==='tile'){
         const tiles=copy.attributes.tileCoord,uv=[],detail=[];
         for(let i=0;i<p.count;i++){
           uv.push(tiles.getX(i)*.26/pitch,tiles.getW(i));
           // X1b: one painted run per 2.5 source rows, also on the hip faces.
-          detail.push(profile==='xuande'?tiles.getX(i)/2.5:tiles.getX(i)*.26/pitch+rows*.5,tiles.getY(i),tiles.getZ(i),tiles.getW(i));
+          // inferred: about nine pixels on the near Zhouqiao tower. Legacy
+          // paintUV remains unchanged for views 5/6 and the water materials.
+          detail.push(profile==='xuande'?tiles.getX(i)/2.5:tiles.getX(i)/1.45,tiles.getY(i),tiles.getZ(i),tiles.getW(i));
         }
         copy.setAttribute('paintUV',new THREE.Float32BufferAttribute(uv,2));
         copy.setAttribute('paintDetail',new THREE.Float32BufferAttribute(detail,4));
@@ -125,6 +129,14 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
         if(paintShape&&types?.getX(i)!==4&&p.getY(i)>roofDatum-.4)p.setY(i,roofDatum+(p.getY(i)-roofDatum)*(paintShape.roofStretch||1));
       }
       if(k==='ridge'&&profile==='zhouqiao')copy.setAttribute('paintDetail',new THREE.Float32BufferAttribute(ridgeDetail,4));
+      if(k==='plaster'&&hero&&profile==='zhouqiao'){
+        const uv=copy.attributes.memberUV||copy.attributes.uv,detail=[];
+        for(let i=0;i<p.count;i++)detail.push(uv?.getX(i)??0,uv?.getY(i)??0,0,(p.getY(i)-h.layout.spec.columnHeight)/bh);
+        copy.setAttribute('paintDetail',new THREE.Float32BufferAttribute(detail,4));
+        // Only metadata changed on these panels; keep their source normals
+        // exactly, including the accepted legacy views and reflected proxy.
+        return copy;
+      }
       copy.computeVertexNormals();return copy;
     };
     const visibleHall=distant?h.lod2:h.lod1;
@@ -194,6 +206,10 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
         bracketInstances.set(key,new PaintInstances(detail,40));detail.dispose();
       }
       const pigment=new THREE.Color(palette.bracket||'#bb805f');if(s.kind==='bujian')pigment.multiplyScalar(1.08);
+      // inferred: six-percent value and <=three-percent R/B difference.
+      // The same quiet hue difference offsets the set's eave-shade edge.
+      const value=setPigments.range(.94,1.06),hue=setPigments.range(-.015,.015);
+      pigment.multiply(new THREE.Color().setRGB(value*(1+hue),value,value*(1-hue)));
       bracketInstances.get(key).add(placement.clone().multiply(m),pigment);
       if(g!==source)g.dispose();
       if(s.kind==='bujian'){
@@ -307,7 +323,8 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
   }
 
   const dispose=()=>{
-    for(const [key,instances]of bracketInstances){const mesh=instances.mesh(paintMaterial(time,'timber',{profile}),'hall-brackets-'+key);if(mesh)engine.add(mesh,{castShadow:false,receiveShadow:false});}
+    for(const [key,instances]of bracketInstances){const setBase=new THREE.Color(palette.bracket||'#bb805f').multiplyScalar(key.includes('bujian')?1.08:1);
+      const mesh=instances.mesh(paintMaterial(time,'timber',{profile,setBase}),'hall-brackets-'+key);if(mesh)engine.add(mesh,{castShadow:false,receiveShadow:false});}
     for(const [instances,family,name]of [[caps,'roof','hall-drip-tiles'],[rafters,'timber','hall-rafter-ends']]){
       const mesh=instances.mesh(paintMaterial(time,family,{profile}),name);if(mesh)engine.add(mesh,{castShadow:false,receiveShadow:false});
     }

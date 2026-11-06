@@ -67,11 +67,11 @@ export function dappleGLSL({height=8,wind=.12,scale=[1.05,.8]}={}){
             c=mix(c*vec3(.58,.57,.69)+linearColor(vec3(.13,.10,.19))*.04,c*vec3(1.52,1.22,1.03),dapple);`;
 }
 
-export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',reflection=false,bank=false}={}) {
+export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',reflection=false,bank=false,setBase=null}={}) {
   // W2 replaces Zhouqiao's soft procedural washes with one mark-lit path.
   // Xuande retains the complete approved material implementation below.
-  if(profile==='zhouqiao'&&kind!=='leaf')return strokeMaterial(time,kind,{reflection,bank});
-  if(profile==='xuande'&&kind!=='leaf'&&!reflection)return strokeMaterial(time,kind,{profile,reflection,bank});
+  if(profile==='zhouqiao'&&kind!=='leaf')return strokeMaterial(time,kind,{reflection,bank,setBase});
+  if(profile==='xuande'&&kind!=='leaf'&&!reflection)return strokeMaterial(time,kind,{profile,reflection,bank,setBase});
   time.windTime??={value:new THREE.Vector4(0,1,0,1)};
   const code = {
     stone: `vec2 q=abs(n.y)>.65?vP.xz:vec2(abs(n.x)>.65?vP.z:vP.x,vP.y);
@@ -270,7 +270,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             vec3 lit=vC*(nearLeaf?vec3(1.30,1.24,1.03):vec3(.94,.92,.72));
             vec3 c=mix(shaded,lit,light)*(nearLeaf?.78+.22*vData.x:.92+.08*vData.x);
             if(!nearLeaf)c*=.94+.12*clamp((vP.y-4.)/10.,0.,1.);
-            if(!nearLeaf&&vLeafDetail.w>.5&&(paintView<3.5||paintView>5.5)){
+            if(!nearLeaf&&vLeafDetail.w>.5&&(${reflection?'paintView<3.5||paintView>5.5':'true'})){
               vec3 q=vLeafDetail.xyz;
               vec2 a=willowClump(q,vec3(.23,.60,.17),vec3(.23,.45,.22));
               vec2 b=willowClump(q,vec3(-.23,.53,.12),vec3(.22,.42,.21));
@@ -284,8 +284,20 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
               exposure*=.85+.15*shadowing;
               float load=clamp(dot(vC,vec3(.2126,.7152,.0722))/.48,.85,1.15);
               c=mix(linearColor(vec3(.39,.395,.22)),linearColor(vec3(.76,.73,.42)),exposure)*load;
+              ${!reflection?`
+              // inferred: whole whips/lobes keep one pigment load, with a
+              // yellow sun/top and cool grey-green shade. Geometry stays.
+              float whip=clamp((vLeafDetail.w-1.)/.90,0.,1.);
+              // Lobes turn light and dark on their own; the crown has no overall
+              // top-down glow, and sunlit yellow only takes the exposed whips.
+              float top=clamp((q.y-.50)*.20+dot(q.xz,paintSun.xz)*.14,-.07,.07);
+              float lit=smoothstep(.30,.86,exposure+top+(whip-.5)*.36);
+              c=mix(linearColor(vec3(116.,130.,94.)/255.),linearColor(vec3(160.,165.,100.)/255.),smoothstep(0.,.55,lit));
+              c=mix(c,linearColor(vec3(232.,205.,106.)/255.),smoothstep(.55,1.,lit));
+              c*=.95+.10*whip;
+              `:''}
               float inner=1.-smoothstep(.32,.58,length(q.xz));
-              c=mix(linearColor(vec3(.42,.42,.21))*load,c,1.-inner*(1.-cover)*.32);
+              ${reflection?'c=mix(linearColor(vec3(.42,.42,.21))*load,c,1.-inner*(1.-cover)*.32);':''}
             }
             c=mix(c,linearColor(vec3(.76,.75,.69)),smoothstep(35.,140.,-vP.z)*.68);
             float edge=abs(vUv.x-.5)*2.,aa=max(.06,fwidth(edge));

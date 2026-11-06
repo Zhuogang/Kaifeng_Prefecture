@@ -39,7 +39,7 @@ node tools/build.mjs        # static site in dist/, upload it to any host
 
 `?scene=0` or `?scene=1` opens a scene directly. `?scene=1&view=6` opens a view of 州桥.
 
-An earlier, less detailed version ran at 60 FPS, locked to vsync, on an RTX 3070 Laptop GPU. This version costs less than that one in software tests, but hasn't been measured on a real GPU yet. Press `P` to see it. Every view is at most 35 draw calls and about 1.1 million triangles.
+An earlier, less detailed version ran at 60 FPS, locked to vsync, on an RTX 3070 Laptop GPU. This version costs less than that one in software tests, but hasn't been measured on a real GPU yet. Press `P` to see it. Every view is at most 36 draw calls and about 1.1 million triangles.
 
 If a machine can't keep up, the page reduces reflection quality first, then resolution, and recovers when there's room.
 
@@ -55,7 +55,7 @@ The caption text is quoted from 《東京夢華錄》. The English glosses are o
 
 Codex (OpenAI) wrote the code. Claude Code (Anthropic) wrote the specs and tests, reviewed the work and validated it by rendering, with Codex sandboxed to this repository. The engine and render tools are adapted from [athenaion](THIRD_PARTY_NOTICES.md) (MIT).
 
-Buildings, water, trees and everything near are generated in code, and 州桥's sunlight is a shadow map baked once at load. Only the sky and far distance are painted images, in `assets/backdrops/`. Those images and the look targets in `refs/style/` are AI-generated, and they aren't historical evidence. Historical images are listed in `refs/historical/SOURCES.md`.
+Buildings, water, trees and everything near are generated in code, and the sunlight on both scenes is a shadow map baked once at load. Only the sky and far distance are painted images, in `assets/backdrops/`. Those images and the look targets in `refs/style/` are AI-generated, and they aren't historical evidence. Historical images are listed in `refs/historical/SOURCES.md`.
 
 ## Tests
 
@@ -68,8 +68,10 @@ python3 -I test/gates/regions.py c1 <render.png>    # regional values against a 
 python3 -I test/gates/shimmer.py <frames-dir>       # flicker on consecutive frames from a fixed camera
 python3 -I test/gates/crops.py c1 <render.png> <dir> # target above render, region by region
 python3 -I test/gates/colour.py <render.png>         # colour of 州桥's water and willows against the target
+python3 -I test/gates/look-zhou.py <view1.png>       # 州桥, one material at a time, against c2
+python3 -I test/gates/look-xuande.py <f0.png>        # 宣德楼, one material at a time, against c1
 node test/gates/perf.mjs                             # frame cost in software, to compare versions
-node test/gates/views.mjs                            # every view of 州桥: holes, budget, controls, and the approved views unchanged
+node test/gates/views.mjs                            # every view of 州桥: holes, budget and controls, and 宣德楼 unchanged
 ```
 
 ## The earlier version

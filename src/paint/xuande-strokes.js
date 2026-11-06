@@ -177,12 +177,13 @@ vec3 xuandeFineTimber(vec3 n){
     c=mix(linearColor(vec3(154.,99.,82.)/255.),linearColor(vec3(242.,140.,94.)/255.),light);
     c*=1.-max(-n.y,0.)*.50;c*=1.-pow(abs(n.x),3.)*.34;
     // inferred: the eave's shade gathers at the top of each set, as in c1.
-    c*=mix(1.,.60,smoothstep(.30,.95,vDetail.w));
+    c*=mix(1.,.60,smoothstep(.30,.95,vDetail.w+bracketShadeOffset()));
     if(abs(vKind-41.)<.5)c*=.95;
     if(abs(vKind-44.)<.5)c*=.90;
     if(abs(vKind-45.)<.5)c*=.92;
   }
   c=towerTimber(c,n,light);
+  if(vKind>39.5&&vKind<45.5)c*=bracketPigment();
   if(abs(vKind-24.)<.5||abs(vKind-58.)<.5||abs(vKind-59.)<.5)
     c=mix(linearColor(vec3(.50,.355,.32)),linearColor(vec3(.55,.36,.28)),light*.65);
   return c*(.82+.18*clamp(vData.x,0.,1.));

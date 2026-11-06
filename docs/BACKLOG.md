@@ -9,22 +9,20 @@ Whole-picture
 - The detailed version hasn't been measured on a real GPU. On high-DPI screens it now starts at a pixel ratio of up to 2, not 1.5. The adaptive quality ladder protects slower machines.
 - Portrait phones crop the scenes heavily, and the English gloss takes noticeable space there.
 
-宣德楼
-- The wall is much richer but still plainer than c1. It has few distinct flaked stones, so it stays closer to a wash.
-- Corner bracket clusters are spiky and busier than c1's. Tile rows are more regular.
-- The bark is too fluted, and near-rail paint wear is restrained. Distant trees at the right are soft smooth domes.
+宣德楼, after X1 and X1b
+- Blossom clusters repeat, and read as stamped when you look for it.
+- Tile rows and bracket shapes are still more regular than c1's.
+- The canal shows some hatching. Water was left alone at the client's request.
+- Distant trees at the right are soft smooth domes.
 
-州桥
-- Stone is more regular than c2. Bridge piers and balustrade have less wear, and pale ghost piers show in the water just below the bridge.
-- The boat is darker than c2's, with less dappled sunlight on it.
-- The trunk is smoother than c2's. Paving dapple is a little busy.
-- Willows by the towers cover more of them than in c2. The tower brackets are dense.
-
-州桥 after the sunlight and brush rounds (W1 to W3b)
-- The water is now furthest from c2: paler, with a tan band under the bridge and softer reflections. c2 is deeper green with crisp vertical reflections.
-- 宣德楼 still has the older, plastic surfaces.
-- Bracket sets repeat and timber is a little browner than c2. Mid-distance willow strands are more even than c2's.
-- Lesson for briefs: my W3b timber numbers came from a saturation mask that kept only c2's brightest pixels. Codex hit them and the towers went flat salmon. Measure a whole region, unmasked, and judge by eye.
+州桥, after W1 to W3b and X2
+- The water is the furthest thing from c2: paler, with a tan band under the bridge and softer reflections. c2 is deeper green with crisp vertical reflections. The client said it's fine, so it stays.
+- The tower bracket sets are smaller than c2's, so more pale frieze shows between them. Fixing that means changing geometry.
+- Mid-distance willows are curtains of thin strands where c2 has broad painted lobes. Pigment and light got them closer, but the shape needs new geometry.
+- The trunk's paint is close to c2, but its outline is still a low-poly tube with visible zigzags, and it has none of c2's big twisting forms.
+- Stone is more regular than c2. Pale ghost piers show in the water just below the bridge, and the boat has less dappled sunlight.
+- The tower paint matches in every view, but near stone in views 5 and 6 keeps its older treatment.
+- Lesson for briefs: twice, my colour targets came from a region that held the wrong material (a saturation mask in W3b, loose boxes in X1). Codex hit every number and the picture got worse. Measure one material at a time, draw the boxes and look at them. Matching percentiles says nothing about shape either: X2's first trunk matched c2's percentiles and looked like giraffe hide.
 
 州桥's added views
 - These are composed shots, and they cheat. The deck willow is moved in views 2 to 7, the far bank exists only in views 4 and 5, and the extra roofs, trees and willow whips only in view 7. The cross-fade hides the changes.

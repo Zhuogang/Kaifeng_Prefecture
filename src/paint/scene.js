@@ -149,8 +149,8 @@ export function compose(engine, time, viewAt) {
 
   function tower(x, z, scale) {
     const m = new THREE.Matrix4().makeScale(scale, scale, scale); m.setPosition(x, 3.6, z);
-    const box = (batch, p, s, c, ao = 1) => {
-      const g = new THREE.BoxGeometry(...s); g.translate(...p); batch.add(g,m,c,ao,0,batch===plaster?11:null);
+    const box = (batch, p, s, c, ao = 1,kind=null) => {
+      const g = new THREE.BoxGeometry(...s); g.translate(...p); batch.add(g,m,c,ao,0,batch===plaster?11:kind);
       const family=Object.keys(batches).find(k=>batches[k]===batch);reflected[family].add(g,m,c,ao,0,batch===plaster?11:null);g.dispose();
     };
     for (const sign of [-1, 1]) {
@@ -158,8 +158,8 @@ export function compose(engine, time, viewAt) {
       box(plaster,[sign*4.75,3,0],[3.0,5.7,6.5],'#dfbb88');
       // inferred: a deep, flat-lintelled passage with warm reflected light.
       box(plaster,[sign*3.23,2.65,-1.1],[.12,5.25,4.6],'#7c573b',.86);
-      for (const dz of [-3.5, 3.5]) box(timber, [sign * 3.65, 3.1, dz], [.65, 6.2, .7], timberColor);
-      box(timber, [sign * 6.1, 3.1, 3.5], [.5, 6.2, .55], '#a85437');
+      for (const dz of [-3.5, 3.5]) box(timber, [sign * 3.65, 3.1, dz], [.65, 6.2, .7], timberColor,1,104);
+      box(timber, [sign * 6.1, 3.1, 3.5], [.5, 6.2, .55], '#a85437',1,104);
     }
     box(timber, [0, 6.1, 0], [13, .66, 7.8], '#b56c44');
     box(timber,[0,5.55,-.3],[6.4,.35,6.7],'#523c2f',.62);
@@ -302,7 +302,8 @@ export function compose(engine, time, viewAt) {
   function addWillow(x,z,height,hero=false,move=false){
     const rng=engine.rng(`P2-willow-${x}-${z}`),place=new THREE.Matrix4().makeTranslation(x,hero?HERO_WILLOW.position[1]:3.7,z);
     const starts=move||hero?new Map([bark,leaf,reflected.bark,reflected.leaf].map(b=>[b,b.p.length/3])):null;
-    const g=willowGeometry(rng,{height,hero,trunkPoints:HERO_WILLOW.trunk,branches:HERO_WILLOW.branches});
+    const g=willowGeometry(rng,{height,hero,trunkPoints:HERO_WILLOW.trunk,branches:HERO_WILLOW.branches,
+      repairRng:hero?engine.rng('X2-hero-willow-form'):null,pigmentRng:hero?null:engine.rng(`X2-willow-pigments-${x}-${z}`)});
     bark.add(g.wood,place);leaf.add(g.leaves,place);reflected.bark.add(g.wood,place);
     if(!hero){
       const crown=new Geometry();
@@ -361,7 +362,8 @@ export function compose(engine, time, viewAt) {
 
   const above=new PaintBatch(),extraBatches=Object.fromEntries(families.map(k=>[k,above]));
   const unused=Object.fromEntries(families.map(k=>[k,new PaintBatch()]));
-  const extraHalls=paintedHalls(engine,extraBatches,unused,{time,view0:viewAt(0),timberColor});
+  // These sit in a batch with baked pigment, so they take the towers' tile colour here.
+  const extraHalls=paintedHalls(engine,extraBatches,unused,{time,view0:viewAt(0),timberColor,palette:{tile:'#8d868a',ridge:'#a39c98'}});
   for(const [x,z,s]of [[55,-37,.56],[68,-48,.64],[48,-54,.53]])extraHalls.hall([x,3.5,z],s,false,true);
   extraHalls.dispose();
   for(const [i,[x,z,h]]of [[52,-41,8],[63,-35,7],[77,-53,10],[43,-48,9]].entries()){
