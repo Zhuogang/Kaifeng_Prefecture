@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TOWERS, BRIDGE, MOORING, BOAT } from './composition.js';
+import { TOWERS, BRIDGE, MOORING, BOAT, CAMERA } from './composition.js';
 import { SUN, dirFromAzEl } from '../world/plan.js';
 import { BARK_GLSL } from './bark.js';
 import { PAINTED_STONE_GLSL } from './stonework.js';
@@ -65,7 +65,7 @@ export function dappleGLSL({height=8,wind=.12,scale=[1.05,.8]}={}){
             c=mix(c*vec3(.58,.57,.69)+linearColor(vec3(.13,.10,.19))*.04,c*vec3(1.52,1.22,1.03),dapple);`;
 }
 
-export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',reflection=false}={}) {
+export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',reflection=false,bank=false}={}) {
   time.windTime??={value:new THREE.Vector4(0,1,0,1)};
   const code = {
     stone: `vec2 q=abs(n.y)>.65?vP.xz:vec2(abs(n.x)>.65?vP.z:vP.x,vP.y);
@@ -91,9 +91,9 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
   }[kind];
   const mat = new THREE.ShaderMaterial({
     name: 'gouache-' + kind, vertexColors: true, side: THREE.DoubleSide, alphaToCoverage: kind === 'leaf',
-    uniforms: { paintTime: time, paintWindTime:time.windTime, paintSun: { value: new THREE.Vector3(...dirFromAzEl(SUN.azimuth, SUN.elevation)) } },
+    uniforms: { paintTime: time, paintWindTime:time.windTime, paintView:time.viewIndex??{value:0},paintSun: { value: new THREE.Vector3(...dirFromAzEl(SUN.azimuth, SUN.elevation)) } },
     vertexShader: /* glsl */`
-      uniform float paintTime; uniform vec4 paintWindTime; attribute vec4 paintWind; attribute vec3 paintData; attribute float paintKind;
+      uniform float paintTime,paintView; uniform vec4 paintWindTime; attribute vec4 paintWind; attribute vec3 paintData; attribute float paintKind;
       varying vec3 vP,vN,vC,vData; varying vec2 vUv; varying float vKind;
       void main(){
         vec3 p=position;
@@ -107,6 +107,20 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
           localNormal/=vec3(dot(basis[0],basis[0]),dot(basis[1],basis[1]),dot(basis[2],basis[2]));
           localNormal=basis*localNormal;
         #endif
+        ${profile==='zhouqiao'&&(kind==='bark'||kind==='leaf')?`
+          // inferred: move the same seeded willow beyond the north rail by
+          // scaling about the approved eye. The approved view keeps its
+          // original tree and mirror, avoiding wind/parallax regression.
+          if(paintView>.5){
+            if(paintData.z>.5){
+              vec3 eye=vec3(${CAMERA.pos.join(',')});
+              surface.xyz=eye+(surface.xyz-eye)*1.13;moved.xyz=eye+(moved.xyz-eye)*1.13;
+            }
+            // inferred: the hero's isolated fringe is outside this authored
+            // picture; omit it in 橋側 rather than leaving a detached strand.
+            if(paintView>3.5&&paintView<4.5&&paintData.z<-.5)moved.xyz=vec3(0.,-1000.,0.);
+          }
+        `:''}
         vP=(modelMatrix*surface).xyz;
         vN=normalize(mat3(modelMatrix)*localNormal);vC=color;
         #ifdef USE_INSTANCING_COLOR
@@ -117,11 +131,82 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
       }`,
     fragmentShader: /* glsl */`
       uniform vec3 paintSun;
-      uniform float paintTime;
+      uniform float paintTime,paintView;
       varying vec3 vP,vN,vC,vData; varying vec2 vUv; varying float vKind;
       ${BRUSH}
       void main(){
         vec3 n=normalize(vN); if(!gl_FrontFacing)n=-n;
+        ${bank?`
+        {
+          // inferred: one merged, softly hazed bank family keeps the source
+          // roofs and drooping foliage in two calls including its reflection.
+          float sun=smoothstep(-.25,.80,dot(n,paintSun)),coverage=1.;
+          vec3 c=vC*mix(vec3(.54,.58,.66),vec3(1.14,1.06,.87),sun);
+          if(abs(vKind-96.)<.5||abs(vKind-98.)<.5){
+            c=vC*mix(vec3(.64,.72,.66),vec3(1.02,1.03,.83),sun)*(.88+.20*noise(vP.xz*.8+vP.y*.6));
+            float edge=abs(vUv.x-.5)*2.,aa=max(.08,fwidth(edge));
+            if(abs(vKind-96.)<.5)coverage=(1.-smoothstep(.80-aa,1.+aa,edge))*smoothstep(.18,.70,1./max(fwidth(vUv.x),.0001));
+          }
+          if(abs(vKind-65.)<.5)c=paintedStone(c,vec2(vP.z,vP.y),vec2(2.4,.58),vec4(.30,.10,.40,.035),vec2(.008,.020));
+          if(abs(vKind-50.)<.5||abs(vKind-57.)<.5)c=mix(linearColor(vec3(.36,.39,.43)),linearColor(vec3(.55,.57,.57)),sun);
+          float haze=.46+smoothstep(35.,160.,length(vP.xz-vec2(0.,-25.)))*.30;
+          c=mix(c,linearColor(vec3(.76,.75,.69)),haze);
+          gl_FragColor=vec4(c,coverage);return;
+        }
+        `:''}
+        ${kind==='stone'&&profile==='zhouqiao'?`
+          if(paintView>5.5&&abs(vKind-95.)<.5){
+            float sun=smoothstep(-.45,.85,dot(n,paintSun));
+            vec3 c=vC*mix(vec3(.57,.65,.62),vec3(1.13,1.07,.83),sun)*(.86+.22*noise(vP.xz*2.1+vP.y*.7));
+            c=mix(c,linearColor(vec3(.76,.75,.69)),smoothstep(35.,140.,-vP.z)*.68);
+            gl_FragColor=vec4(c,1.);return;
+          }
+          if(paintView>4.5&&paintView<5.5&&(abs(vKind-92.)<.5||abs(vKind-61.)<.5&&n.y<-.4)){
+            // inferred: cool deck shadow, with broad warm water-bounce washes
+            // rising toward the side openings and the sunlit far bank.
+            vec2 q=vec2(vP.x,vP.z-(${BRIDGE.skew} )*vP.x);
+            float openings=smoothstep(.5,2.8,abs(q.y+25.3)),farLight=smoothstep(-12.,34.,vP.x);
+            float ribbon=.5+.5*sin(q.x*.50+q.y*1.45+sin(q.x*.27-q.y*.48)*1.2+paintTime*.24);
+            ribbon=ribbon*ribbon*(3.-2.*ribbon);
+            vec3 c=linearColor(vec3(.255,.25,.305))*(.94+.12*noise(q*vec2(.27,.42)+2.));
+            c+=linearColor(vec3(.65,.49,.30))*(.025+ribbon*(.07+.23*farLight+.16*openings));
+            if(abs(vKind-92.)<.5)c*=n.y<-.4?.86:1.13;
+            // The per-cell hash/offsets in paintedStone introduced vertical
+            // steps on a beam's constant-x face. Keep this wash continuous.
+            c*=.985+.03*noise(q*vec2(3.2,5.7));
+            gl_FragColor=vec4(c,1.);return;
+          }
+          if(paintView>4.5&&paintView<5.5&&(abs(vKind-52.)<.5||abs(vKind-37.)<.5)){
+            // inferred: side daylight only warms the outward faces. Interior
+            // planes stay violet-grey, with a soft damp line and low bounce.
+            float cross=vP.z-(${BRIDGE.skew})*vP.x-(${BRIDGE.offset})+19.75;
+            vec3 lateral=normalize(vec3(.15,0.,1.));
+            float daylight=smoothstep(-.15,.85,dot(n,lateral)*sign(cross));
+            // inferred: equal-value warm grey retains the bridge's cream
+            // pigment in shade; side openings leave a near vertical edge.
+            vec3 c=mix(linearColor(vec3(.385,.35,.365)),linearColor(vec3(.51,.455,.385)),daylight*.72);
+            float top=2.95+.18*max(0.,1.-pow(vP.x/30.,2.)),y=vP.y-(${BRIDGE.fall})*vP.x;
+            c*=1.-smoothstep(top-.75,top-.05,y)*.22;
+            vec2 q=vec2(abs(n.x)>.65?vP.z:vP.x,y)*1.5;
+            float broken=smoothstep(.24,.64,noise(q*vec2(3.7,1.9)+9.));
+            c=paintedStone(c,q,vec2(1.65,.78),vec4(.32*broken,.10,.28,.012),vec2(.002,.006));
+            vec2 grain=q*vec2(13.,19.);float fade=1.-smoothstep(.55,1.4,max(length(dFdx(grain)),length(dFdy(grain))));
+            float mineral=noise(grain+noise(q*2.3)*1.4);
+            c*=1.+((mineral-.5)*.16+pigmentDab(q*vec2(3.5,2.))*.20)*fade;
+            float chips=smoothstep(.76,.90,mineral)*smoothstep(.50,.72,noise(q*5.1+3.))*fade;
+            c*=1.-chips*.16;
+            float damp=(1.-smoothstep(-.10,.46,vP.y))*(.70+.30*noise(q*2.));
+            c=mix(c,linearColor(vec3(.26,.275,.26)),damp*.38);
+            float bounce=1.-smoothstep(.03,1.30,vP.y);
+            c=mix(c,linearColor(vec3(.45,.375,.285)),bounce*.24);
+            c+=linearColor(vec3(.58,.44,.29))*bounce*.055;
+            float nearColumn=1.-smoothstep(-8.,22.,vP.x);
+            float openingEdge=smoothstep(2.95,3.22,abs(cross));
+            c=mix(c,linearColor(vec3(.52,.435,.33)),openingEdge*(.20+.45*nearColumn));
+            ${reflection?'c*=.52;':''}
+            gl_FragColor=vec4(c,1.);return;
+          }
+        `:''}
         ${kind==='bark'?`
           // inferred: added fine twigs and distant trunks carry a quiet brown
           // wash; metre-scale furrow relief is neither visible nor useful here.
@@ -580,6 +665,11 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             if(abs(n.y)<.5)c*=1.-seam*.26;
             c*=mix(.52,1.,smoothstep(-.12,.40,vP.y));
             if(abs(vKind-77.)<.5)c=mix(c,linearColor(vec3(.67,.52,.35)),.32+.20*light);
+            if(paintView>.5&&paintView<1.5&&abs(vKind-77.)<.5){
+              // inferred: broad worn grain on the gunwale visible in 舟中.
+              float wear=noise(grain*vec2(2.,36.));
+              c*=.72+.42*wear;c=mix(c,linearColor(vec3(.70,.57,.41)),smoothstep(.60,.83,wear)*.28);
+            }
             float seat=min(min(abs(s+.63),abs(s+.22)),min(abs(s-.22),abs(s-.63)));
             if(abs(vKind-9.)<.5)c*=1.-(1.-smoothstep(.035,.09,seat))*(1.-smoothstep(.10,.24,vP.y))*.40;
           }
@@ -690,7 +780,14 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             c=paintedStone(c,vec2(vP.z,vP.y),vec2(1.9,.62),vec4(.32,.10,.35,.12));
           }
         `:''}
-        ${kind==='plaster'&&profile==='zhouqiao'?`if(abs(vKind-66.)<.5)c=linearColor(vec3(.77,.69,.56))*(.93+.10*noise(q*.45));`:''}
+        ${kind==='plaster'&&profile==='zhouqiao'?`if(abs(vKind-66.)<.5){
+          c=linearColor(vec3(.77,.69,.56))*(.93+.10*noise(q*.45));
+          if(paintView>4.5&&paintView<5.5){
+            // inferred: sunlit, coursed bank closes the corridor in open light.
+            c=paintedStone(c,vec2(abs(n.x)>.65?vP.z:vP.x,vP.y),vec2(2.6,.65),vec4(.22,.12,.35,.10),vec2(.008,.024));
+            c=mix(c,linearColor(vec3(.48,.53,.37)),(1.-smoothstep(.05,.50,vP.y))*.35);
+          }
+        }`:''}
         ${kind==='leaf'?`
           // inferred: willow leaves keep three coherent whip values; closed
           // crowns receive soft directional light instead of cutout noise.

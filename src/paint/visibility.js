@@ -5,12 +5,13 @@ import {LOOK_YAW,LOOK_PITCH} from './playback.js';
 // interpolation, nine path samples, and 10% horizontal resize guard. Culling
 // uses the union for the entire path, never the current frame's camera.
 export function paintVisibility(engine, viewAt, {reflection=false,waterBounds=null}={}) {
+  const paths=Array.isArray(viewAt)?viewAt:[viewAt];
   let aspect, volumes;
   const meshes=[];
   (engine.registry.paint.culling??=[]).push({reflection,meshes});
   const updateVolumes=()=>{
     aspect=engine.camera.aspect;
-    volumes=Array.from({length:9},(_,i)=>{
+    volumes=paths.flatMap(viewAt=>Array.from({length:9},(_,i)=>{
       const view=viewAt(i/8),camera=new THREE.PerspectiveCamera();
       const v=Math.tan(view.fov*Math.PI/360)+Math.tan(LOOK_PITCH+Math.PI/90);
       const h=Math.tan(view.fov*Math.PI/360)*aspect*1.1+Math.tan(LOOK_YAW+Math.PI/90);
@@ -20,7 +21,7 @@ export function paintVisibility(engine, viewAt, {reflection=false,waterBounds=nu
       if(reflection){camera.position.y*=-1;target.y*=-1;camera.up.set(0,-1,0);}
       camera.lookAt(target);camera.updateMatrixWorld(true);
       return {camera,frustum:new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse))};
-    });
+    }));
   };
   updateVolumes();
   const sphere=new THREE.Sphere(),a=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3();

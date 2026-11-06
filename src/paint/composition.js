@@ -21,6 +21,23 @@ export const HERO_WILLOW = {position:[-8.56,1.28,8.1], height:17,
   ]};
 
 export const CAMERA={pos:[-.5,5.1,22],target:[4.2,2.7,-27],fov:45,pan:-7,travel:[.8,.6,-Math.sqrt(12.96-.16)]};
+// inferred: short parallel dollies preserve the lead's scout compositions.
+// View 2 rises .45 m to keep the near gunwale below the picture.
+const drift=(pos,target,fov,travel)=>(fraction=0,time=0)=>({
+  pos:pos.map((v,i)=>v+fraction*travel[i]),
+  target:target.map((v,i)=>v+fraction*travel[i]),fov,time,near:.15,far:900,
+});
+export const VIEWS=[
+  {name:'河灣',gloss:'The bend',roundTrip:50,viewAt:(fraction=0,time=0)=>({
+    pos:CAMERA.pos.map((v,i)=>v+fraction*CAMERA.travel[i]),
+    target:CAMERA.target.map((v,i)=>v+fraction*(i===0?.4+CAMERA.pan:i===1?-2.7:0)),fov:45,time,near:.15,far:900})},
+  {name:'舟中',gloss:'In the boat',roundTrip:40,viewAt:drift([-3,1.80,6.4],[9,3.85,-27],45,[.25,0,-.30])},
+  {name:'柳下',gloss:'Under the willow',roundTrip:40,viewAt:drift([-11,3,17],[22,3.4,-25],45,[.30,0,-.25])},
+  {name:'橋上',gloss:'On the bridge',roundTrip:40,viewAt:drift([-8,5.35,-24.2],[35,8.5,-34],45,[.40,0,-.06])},
+  {name:'橋側',gloss:'Beside the bridge',roundTrip:40,viewAt:drift([-19.5,3.6,-12],[30,3.2,-23],45,[.30,0,-.10])},
+  {name:'橋下',gloss:'Under the bridge',roundTrip:40,viewAt:drift([-12,1.1,-24.2],[30,1.8,-30.5],50,[.40,0,-.06])},
+  {name:'遠望',gloss:'From above',roundTrip:50,viewAt:drift([6,15,34],[12,2.2,-25],40,[.30,0,-.40])},
+];
 export const MID_HALLS=[[-23,-42,.7],[-12,-41,.7],[9,-43,.5],[28,-50,.55],[-42,-53,.8],[3,-61,.8],[40,-63,.8],[46,-33,.44]];
 export const WILLOWS=[[-22,-28,10],[-12,-32,8],[16.5,-27,9],[38,-30,11],[-37,-43,11],[4,-48,8],[45,-44,12]];
 export const WATER={distortion:.48};

@@ -9,13 +9,15 @@ import {paintedHalls} from './halls.js';
 import { goulan } from '../yingzao/ornament.js';
 import { Geometry, V } from '../flora/geometry.js';
 import { buildBoats } from '../water/boats.js';
-import { BOAT, TOWERS, BRIDGE, QUAY, MOORING, HERO_WILLOW, MID_HALLS, WILLOWS } from './composition.js';
+import { BOAT, TOWERS, BRIDGE, QUAY, MOORING, HERO_WILLOW, MID_HALLS, WILLOWS, VIEWS } from './composition.js';
 
 // inferred: all placements, dimensions, palettes, brush scales and botanical forms
 // here compose c2 rather than reconstruct a surveyed location. The low stone beam
 // bridge, Song hall rules, structural brackets and ridge ornaments reuse the sources.
 export function compose(engine, time, viewAt) {
-  const keep=paintVisibility(engine,viewAt),keepReflection=paintVisibility(engine,viewAt,{});
+  // One conservative union per scene, independent of the selected view.
+  const paths=VIEWS.map(v=>v.viewAt);
+  const keep=paintVisibility(engine,paths),keepReflection=paintVisibility(engine,paths,{reflection:true});
   const rng = engine.rng('P0-painted-zhouqiao');
   const families = ['stone', 'plaster', 'timber', 'roof', 'bark', 'leaf'];
   const batches = Object.fromEntries(families.map(k => [k, new PaintBatch()]));
@@ -294,8 +296,10 @@ export function compose(engine, time, viewAt) {
   const rope=new THREE.CatmullRomCurve3([ropeStart,sag,tie]);
   cord(rope,.058,128);
 
-  function addWillow(x,z,height,hero=false){
+  const relocationRanges=new Map(),heroRanges=new Map();
+  function addWillow(x,z,height,hero=false,move=false){
     const rng=engine.rng(`P2-willow-${x}-${z}`),place=new THREE.Matrix4().makeTranslation(x,hero?HERO_WILLOW.position[1]:3.7,z);
+    const starts=move||hero?new Map([bark,leaf,reflected.bark,reflected.leaf].map(b=>[b,b.p.length/3])):null;
     const g=willowGeometry(rng,{height,hero,trunkPoints:HERO_WILLOW.trunk,branches:HERO_WILLOW.branches});
     bark.add(g.wood,place);leaf.add(g.leaves,place);reflected.bark.add(g.wood,place);
     if(!hero){
@@ -306,10 +310,12 @@ export function compose(engine, time, viewAt) {
       }
       const cg=crown.build();reflected.leaf.add(cg,place);cg.dispose();
     }
+    if(move)for(const [batch,start]of starts)relocationRanges.set(batch,[start,batch.p.length/3]);
+    if(hero)for(const [batch,start]of starts)heroRanges.set(batch,[start,batch.p.length/3]);
     g.wood.dispose();g.leaves.dispose();
   }
   addWillow(HERO_WILLOW.position[0],HERO_WILLOW.position[2],HERO_WILLOW.height,true);
-  for(const [x,z,h]of WILLOWS) addWillow(x, z, h);
+  for(const [i,[x,z,h]]of WILLOWS.entries()) addWillow(x,z,h,false,i===2);
   for(let i=0;i<30;i++){
     const x=-66+i*4.8+distanceRng.range(-2,2),z=-48-distanceRng.range(0,37),h=distanceRng.range(4,9);
     const wood=new Geometry(),crown=new Geometry(),place=new THREE.Matrix4().makeTranslation(x,4,z);
@@ -330,9 +336,118 @@ export function compose(engine, time, viewAt) {
     bark.add(g.wood,m);leaf.add(g.leaves,m);reflected.leaf.add(g.leaves,m);g.wood.dispose();g.leaves.dispose();
   }
 
-  for (const k of families) engine.add(keep(batches[k].mesh(paintMaterial(time, k), 'paint-' + k)), { castShadow: false, receiveShadow: false });
+  // inferred: small composed additions, one merged call per affected view.
+  // They never enter the mirror scene or the approved opening view.
+  const dressing=(batch,index,name)=>{
+    const mesh=batch.mesh(paintMaterial(time,'stone'),name);mesh.userData.paintView=index;mesh.visible=false;
+    (engine.registry.paint.viewDressing??=[]).push(mesh);engine.add(mesh,{castShadow:false,receiveShadow:false});
+  };
+  const below=new PaintBatch();
+  for(let x=-19;x<34;x+=2.6){
+    const g=drape(beveledBox([.43,.30,6.5],.035),new THREE.Matrix4().makeTranslation(x,2.78,-19.6));
+    below.add(g,undefined,'#a39880',1,0,92);g.dispose();
+  }
+  // Broad foundation piers carry each visible tower's masonry to the water.
+  for(const [x,z,s]of TOWERS)for(const sign of [-1,1])
+    below.box([x+sign*4.8*s,1.75,z],[3.1*s,3.6,7.8*s],'#b4a488',1,0,true,65);
+  dressing(below,5,'view6-cross-beams-and-tower-foundations');
+  const treeBank=new PaintBatch();
+  // The displaced root terminates on an ashlar ledge and two water piles.
+  treeBank.box([18.71,3.35,-33.37],[3,.34,2.6],'#b4a488',1,0,true,65);
+  for(const x of [17.85,19.57])treeBank.box([x,1.58,-33.37],[.65,3.16,1.8],'#a99e85',1,0,true,52);
+  dressing(treeBank,3,'view4-willow-bearing');
+
+  const above=new PaintBatch(),extraBatches=Object.fromEntries(families.map(k=>[k,above]));
+  const unused=Object.fromEntries(families.map(k=>[k,new PaintBatch()]));
+  const extraHalls=paintedHalls(engine,extraBatches,unused,{time,view0:viewAt(0),timberColor});
+  for(const [x,z,s]of [[55,-37,.56],[68,-48,.64],[48,-54,.53]])extraHalls.hall([x,3.5,z],s,false,true);
+  extraHalls.dispose();
+  for(const [i,[x,z,h]]of [[52,-41,8],[63,-35,7],[77,-53,10],[43,-48,9]].entries()){
+    const g=broadleafGeometry(engine.rng(`V1-above-grove-${i}`),{height:h}),m=new THREE.Matrix4().makeTranslation(x,3,z);
+    // Shared material: quiet crown shading has a dedicated tag in this batch.
+    g.leaves.setAttribute('paintPart',new THREE.Float32BufferAttribute(new Float32Array(g.leaves.attributes.position.count).fill(95),1));
+    above.add(g.wood,m);above.add(g.leaves,m);g.wood.dispose();g.leaves.dispose();
+  }
+  // Sparse drooping whips cover the exposed distal half of the hero limb.
+  const whips=new Geometry(),whipRng=engine.rng('V1-hero-limb-whips');
+  const limbStart=V(...HERO_WILLOW.trunk[4]),limbTip=V(...HERO_WILLOW.branches.at(-1).tip);
+  const limbMid=limbStart.clone().lerp(limbTip,.55).add(V(0,HERO_WILLOW.height*.06,0));
+  const limb=new THREE.CatmullRomCurve3([limbStart,limbMid,limbTip]);
+  for(let i=0;i<52;i++){
+    const t=whipRng.range(.02,.99),base=limb.getPoint(t).add(V(whipRng.range(-.06,.06),whipRng.range(-.03,.03),whipRng.range(-.08,.08)));
+    const length=whipRng.range(2.2,4.6),yaw=whipRng.range(-1,1),path=Array.from({length:7},(_,j)=>base.clone().add(V(Math.sin(j/6*2+yaw)*j/6*.40,-length*j/6,j/6*.24)));
+    const pigment=new THREE.Color(whipRng.pick(['#a7a563','#8c995f','#b5ad67']));
+    whips.curtain(path,.008,yaw,pigment,{sway:.6,ao:.85,kind:95});
+    for(let j=1;j<35;j++){
+      const f=(j+whipRng.range(-.3,.3))/35*6,k=Math.min(5,Math.floor(f)),p=path[k].clone().lerp(path[k+1],f-k);
+      whips.leaf(p,whipRng.range(.25,.43),whipRng.range(.08,.13),V(j%2?.22:-.22,-1,.08),pigment,.3,-Math.PI/2+whipRng.range(-.8,.8),95);
+    }
+  }
+  const wg=whips.build();above.add(wg,new THREE.Matrix4().makeTranslation(...HERO_WILLOW.position));wg.dispose();
+  dressing(above,6,'view7-roofs-grove-and-limb-whips');
+
+  // inferred: a lower, broken bank and an overlapping distance grove keep
+  // the east horizon quiet. The same cheap trunk/crowns/sparse leaves used
+  // above replace the far willows; low lobes close the sky below the crowns.
+  const bank=new PaintBatch(),bankMirror=new PaintBatch();
+  const bankRng=engine.rng('V1c-distance-bank');
+  for(const batch of [bank,bankMirror]){
+    batch.box([74,.69,-20],[20,1.38,250],'#b7aa8e',1,0,false,0);
+  }
+  for(let z=-145;z<105;){
+    const length=Math.min(105-z,bankRng.range(11,19)),h=bankRng.range(1.10,1.65);
+    for(const batch of [bank,bankMirror]){
+      batch.box([65,h/2,z+length/2],[2,h,length],'#bdb298',1,0,false,65);
+      batch.box([64.9,h+.04,z+length/2],[2.3,.12,length-.02],'#cdbb9b',1,0,false,63);
+    }
+    z+=length;
+  }
+  const bankHalls=paintedHalls(engine,Object.fromEntries(families.map(k=>[k,bank])),
+    Object.fromEntries(families.map(k=>[k,bankMirror])),{time,view0:VIEWS[4].viewAt(),timberColor});
+  // inferred: unevenly spaced roofs of different sizes sit down into the
+  // treeline, so that only their upper slopes rise above the crowns.
+  const bankRoofs=[[78,-65,.9],[80,-14,1.1],[83,-4,.8],[79,30,.95]];
+  for(const [x,z,s]of bankRoofs)bankHalls.hall([x,1.40,z],s,false,true);
+  bankHalls.dispose();
+  for(let z=-145;z<106;z+=bankRng.range(3.2,4.8)){
+    const x=bankRng.range(67,73),wood=new Geometry(),crown=new Geometry(),h=bankRng.range(5.5,8.5);
+    const place=new THREE.Matrix4().makeTranslation(x,1.38,z);
+    wood.tube([V(),V(.1,h*.55,0)],[h*.038,h*.016],new THREE.Color('#79775f'),{sides:5,smooth:1});
+    for(let j=0;j<7;j++){
+      const a=j*2.399,low=j<2,center=V(Math.cos(a)*h*.18,h*(low?.23:.63+.10*Math.sin(j)),Math.sin(a)*h*.18);
+      const color=new THREE.Color(bankRng.pick(['#a5a77c','#929d7c','#b4af7d','#879d8b']));
+      crown.ellipsoid(center,low?V(Math.max(h*.22,2.4),h*.26,Math.max(h*.20,2.8)):V(h*.22,h*.24,h*.20),color,{kind:3,detail:1});
+      for(let k=0;k<16;k++)crown.leaf(center.clone().add(V(...bankRng.sphere()).multiplyScalar(h*.2)),h*.055,h*.016,V(bankRng.range(-.4,.4),-1,.2),color,.2,a);
+    }
+    const wg=wood.build(),lg=crown.build(),part=lg.attributes.aFlora;
+    lg.setAttribute('paintPart',new THREE.Float32BufferAttribute(Array.from({length:part.count},(_,i)=>part.getX(i)===3?98:96),1));
+    for(const batch of [bank,bankMirror]){batch.add(wg,place);batch.add(lg,place);}
+    wg.dispose();lg.dispose();
+  }
+  const bankMeshes=[bank,bankMirror].map((batch,i)=>{
+    const material=paintMaterial(time,'stone',{bank:true});material.alphaToCoverage=i===0;
+    const mesh=batch.mesh(material,'views45-river-bank'+(i?'-reflection':''));mesh.userData.paintView=[3,4];mesh.visible=false;
+    engine.registry.paint.viewDressing.push(mesh);return mesh;
+  });
+  engine.add(bankMeshes[0],{castShadow:false,receiveShadow:false});
+
+  const relocate=(mesh,batch)=>{
+    if(relocationRanges.has(batch)){
+      // Wind phase is already expanded into paintWind. Reuse its unused
+      // source channel for this tag without another per-vertex attribute.
+      const [start,end]=relocationRanges.get(batch),data=mesh.geometry.attributes.paintData;
+      for(let i=0;i<data.count;i++)data.setZ(i,i>=start&&i<end?1:0);
+    }
+    if(heroRanges.has(batch)){
+      const [start,end]=heroRanges.get(batch),data=mesh.geometry.attributes.paintData;
+      for(let i=start;i<end;i++)data.setZ(i,-1);
+    }
+    return mesh;
+  };
+  for (const k of families) engine.add(keep(relocate(batches[k].mesh(paintMaterial(time, k), 'paint-' + k),batches[k])), { castShadow: false, receiveShadow: false });
   const reflectionScene=new THREE.Scene();
-  for(const k of families){const material=paintMaterial(time,k,{reflection:true});material.alphaToCoverage=false;reflectionScene.add(keepReflection(reflected[k].mesh(material,'reflection-'+k)));}
+  reflectionScene.add(bankMeshes[1]);
+  for(const k of families){const material=paintMaterial(time,k,{reflection:true});material.alphaToCoverage=false;reflectionScene.add(keepReflection(relocate(reflected[k].mesh(material,'reflection-'+k),reflected[k])));}
   halls.dispose();
   return reflectionScene;
 }

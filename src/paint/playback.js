@@ -7,6 +7,7 @@ export function paintPlayback(engine,viewAt,roundTrip=48){
  engine.registry.paint.views=[viewAt(),...Array.from({length:8},(_,i)=>viewAt(i/7,i*2))];
  engine.registry.paint.viewAt=viewAt;
  engine.registry.paint.roundTrip=roundTrip;
+ engine.registry.paint.viewSet=[{name:'宣德樓',gloss:'Xuande Tower',viewAt,roundTrip}];
  if(engine.scroll)return;
  if(engine.params.get('drift')!=='1')return;
  const render=engine.renderInteractive.bind(engine),target=new THREE.Vector3();let previous;
@@ -19,6 +20,7 @@ export function paintPlayback(engine,viewAt,roundTrip=48){
 // The shell uses the same authored camera, adding only the small pointer offset.
 export function paintCamera(engine, viewAt, fraction, yaw = 0, pitch = 0) {
  const view = viewAt(fraction, engine.time), camera = engine.camera;
+ camera.fov=view.fov;camera.updateProjectionMatrix();
  camera.position.set(...view.pos);
  camera.lookAt(new THREE.Vector3(...view.target));
  camera.rotateY(yaw); camera.rotateX(pitch);

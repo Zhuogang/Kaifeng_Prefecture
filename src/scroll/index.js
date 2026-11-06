@@ -38,10 +38,12 @@ export async function bootScroll(params) {
   let ratio = qualityControl.ratio, frameMs = 0, calls = 0, triangles = 0, gpu = null;
   let engine, previous, raf, lastInput = -Infinity, elapsed = 0, captionOverride = null, captionLine = -1;
   let phase = 0, yaw = 0, pitch = 0, wantedYaw = 0, wantedPitch = 0;
+  let viewIndex=0,viewSet=[],fadeTimer;
   let drag = null;
   let hintDismissed = false;
   try { hintDismissed = sessionStorage.getItem('kaifeng:scroll-hint-dismissed') === '1'; } catch { /* dismissal still works in this document */ }
   const hint = $('scroll-hint');
+  if(scene===1)hint.textContent=hint.textContent.replace('← →','← → · 1–7 views');
   hint.classList.toggle('dismissed', hintDismissed);
   hint.setAttribute('aria-hidden', String(hintDismissed));
   const dismissHint = () => {
@@ -50,7 +52,7 @@ export async function bootScroll(params) {
     try { sessionStorage.setItem('kaifeng:scroll-hint-dismissed', '1'); } catch { /* dismissal still works in this document */ }
   };
   const status = () => ({ frameMs, fps: frameMs ? 1000 / frameMs : 0, pixelRatio: ratio, calls, triangles,
-    qualityLevel:qualityControl.level, reflectionSize:engine?.registry.paint?.reflection ?
+    view:viewIndex,qualityLevel:qualityControl.level, reflectionSize:engine?.registry.paint?.reflection ?
       [engine.registry.paint.reflection.width,engine.registry.paint.reflection.height] : [0,0], gpu });
   const visibleCaption = () => active && !leaving && (captionOverride ?? (elapsed >= 2 && elapsed < 12 || elapsed >= 14 && elapsed < 24));
   const fail = message => {
@@ -68,6 +70,30 @@ export async function bootScroll(params) {
     lastInput = performance.now();
     return fraction;
   };
+  const changeView=index=>{
+    if(!ready||leaving||scene!==1||!Number.isInteger(index)||index<0||index>=viewSet.length)return viewIndex;
+    if(index===viewIndex)return viewIndex;
+    const fade=$('scroll-fade');clearTimeout(fadeTimer);
+    if(!reduced.matches){
+      fade.width=Math.min(1280,engine.canvas.width);
+      fade.height=Math.max(1,Math.round(engine.canvas.height*fade.width/engine.canvas.width));
+      fade.getContext('2d').drawImage(engine.canvas,0,0,fade.width,fade.height);fade.hidden=false;
+      fade.style.transition='none';fade.style.opacity='1';void fade.offsetWidth;
+    }else{fade.hidden=true;fade.width=fade.height=0;}
+    viewIndex=index;fraction=0;phase=0;elapsed=0;captionLine=-1;captionOverride=null;
+    lastInput=performance.now();
+    engine.registry.paint.viewAt=viewSet[index].viewAt;
+    engine.registry.paint.roundTrip=viewSet[index].roundTrip;
+    paintCamera(engine,viewSet[index].viewAt,0,yaw,pitch);
+    engine.renderInteractive(true);updateCaption();
+    for(const button of $('scroll-views').children)button.setAttribute('aria-pressed',String(+button.dataset.view===index));
+    const url=new URL(location.href);url.searchParams.set('view',index+1);history.replaceState(null,'',url);
+    if(!reduced.matches){
+      fade.style.transition='opacity .7s ease';fade.style.opacity='0';
+      fadeTimer=setTimeout(()=>{fade.hidden=true;fade.width=fade.height=0;},750);
+    }
+    return viewIndex;
+  };
   const navigate = destination => {
     if (!ready || !active || leaving || destination < 0 || destination >= SCENES.length) return;
     leaving = true; $('scroll-ui').classList.add('leaving');
@@ -76,13 +102,15 @@ export async function bootScroll(params) {
     void cover.offsetWidth;
     cover.style.transition = ''; cover.style.transform = 'translateX(0)';
     const url = new URL(location.href); url.searchParams.set('scene', destination);
+    url.searchParams.delete('view');
     let navigated = false;
     const go = () => { if (!navigated) { navigated = true; location.assign(url.href); } };
     cover.addEventListener('transitionend', go, { once: true });
     setTimeout(go, 1100);
   };
   window.__scroll = { scene: () => scene, ready: () => ready, fraction: () => fraction,
-    scrub, next: () => navigate(scene + 1), prev: () => navigate(scene - 1), captionsVisible: visibleCaption, status };
+    scrub,view:changeView,views:()=>viewSet.map(({name,gloss})=>({name,gloss})),
+    next: () => navigate(scene + 1), prev: () => navigate(scene - 1), captionsVisible: visibleCaption, status };
   const progress = message => { $('scroll-progress').textContent = message; $('scroll-cover-status').textContent = message; };
   progress('展纸 · Preparing the scroll');
   const quality = getQuality('preview');
@@ -110,10 +138,24 @@ export async function bootScroll(params) {
   progress('入画 · Preparing ' + TEXT[scene].name);
   const moduleStart = performance.now(), mod = await import(`../modules/${SCENES[scene]}.js`);
   await mod.build(engine);
+  viewSet=engine.registry.paint.viewSet;
+  const requestedView=Number(params.get('view'))-1;
+  viewIndex=scene===1&&Number.isInteger(requestedView)&&requestedView>=0&&requestedView<viewSet.length?requestedView:0;
+  if(scene===1){
+    const list=$('scroll-views');list.hidden=false;
+    viewSet.forEach(({name,gloss},index)=>{
+      const button=document.createElement('button');button.type='button';button.dataset.view=String(index);
+      button.append(String(index+1));const label=document.createElement('span');label.textContent=' '+name;button.append(label);
+      button.setAttribute('aria-label',`${index+1} · ${name} · ${gloss}`);
+      button.setAttribute('aria-pressed',String(index===viewIndex));button.addEventListener('click',()=>changeView(index));list.append(button);
+    });
+    engine.registry.paint.viewAt=viewSet[viewIndex].viewAt;
+    engine.registry.paint.roundTrip=viewSet[viewIndex].roundTrip;
+  }
   const moduleBuildMs = Math.round(performance.now() - moduleStart), prepareStart = performance.now();
   engine.prepareScene();
   const prepareMs = Math.round(performance.now() - prepareStart);
-  engine.applyShot({ id: 'scroll-' + scene, ...mod.paintView(0) });
+  engine.applyShot({ id: 'scroll-' + scene, ...viewSet[viewIndex].viewAt(0) });
   const buildMs = Math.round(performance.now() - started), compileStart = performance.now();
   window.__STATS = { buildMs, engineMs, moduleBuildMs, prepareMs, modules: [{ name: SCENES[scene], buildMs: moduleBuildMs }] };
   progress('成像 · Preparing light');
@@ -151,9 +193,10 @@ export async function bootScroll(params) {
   const updateCaption = () => {
     const line = elapsed < 13 ? 0 : 1;
     if (line !== captionLine) {
-      captionLine = line; $('scroll-caption-name').textContent = TEXT[scene].name;
-      $('scroll-caption-line').textContent = TEXT[scene].lines[line][0];
-      $('scroll-caption-gloss').textContent = TEXT[scene].lines[line][1];
+      captionLine = line; $('scroll-caption-name').textContent = TEXT[scene].name+(scene===1?' · '+viewSet[viewIndex].name:'');
+      const sourceLine=scene===1&&viewIndex===5?1-line:line;
+      $('scroll-caption-line').textContent = TEXT[scene].lines[sourceLine][0];
+      $('scroll-caption-gloss').textContent = TEXT[scene].lines[sourceLine][1];
     }
     $('scroll-caption').classList.toggle('visible', visibleCaption());
     $('scroll-caption').setAttribute('aria-hidden', String(!visibleCaption()));
@@ -199,6 +242,7 @@ export async function bootScroll(params) {
   });
   addEventListener('keydown', event => {
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+    if(scene===1&&/^Digit[1-7]$/.test(event.code)){event.preventDefault();changeView(Number(event.code.slice(-1))-1);}
     if (event.code === 'ArrowLeft') { event.preventDefault(); navigate(scene - 1); }
     if (event.code === 'ArrowRight') { event.preventDefault(); navigate(scene + 1); }
     if (event.code === 'KeyC') { captionOverride = !visibleCaption(); updateCaption(); }

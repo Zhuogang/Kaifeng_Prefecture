@@ -4,7 +4,7 @@ import {barkRelief} from './bark.js';
 
 // inferred: parameterised pollarded willow, growth-following roots and botanical
 // leaf/clump dimensions. Leaves stay within 25 degrees of their strand.
-  export function willowGeometry(rng, {height, hero=false, trunkPoints, branches=[]}) {
+  export function willowGeometry(rng, {height, hero=false, trunkPoints, branches=[], distant=false}) {
     const wood = new Geometry(), leaves = new Geometry();
     const h = height, trunk = hero ? trunkPoints.map(p=>V(...p)) :
       [V(),V(-.2,h*.16,0),V(.3,h*.33,0),V(.1,h*.46,0)];
@@ -29,6 +29,8 @@ import {barkRelief} from './bark.js';
     // inferred: a separate pigment stream interleaves dark and lit whips
     // throughout the crown, instead of assigning one value to a whole branch.
     const pigmentRng=rng.fork('D4b-whip-values');
+    // inferred: distant-bank willows keep the same drooping construction with
+    // fewer whips and leaves; the accepted trees retain their original counts.
     for (let j = 0; j < (hero ? branches.length : 20); j++) {
       const angle=j*2.399,start=trunk[hero?branches[j].from:2];
       const tip=hero?V(...branches[j].tip):V(Math.cos(angle)*h*rng.range(.25,.43),h*rng.range(.66,.90),Math.sin(angle)*h*rng.range(.24,.40));
@@ -37,7 +39,7 @@ import {barkRelief} from './bark.js';
       wood.tube([start, mid, tip], [hero ? .26 : h * .016, hero ? .12 : h * .008, .018], new THREE.Color('#696551'), { sides: 6, gnarl: .4, smooth: 3 });
       const family=hero?branches[j].color:rng.pick(['#adb55f','#879249','#c1b65e','#667b53']);
       const clusterLength=hero?branches[j].length:h*rng.range(.57,.80);
-      for (let k = 0; k < (hero ? rng.int(68,80) : 28); k++) {
+      for (let k = 0; k < (hero ? rng.int(68,80) : distant?18:28); k++) {
         const base = mid.clone().lerp(tip,rng.range(hero?.70:.55,hero?1:1.08)).add(V(rng.range(-.7, .7), rng.range(-.4, .6), rng.range(-.8, .8)));
         const lengthVariation=rng.range(.78,1.16),end=hero?0:h*THREE.MathUtils.clamp(.15+.23*Math.pow(Math.hypot(base.x,base.z)/(h*.45),1.5)+rng.range(-.12,.12),.10,.57);
         // inferred: the mid-distance crown hangs down around its short trunk,
@@ -50,7 +52,7 @@ import {barkRelief} from './bark.js';
         const c=new THREE.Color(hero?pigmentRng.pick(['#b7b267','#a6a36c','#8d9a68','#65764f','#c0b459']):family).multiplyScalar(rng.range(.88,1.09));
         const clumpShade=hero?.68+.32*THREE.MathUtils.clamp((base.z-tip.z+.8)/1.6,0,1):.65+.35*THREE.MathUtils.clamp(base.y/h,0,1);
         leaves.curtain(path,rng.range(.008,.018),yaw,c,{sway:1,ao:clumpShade,random:rng.random()});
-        const count=hero?rng.int(34,44):rng.int(32,42);
+        const count=hero?rng.int(34,44):distant?rng.int(22,28):rng.int(32,42);
         for (let s = 1; s < count; s++) {
           if(rng.chance(hero?.26:.15))continue;
           const t=(s+rng.range(-.38,.38))/count,index=Math.min(7,Math.floor(t*8)),p=path[index].clone().lerp(path[index+1],t*8-index);

@@ -20,6 +20,12 @@ Whole-picture
 - The trunk is smoother than c2's. Paving dapple is a little busy.
 - Willows by the towers cover more of them than in c2. The tower brackets are dense.
 
+州桥's added views
+- These are composed shots, and they cheat. The deck willow is moved in views 2 to 7, the far bank exists only in views 4 and 5, and the extra roofs, trees and willow whips only in view 7. The cross-fade hides the changes.
+- 橋下 is the least painted: closer to a dim render than to gouache. Thin white glints follow the column reflections, and the ceiling is plain.
+- The far bank's trees are soft smooth domes, as in the distance on 宣德楼.
+- 橋側's near rail and 橋上's near paving are plainer than the near stone in view 1.
+
 ## The earlier photoreal city
 
 ### 宣德楼 and halls (T4)

@@ -11,7 +11,9 @@ An impression of Kaifeng, the Northern Song capital, around 1120: composed scene
 Two scenes, with captions from 孟元老's 《東京夢華錄》:
 
 - **宣德楼:** the palace gate, with five vermilion doors with gold nails, a great bracketed hall, blossom, red rails, a canal and cranes
-- **州桥:** the low column-and-beam stone bridge, a moored boat, willows, and the towers reflected in the water
+- **州桥:** the low column-and-beam stone bridge, a moored boat, willows, and the towers reflected in the water, seen from seven views
+
+![The six added views of 州桥](media/zhouqiao-views.jpg)
 
 There are no people yet.
 
@@ -23,6 +25,7 @@ There are no people yet.
 | Pointer | Look around: up to 6° to each side and 3° up or down |
 | Drag or wheel | Move along the path. Drift resumes a few seconds later |
 | ← → or the on-screen arrows | Change scene |
+| 1 to 7, or the on-screen list | Change view on 州桥: 河灣, 舟中, 柳下, 橋上, 橋側, 橋下, 遠望 |
 | C | Show or hide captions |
 | P | Show frame rate, draw calls, triangles, pixel ratio, quality level and GPU |
 
@@ -34,9 +37,9 @@ node tools/serve.mjs        # development, at http://localhost:8080/
 node tools/build.mjs        # static site in dist/, upload it to any host
 ```
 
-`?scene=0` or `?scene=1` opens a scene directly.
+`?scene=0` or `?scene=1` opens a scene directly. `?scene=1&view=6` opens a view of 州桥.
 
-An earlier, less detailed version ran at 60 FPS, locked to vsync, on an RTX 3070 Laptop GPU. This version costs less than that one in software tests, but hasn't been measured on a real GPU yet. Press `P` to see it. Each scene is at most 35 draw calls and about 940,000 triangles.
+An earlier, less detailed version ran at 60 FPS, locked to vsync, on an RTX 3070 Laptop GPU. This version costs less than that one in software tests, but hasn't been measured on a real GPU yet. Press `P` to see it. Every view is at most 35 draw calls and about 1.1 million triangles.
 
 If a machine can't keep up, the page reduces reflection quality first, then resolution, and recovers when there's room.
 
@@ -66,6 +69,7 @@ python3 -I test/gates/shimmer.py <frames-dir>       # flicker on consecutive fra
 python3 -I test/gates/crops.py c1 <render.png> <dir> # target above render, region by region
 python3 -I test/gates/colour.py <render.png>         # colour of 州桥's water and willows against the target
 node test/gates/perf.mjs                             # frame cost in software, to compare versions
+node test/gates/views.mjs                            # every view of 州桥: holes, budget, controls, and the approved views unchanged
 ```
 
 ## The earlier version
