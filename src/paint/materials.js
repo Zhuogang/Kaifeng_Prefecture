@@ -71,6 +71,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
   // W2 replaces Zhouqiao's soft procedural washes with one mark-lit path.
   // Xuande retains the complete approved material implementation below.
   if(profile==='zhouqiao'&&kind!=='leaf')return strokeMaterial(time,kind,{reflection,bank});
+  if(profile==='xuande'&&kind!=='leaf'&&!reflection)return strokeMaterial(time,kind,{profile,reflection,bank});
   time.windTime??={value:new THREE.Vector4(0,1,0,1)};
   const code = {
     stone: `vec2 q=abs(n.y)>.65?vP.xz:vec2(abs(n.x)>.65?vP.z:vP.x,vP.y);
@@ -791,6 +792,12 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
         // inferred: painted aerial wash, deliberately independent of view direction.
         float haze=smoothstep(35.0,140.0,-vP.z)*.68;
         c=mix(c,linearColor(vec3(.76,.75,.69)),haze);
+        ${kind==='leaf'&&profile==='xuande'&&!reflection?`
+          // inferred: tiny existing green leaves and muted gold flower cores
+          // gain definition; the accepted pink/cream petal pigments stay.
+          if(abs(vKind-87.)<.5)c*=vec3(1.04,1.18,.96);
+          if(abs(vKind)<.5&&vC.r>vC.g*1.15&&vC.g>vC.b*1.5)c*=.72;
+        `:''}
         float coverage=1.0;
         ${kind === 'leaf' ? `
           float edge=abs(vUv.x-.5)*2.0;
@@ -839,7 +846,7 @@ export function installPaintOutput(engine,{profile='xuande'}={}) {
     // Live tier changes can restore generic AO. Zhouqiao selects its small
     // contact pass here; Xuande and the accepted corridor retain no SSAO.
     const light=engine.registry.paint?.lightTime;
-    pipeline.quality.ao = profile==='zhouqiao'&&light?.contactAO&&light.viewIndex.value!==5;
+    pipeline.quality.ao = profile==='zhouqiao'&&light?.contactAO&&light.viewIndex.value!==5||profile==='xuande'&&light?.contactAO;
     if(pipeline.quality.ao){pipeline.quality.aoSamples=8;pipeline.quality.aoSettleSamples=8;pipeline.quality.aoStrength=.85;}
     return addSample(scene, camera);
   };

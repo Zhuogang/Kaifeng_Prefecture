@@ -75,7 +75,12 @@ export function blossomGeometry(rng,{height=7,hero=false,white=false,detailRng=n
   const relief=(barkRelief(wood.uv[i*2],wood.uv[i*2+1])-.5)*.10;
   for(let k=0;k<3;k++)wood.p[i*3+k]+=wood.n[i*3+k]*relief;
  }
- const bark=wood.build();if(hero)bark.computeVertexNormals();
+ const bark=wood.build();if(hero){
+  // inferred: keep the original growth normals for the X1 visible bark,
+  // as on the W2b hero trunk. Legacy reflection normals remain unchanged.
+  const detail=[];for(let i=0;i<wood.n.length;i+=3)detail.push(wood.n[i],wood.n[i+1],wood.n[i+2],2);
+  bark.setAttribute('paintDetail',new THREE.Float32BufferAttribute(detail,4));bark.computeVertexNormals();
+ }
  return {wood:bark,flowers:bloom.build(),reflectionFlowers:hero?bloom.reflectionProxy.build():null};
 }
 export function scatteredPetals(rng,{count=220,x=[-7,14],z=[2,67],scale=1}={}){

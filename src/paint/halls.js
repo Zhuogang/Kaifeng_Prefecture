@@ -42,7 +42,7 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
   const hallTemplates=new Map();
   const bracketInstances=new Map();
   const capSource=new THREE.CircleGeometry(.075,6),rafterSource=new THREE.BoxGeometry();
-  if(profile==='zhouqiao'){
+  if(profile==='zhouqiao'||profile==='xuande'){
     const uv=capSource.attributes.uv;
     capSource.setAttribute('paintDetail',new THREE.Float32BufferAttribute(Array.from({length:uv.count},(_,i)=>[uv.getX(i),uv.getY(i),2,0]).flat(),4));
   }
@@ -77,7 +77,7 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
     const ridgePaths=[[[-model.r,model.baseY+model.sectionY(0),0],[model.r,model.baseY+model.sectionY(0),0]]];
     if(model.kind!=='xuanshan')for(const side of ['south','north'])for(const u of [-1,1])ridgePaths.push(model.rows(side,1).map(t=>model.point(side,u,t)));
     const shapeGeometry=(g,k)=>{
-      if(!paintShape&&k!=='tile'&&k!=='ridge')return profile==='zhouqiao'&&k==='timber'?g.clone():g;
+      if(!paintShape&&k!=='tile'&&k!=='ridge')return k==='timber'?g.clone():g;
       const copy=g.clone(),p=copy.attributes.position;
       if(k==='tile'){
         const tiles=copy.attributes.tileCoord,uv=[],detail=[];
@@ -86,7 +86,7 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
           detail.push(tiles.getX(i)*.26/pitch+rows*.5,tiles.getY(i),tiles.getZ(i),tiles.getW(i));
         }
         copy.setAttribute('paintUV',new THREE.Float32BufferAttribute(uv,2));
-        if(profile==='zhouqiao')copy.setAttribute('paintDetail',new THREE.Float32BufferAttribute(detail,4));
+        copy.setAttribute('paintDetail',new THREE.Float32BufferAttribute(detail,4));
       }
       // inferred: stout paint-only columns retain the source lean/taper and
       // grid; ridge cross-sections grow without moving their authored paths.
@@ -133,7 +133,7 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
       const k = o.material.name;
       const source=k==='timber'&&!distant?members(o.geometry,false):o.geometry;
       const g=shapeGeometry(source,k);
-      if(profile==='zhouqiao'&&k==='timber'&&g.attributes.tileCoord){
+      if((profile==='zhouqiao'||profile==='xuande')&&k==='timber'&&g.attributes.tileCoord){
         const old=g.attributes.paintPart,part=Array.from({length:g.attributes.position.count},(_,i)=>old?.getX(i)??(paintShape?34:0));
         const index=g.index?.array,count=index?.length??g.attributes.position.count;
         // A categorical material tag must agree across each triangle,
@@ -145,7 +145,7 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
         }
         g.setAttribute('paintPart',new THREE.Float32BufferAttribute(part,1));
       }
-      batches[matFamily[k]].add(g, placement.clone().multiply(o.matrixWorld),heroPaint&&hero&&k==='bracket'?'#593d34':matColor[k],k==='window'?.72:1,0,k==='tile'?50:k==='ridge'?57:k==='window'?46:k==='timber'?(paintShape?33:47):profile==='zhouqiao'&&k==='bracket'?100:profile==='zhouqiao'&&hero&&k==='plaster'?103:(k==='bracket'&&paintShape?26:null));if(g!==source)g.dispose();if(source!==o.geometry)source.dispose();
+      batches[matFamily[k]].add(g, placement.clone().multiply(o.matrixWorld),heroPaint&&hero&&k==='bracket'?'#593d34':matColor[k],k==='window'?.72:1,0,k==='tile'?50:k==='ridge'?57:k==='window'?46:k==='timber'?(paintShape?33:47):(profile==='zhouqiao'||profile==='xuande')&&k==='bracket'?100:profile==='zhouqiao'&&hero&&k==='plaster'?103:(k==='bracket'&&paintShape?26:null));if(g!==source)g.dispose();if(source!==o.geometry)source.dispose();
     });
     if(!distant){
       // Real sixteen-sided source 梭柱, with their smooth radial normals;
@@ -180,7 +180,7 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
           part.getX(i)===1&&Math.abs(size.getX(i)/f-62)<.1?44:
           part.getX(i)===1&&Math.abs(size.getY(i)/f-21)<.1?45:40);
         detail.setAttribute('paintPart',new THREE.Float32BufferAttribute(tags,1));
-        if(profile==='zhouqiao'){
+        if(profile==='zhouqiao'||profile==='xuande'){
           const uv=detail.attributes.memberUV||detail.attributes.uv,info=[];
           for(let i=0;i<part.count;i++)info.push(uv.getX(i),uv.getY(i),size.getX(i),detail.attributes.position.getY(i)/bh);
           detail.setAttribute('paintDetail',new THREE.Float32BufferAttribute(info,4));

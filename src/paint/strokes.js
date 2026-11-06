@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import {BRIDGE,BOAT,MOORING,CAMERA} from './composition.js';
-import {ZHOU_SUN,SUNLIGHT_GLSL} from './sunlight.js';
+import {ZHOU_SUN,XUANDE_SUN,SUNLIGHT_GLSL} from './sunlight.js';
 import {MARK_SAMPLE_GLSL} from './marks.js';
 import {PAINTED_STONE_GLSL} from './stonework.js';
 import {ROOF_DETAIL_GLSL,TIMBER_DETAIL_GLSL,WALL_DETAIL_GLSL} from './tower-detail.js';
+import {xuandeDetailGLSL} from './xuande-strokes.js';
 
 const MATH=/* glsl */`
 float hash21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
@@ -15,14 +16,15 @@ float lineCut(float phase,float width){float e=min(fract(phase),1.-fract(phase))
 
 // inferred: the W2/W2b palette, directional coordinates, wear and shade-pool
 // footprint compose c2. The accepted W1 sun/depth map and geometry are reused.
-export function strokeMaterial(time,kind,{reflection=false,bank=false}={}){
+export function strokeMaterial(time,kind,{reflection=false,bank=false,profile='zhouqiao'}={}){
+  const xuande=profile==='xuande';
   time.windTime??={value:new THREE.Vector4(0,1,0,1)};
   const mat=new THREE.ShaderMaterial({name:'gouache-'+kind,vertexColors:true,side:THREE.DoubleSide,
-    uniforms:{paintTime:time,paintView:time.viewIndex,paintWindTime:time.windTime,paintSun:{value:ZHOU_SUN.clone()},...time.sunlight.uniforms,...time.marks.uniforms},
+    uniforms:{paintTime:time,paintView:time.viewIndex,paintWindTime:time.windTime,paintSun:{value:(xuande?XUANDE_SUN:ZHOU_SUN).clone()},...time.sunlight.uniforms,...time.marks.uniforms},
     vertexShader:`uniform float paintView;uniform vec4 paintWindTime;attribute vec4 paintWind,paintDetail;attribute vec3 paintData;attribute float paintKind;
       varying vec3 vP,vN,vC,vData;varying vec2 vUv;varying float vKind;varying vec4 vDetail;
       void main(){vec3 basePosition=position;
-        ${kind==='roof'&&!reflection?`if(paintView<3.5||paintView>5.5){
+        ${kind==='roof'&&!reflection&&!xuande?`if(paintView<3.5||paintView>5.5){
           if(abs(paintKind-57.)<.5&&paintDetail.w>1.5)basePosition+=paintDetail.xyz;
           #ifdef USE_INSTANCING
           // inferred: enlarge the existing drip ends 1.6x for view-2 legibility.
@@ -35,7 +37,8 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false}={}){
         surface=instanceMatrix*surface;moved=instanceMatrix*moved;mat3 basis=mat3(instanceMatrix);
         localNormal/=vec3(dot(basis[0],basis[0]),dot(basis[1],basis[1]),dot(basis[2],basis[2]));localNormal=basis*localNormal;
         #endif
-        ${kind==='bark'?`if(paintView>.5){if(paintData.z>.5){vec3 eye=vec3(${CAMERA.pos.join(',')});surface.xyz=eye+(surface.xyz-eye)*1.13;moved.xyz=eye+(moved.xyz-eye)*1.13;}if(paintView>3.5&&paintView<4.5&&paintData.z<-.5)moved.xyz=vec3(0.,-1000.,0.);}`:''}
+        ${kind==='bark'&&!xuande?`if(paintView>.5){if(paintData.z>.5){vec3 eye=vec3(${CAMERA.pos.join(',')});surface.xyz=eye+(surface.xyz-eye)*1.13;moved.xyz=eye+(moved.xyz-eye)*1.13;}if(paintView>3.5&&paintView<4.5&&paintData.z<-.5)moved.xyz=vec3(0.,-1000.,0.);}`:''}
+        ${kind==='bark'&&xuande?'if(paintDetail.w>1.5)localNormal=paintDetail.xyz;':''}
         vP=(modelMatrix*surface).xyz;vN=normalize(mat3(modelMatrix)*localNormal);vC=color;
         #ifdef USE_INSTANCING_COLOR
         vC*=instanceColor;
@@ -49,7 +52,7 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false}={}){
       ${MARK_SAMPLE_GLSL}
       // Accepted views 5/6 and the accepted water reflection retain W2b.
       bool towerDetailView(){return ${reflection?'false':'paintView<3.5||paintView>5.5'};}
-      ${kind==='plaster'?PAINTED_STONE_GLSL+WALL_DETAIL_GLSL:kind==='timber'?TIMBER_DETAIL_GLSL:kind==='roof'?ROOF_DETAIL_GLSL:''}
+      ${xuande?xuandeDetailGLSL(kind):kind==='plaster'?PAINTED_STONE_GLSL+WALL_DETAIL_GLSL:kind==='timber'?TIMBER_DETAIL_GLSL:kind==='roof'?ROOF_DETAIL_GLSL:''}
       vec2 boatUV(vec3 p){vec2 q=p.xz-vec2(${BOAT.position[0]},${BOAT.position[2]});return mat2(${Math.cos(BOAT.yaw)},${Math.sin(BOAT.yaw)},${-Math.sin(BOAT.yaw)},${Math.cos(BOAT.yaw)})*q;}
       bool boatPart(){return abs(vKind-9.)<.5||abs(vKind-77.)<.5||abs(vKind-78.)<.5;}
       float groveShade(vec3 p,float load){
@@ -69,6 +72,12 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false}={}){
         return mix(1.,mix(.025,1.,gap),cover);
       }
       vec2 coordinates(vec3 n){
+        ${xuande?`
+        ${kind==='plaster'?'return planeUV(vP,n)*vec2(.65,1.15);':kind==='timber'?`
+          if(abs(vKind-21.)<.5||abs(vKind-22.)<.5)return planeUV(vP,n)*vec2(1.,.22);
+          if(abs(vKind-71.)<.5)return vec2(vP.z*.20,vP.y+vP.x*.17);
+          if(abs(vKind-72.)<.5)return vec2(vP.x+vP.z*.37,vP.y*.22);
+        `:''}`:''}
         ${kind==='bark'?`return vUv*vec2(1.,.23);`:kind==='plaster'?`return planeUV(vP,n)*vec2(1.,.45);`:kind==='roof'?`return (abs(vKind-50.)<.5?vUv:planeUV(vP,n))*vec2(.32,1.);`:kind==='timber'?`
         if(boatPart()){vec2 local=boatUV(vP);if(abs(n.y)>.65)return abs(vKind-78.)<.5?local.yx*vec2(.22,1.):local*vec2(.18,1.);return vec2(local.x*.18,vP.y);}
         if(abs(vKind-33.)<.5||abs(vKind-47.)<.5)return vUv*vec2(1.,.23);
@@ -77,6 +86,7 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false}={}){
         return planeUV(vP,n)*(paving?vec2(.80,1.):vec2(.32,1.));`}
       }
       vec3 shadeMark(PaintMark m){
+        ${xuande?'return xuandeMark(m);':''}
         vec3 p=m.p,n=m.n,c;float light;
         ${kind==='bark'?`p=vP;n=normalize(vN);if(!gl_FrontFacing)n=-n;`:kind==='timber'?`if(boatPart()){p=vP;n=normalize(vN);if(!gl_FrontFacing)n=-n;}`:kind==='stone'?`if(abs(vKind-70.)<.5&&paintView<2.5){p=vP;n=normalize(vN);}`:''}
         ${kind==='stone'?`
@@ -207,12 +217,18 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false}={}){
       }
       void main(){
         vec3 n=normalize(vN);if(!gl_FrontFacing)n=-n;
-        ${kind==='bark'?'if(towerDetailView()&&vDetail.z>.5)discard;':''}
-        ${kind==='plaster'?`if(towerDetailView()&&(abs(vKind-11.)<.5||abs(vKind-103.)<.5)){
+        ${kind==='bark'&&!xuande?'if(towerDetailView()&&vDetail.z>.5)discard;':''}
+        ${kind==='plaster'&&!xuande?`if(towerDetailView()&&(abs(vKind-11.)<.5||abs(vKind-103.)<.5)){
           vec3 c=towerWall(n);c=mix(c,linearColor(vec3(.76,.75,.69)),smoothstep(35.,140.,-vP.z)*.68);
           gl_FragColor=vec4(c,1.);return;
         }`:''}
-        ${kind==='timber'?`
+        ${kind==='timber'&&xuande?`
+        if(abs(vKind-21.)>.5&&abs(vKind-22.)>.5&&abs(vKind-35.)>.5&&abs(vKind-71.)>.5&&abs(vKind-72.)>.5&&abs(vKind-79.)>.5){
+          vec3 c=xuandeFineTimber(n);
+          c=mix(c,linearColor(vec3(.76,.75,.69)),smoothstep(35.,140.,-vP.z)*.68);
+          gl_FragColor=vec4(c,1.);return;
+        }`:''}
+        ${kind==='timber'&&!xuande?`
         if(!boatPart()){
           // Fine members take light at the actual fragment. A seven-pixel
           // mark must never replace a smaller bracket arm's normal or gap.
@@ -235,6 +251,9 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false}={}){
           gl_FragColor=vec4(c,1.);return;
         }`:''}
         ${kind==='roof'?`
+        ${xuande?`{vec3 c=towerRoof(n);if(abs(vKind-31.)<.5)c*=.85;
+          c=mix(c,linearColor(vec3(.76,.75,.69)),smoothstep(35.,140.,-vP.z)*.68);
+          gl_FragColor=vec4(c,1.);return;}`:''}
         if(towerDetailView()){
           if(abs(vKind-51.)<.5&&vDetail.w>2.5)discard;
           vec3 c=towerRoof(n);c=mix(c,linearColor(vec3(.76,.75,.69)),smoothstep(35.,140.,-vP.z)*.68);
@@ -259,7 +278,7 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false}={}){
         // inferred: nearest dyadic scales straddle 4.5 pixels for bark/boat
         // and seven pixels elsewhere, at 1080p.
         // Their coordinates never move; only the smooth LOD weight changes.
-        float octave=clamp(log2(1./max(footprint*${kind==='bark'?'4.5':kind==='timber'?'(towerDetailView()?3.5:4.5)':'7.'}*paintPixelScale,1.e-7)),-12.,12.);
+        float octave=clamp(log2(1./max(footprint*${xuande?(kind==='plaster'?'12.':kind==='bark'?'4.5':kind==='timber'?'5.':'8.'):kind==='bark'?'4.5':kind==='timber'?'(towerDetailView()?3.5:4.5)':'7.'}*paintPixelScale,1.e-7)),-12.,12.);
         float scale=exp2(floor(octave)),weight=smoothstep(0.,1.,fract(octave));
         // A runtime material diagnostic measures the layer against the same
         // pigments and structural detail with one continuous light sample.
@@ -272,7 +291,7 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false}={}){
           PaintMark plain;plain.p=vP;plain.n=n;plain.uv=vUv;plain.load=.5;plain.pick=.5;
           c=shadeMark(plain);
         }
-        ${kind==='stone'?`
+        ${kind==='stone'&&!xuande?`
         // Structural joints use physical metres independently of mark LOD.
         bool paving=abs(vKind-70.)<.5||(abs(vKind-62.)<.5&&n.y>.65);
         if(abs(vKind-52.)<.5||abs(vKind-65.)<.5||paving){
@@ -282,6 +301,10 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false}={}){
           float joint=max(lineCut(grid.x,.010),lineCut(grid.y,.012));c*=1.-joint*(paving?.28:.23);
         }
         `:''}
+        ${kind==='stone'&&xuande?`if(abs(vKind-70.)<.5){
+          vec2 grid=(vP.xz+vec2(13.35,.10))/vec2(3.1,2.2);
+          c*=1.-max(lineCut(grid.x,.006),lineCut(grid.y,.008))*.16;
+        }`:''}
         ${kind==='timber'?`if(boatPart()&&abs(vKind-9.)<.5&&abs(n.y)<.55){
           vec2 local=boatUV(vP);float s=local.x/5.25;
           float row=(vP.y-.05+.24-.18*pow(abs(s),3.))/.1725;

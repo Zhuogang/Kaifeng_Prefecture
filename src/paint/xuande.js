@@ -137,7 +137,7 @@ export function composeXuande(engine,time,viewAt){
  const petalShadows=new PaintBatch();petalShadows.add(ground.shadows);ground.shadows.dispose();
  const petals=scatteredPetals(rng,{count:650,x:[-13,22],z:[1,44],scale:1.25});leaf.add(petals);petals.dispose();
  for(const k of families)engine.add(keep(batches[k].mesh(paintMaterial(time,k,{profile:'xuande'}),'xuande-'+k)),{castShadow:false,receiveShadow:false});
- const reflection=new THREE.Scene();for(const k of families){const m=paintMaterial(time,k,{profile:'xuande'});m.alphaToCoverage=false;reflection.add(keepReflection(reflected[k].mesh(m,'xuande-reflection-'+k)));}
+ const reflection=new THREE.Scene();for(const k of families){const m=paintMaterial(time,k,{profile:'xuande',reflection:true});m.alphaToCoverage=false;reflection.add(keepReflection(reflected[k].mesh(m,'xuande-reflection-'+k)));}
  halls.dispose();
  const contact=paintMaterial(time,'leaf',{profile:'xuande'});contact.transparent=true;contact.depthWrite=false;contact.alphaToCoverage=false;
  engine.add(petalShadows.mesh(contact,'petal-contact-shadows'),{castShadow:false,receiveShadow:false});

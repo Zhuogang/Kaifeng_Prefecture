@@ -3,6 +3,9 @@ import * as THREE from 'three';
 // inferred: W1's low golden light comes from the viewer's left/south-west.
 // +z fronts receive it; +x quay faces turn away. One direction for all views.
 export const ZHOU_SUN = new THREE.Vector3(-.20, Math.sin(35*Math.PI/180), .794).normalize();
+// inferred: c1's low light is left of the viewer; the inward-facing left
+// wing is shaded while the opposite return faces the sun.
+export const XUANDE_SUN = new THREE.Vector3(-.72, Math.sin(25*Math.PI/180), .55).normalize();
 
 export const SUNLIGHT_GLSL = /* glsl */`
 uniform sampler2DShadow paintShadowMap,paintStructureShadowMap;
@@ -49,7 +52,7 @@ vec3 stoneLight(vec3 pigment,vec3 n,float sun,float pier,float wall){
 }
 `;
 
-export function createSunlight(engine,time){
+export function createSunlight(engine,time,{profile='zhouqiao'}={}){
   const target=new THREE.WebGLRenderTarget(4096,4096,{minFilter:THREE.NearestFilter,magFilter:THREE.NearestFilter,
     depthBuffer:true,stencilBuffer:false,generateMipmaps:false});
   target.depthTexture=new THREE.DepthTexture(4096,4096,THREE.UnsignedIntType);
@@ -60,18 +63,20 @@ export function createSunlight(engine,time){
   const structureTarget=target.clone();
   structureTarget.depthTexture=target.depthTexture.clone();
   const matrix=new THREE.Matrix4();
-  time.sunlight={target,structureTarget,uniforms:{paintShadowMap:{value:target.depthTexture},paintStructureShadowMap:{value:structureTarget.depthTexture},paintShadowMatrix:{value:matrix},paintShadowStrength:{value:1},paintSunEnergy:{value:1.45}}};
+  time.sunlight={target,structureTarget,profile,uniforms:{paintShadowMap:{value:target.depthTexture},paintStructureShadowMap:{value:structureTarget.depthTexture},paintShadowMatrix:{value:matrix},paintShadowStrength:{value:1},paintSunEnergy:{value:1.45}}};
   engine.registry.paint??={};engine.registry.paint.sunlight=time.sunlight;
 }
 
 export function bakeSunlight(engine,time){
   const start=performance.now(),{target,structureTarget,uniforms}=time.sunlight;
-  const camera=new THREE.OrthographicCamera(-1,1,1,-1,.1,400),center=new THREE.Vector3(20,7,-12.5);
-  camera.position.copy(center).addScaledVector(ZHOU_SUN,180);camera.lookAt(center);camera.updateMatrixWorld(true);
+  const xuande=time.sunlight.profile==='xuande',direction=xuande?XUANDE_SUN:ZHOU_SUN;
+  const camera=new THREE.OrthographicCamera(-1,1,1,-1,.1,400),center=xuande?new THREE.Vector3(0,15,-5):new THREE.Vector3(20,7,-12.5);
+  camera.position.copy(center).addScaledVector(direction,180);camera.lookAt(center);camera.updateMatrixWorld(true);
   // inferred: W1's visible bounds, with roof height and a modest guard for off-screen
   // casters. Fit in light space, independently of the current view or resize.
   const bounds=new THREE.Box3();
-  for(const x of [-55,95])for(const y of [-1,32])for(const z of [-80,50])bounds.expandByPoint(new THREE.Vector3(x,y,z).applyMatrix4(camera.matrixWorldInverse));
+  // inferred: Xuande's existing grove, pavilions, branch and avenue bounds.
+  for(const x of xuande?[-115,115]:[-55,95])for(const y of xuande?[-1,43]:[-1,32])for(const z of xuande?[-115,88]:[-80,50])bounds.expandByPoint(new THREE.Vector3(x,y,z).applyMatrix4(camera.matrixWorldInverse));
   camera.left=bounds.min.x-2;camera.right=bounds.max.x+2;camera.bottom=bounds.min.y-2;camera.top=bounds.max.y+2;camera.updateProjectionMatrix();
   uniforms.paintShadowMatrix.value.set(.5,0,0,.5,0,.5,0,.5,0,0,.5,.5,0,0,0,1)
     .multiply(camera.projectionMatrix).multiply(camera.matrixWorldInverse);
@@ -107,15 +112,15 @@ export function bakeSunlight(engine,time){
   }
   finally{r.setRenderTarget(saved);r.setClearColor(color,alpha);r.info.autoReset=autoReset;depth.dispose();}
   Object.assign(time.sunlight,{camera,bakeMs:performance.now()-start,structureCalls,structureTriangles,
-    bounds:{x:[-55,95],z:[-80,50]},mapSize:4096,direction:ZHOU_SUN.toArray()});
+    bounds:xuande?{x:[-115,115],z:[-115,88]}:{x:[-55,95],z:[-80,50]},mapSize:4096,direction:direction.toArray()});
   console.log('[paint sunlight]',JSON.stringify({ms:time.sunlight.bakeMs,calls:time.sunlight.calls,triangles:time.sunlight.triangles,structureCalls,structureTriangles}));
 }
 
 // Reuse the pipeline's opaque depth, half-resolution AO target and bilateral
-// accumulation. No normal/depth prepass and no core or Xuande shader changes.
+// accumulation. No normal/depth prepass or core-file changes.
 // inferred: 0.16/0.60 m radii, violet tint and the 20–55 m fade keep contact
 // shade local; distance geometry does not acquire depth-reconstruction stripes.
-export function installContactAO(engine,time){
+export function installContactAO(engine,time,{profile='zhouqiao'}={}){
   const p=engine.pipeline,u=p.aoMat.uniforms;
   u.paintCameraWorld={value:new THREE.Matrix4()};
   p.aoMat.fragmentShader=p.aoMat.fragmentShader
@@ -126,9 +131,22 @@ export function installContactAO(engine,time){
     .replace('smoothstep(250.0, 900.0, -p.z)','smoothstep(20.0, 55.0, -p.z)');
   p.aoMat.needsUpdate=true;
   const originalAO=p._ao.bind(p);
-  p._ao=camera=>{u.paintCameraWorld.value.copy(camera.matrixWorld);return originalAO(camera);};
+  p._ao=camera=>{u.paintCameraWorld.value.copy(camera.matrixWorld);
+    if(profile==='xuande')p.copyMat.uniforms.paintClipToWorld.value.multiplyMatrices(camera.matrixWorld,camera.projectionMatrixInverse);
+    return originalAO(camera);};
   p.copyMat.fragmentShader=p.copyMat.fragmentShader.replace('n.rgb *= 1.0 - uAO * (ws > 1e-5 ? sum / ws : 0.0);',
     'n.rgb *= mix(vec3(1.),vec3(.43,.40,.60),uAO*(ws > 1e-5 ? sum / ws : 0.0));');
+  if(profile==='xuande'){
+    // Same contact pass, extended to this scene's hall distance. Exclude the
+    // accepted canal plane from accumulation tint; its material stays legacy.
+    p.aoMat.fragmentShader=p.aoMat.fragmentShader.replace('smoothstep(20.0, 55.0, -p.z)','smoothstep(70.0, 115.0, -p.z)');
+    p.copyMat.uniforms.paintClipToWorld={value:new THREE.Matrix4()};
+    p.copyMat.fragmentShader=p.copyMat.fragmentShader.replace('varying vec2 vUv;','varying vec2 vUv; uniform mat4 paintClipToWorld;')
+      .replace('n.rgb *= mix(vec3(1.),vec3(.43,.40,.60),uAO*(ws > 1e-5 ? sum / ws : 0.0));',
+        `vec4 wp=paintClipToWorld*vec4(vUv*2.-1.,d*2.-1.,1.);vec3 world=wp.xyz/wp.w;
+        float contact=world.x> -28.5&&world.x< -14.4&&world.z> -2.&&world.z<85.&&abs(world.y)<.08?0.:1.;
+        n.rgb*=mix(vec3(1.),vec3(.43,.40,.60),contact*uAO*(ws>1e-5?sum/ws:0.));`);
+  }
   p.copyMat.needsUpdate=true;
   time.contactAO=true;
 }
