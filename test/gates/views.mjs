@@ -52,9 +52,9 @@ try {
     }
     console.log(`baseline written to ${BASE}`);
   } else {
-    // 宣德楼 is accepted, and only its bracket sets may change: they fill about 2% of the frame.
+    // X3 rebuilds 宣德楼's bracket sets and near blossom, so this is only a guard against a global change. The eye judges those two.
     // 州桥's look is being changed, and that's judged by eye.
-    for (const [scene, limit, share] of [[0, 2, 3]]) {
+    for (const [scene, limit, share] of [[0, 2, 30]]) {
       const { page, clean } = await openStill(`scene=${scene}&ratio=1`);
       for (const f of FRACTIONS) {
         const now = PNG.sync.read((await shoot(page, null, f, [0, 0])).bytes), before = PNG.sync.read(fs.readFileSync(`${BASE}/scene${scene}-f${f}.png`)), changed = compare(now, before, limit);
