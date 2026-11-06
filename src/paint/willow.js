@@ -36,12 +36,15 @@ import {barkRelief} from './bark.js';
     const nearPalette=['#c4b359','#90965b','#99a588','#526e63'];
     // inferred: distant-bank willows keep the same drooping construction with
     // fewer whips and leaves; the accepted trees retain their original counts.
+    const fineBranches=[];
     for (let j = 0; j < (hero ? branches.length : 20); j++) {
       const angle=j*2.399,start=trunk[hero?branches[j].from:2];
       const tip=hero?V(...branches[j].tip):V(Math.cos(angle)*h*rng.range(.25,.43),h*rng.range(.66,.90),Math.sin(angle)*h*rng.range(.24,.40));
       if(!hero)tip.y=h*(.89-.27*Math.pow(Math.hypot(tip.x,tip.z)/(h*.50),2)+rng.range(-.045,.045));
       const mid = start.clone().lerp(tip, .55).add(V(0, h * .06, 0));
+      const branchStart=wood.p.length/3;
       wood.tube([start, mid, tip], [hero ? .26 : h * .016, hero ? .12 : h * .008, .018], new THREE.Color('#696551'), { sides: 6, gnarl: .4, smooth: 3 });
+      if(!hero)fineBranches.push([branchStart,wood.p.length/3]);
       const family=hero?branches[j].color:rng.pick(['#adb55f','#879249','#c1b65e','#667b53']);
       const clusterLength=hero?branches[j].length:h*rng.range(.57,.80);
       for (let k = 0; k < (hero ? rng.int(68,80) : distant?18:28); k++) {
@@ -99,6 +102,12 @@ import {barkRelief} from './bark.js';
     }
     // W2b: radial growth normals carry the round form. Relief moves the
     // silhouette but must not turn each little chip into a lighting plane.
-    const bark=wood.build();
-    return {wood:bark,leaves:leaves.build()};
+    const bark=wood.build(),foliage=leaves.build(),woodDetail=new Float32Array(wood.p.length/3*4),leafDetail=[];
+    // W3 omits bare fine shoots from the visible crown, while keeping the
+    // accepted views and static shadow proxy. No leaf positions/RNG change.
+    for(const [start,end]of fineBranches)for(let i=start;i<end;i++)woodDetail[i*4+2]=1;
+    bark.setAttribute('paintDetail',new THREE.Float32BufferAttribute(woodDetail,4));
+    for(let i=0;i<leaves.p.length/3;i++)leafDetail.push(leaves.p[i*3]/h,leaves.p[i*3+1]/h,leaves.p[i*3+2]/h,hero?0:1);
+    foliage.setAttribute('paintDetail',new THREE.Float32BufferAttribute(leafDetail,4));
+    return {wood:bark,leaves:foliage};
   }

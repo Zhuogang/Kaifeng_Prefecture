@@ -16,14 +16,15 @@ const up = new THREE.Vector3(0, 1, 0);
 
 // A single draw per paint family; construction coordinates survive merging.
 export class PaintBatch {
-  constructor() { this.p = []; this.n = []; this.c = []; this.uv = []; this.data = []; this.wind = []; this.kind = []; this.idx = []; }
+  constructor() { this.p = []; this.n = []; this.c = []; this.uv = []; this.data = []; this.wind = []; this.kind = []; this.detail = []; this.idx = []; }
   add(g, matrix = new THREE.Matrix4(), color = '#ffffff', ao = 1, sway = 0, paintKind = null) {
     const p = g.attributes.position, n = g.attributes.normal, uv = g.attributes.paintUV || g.attributes.memberUV || g.attributes.uv;
     const tile=g.attributes.tileCoord;
     const size = g.attributes.memberSize, colors = g.attributes.color, data = g.attributes.aFlora;
     const origin = g.attributes.aOrigin, canopy = g.attributes.aCanopy;
+    const detail=g.attributes.paintDetail,faceUV=g.attributes.memberUV||g.attributes.uv;
     const c = color?.isColor ? color : new THREE.Color(color);
-    const normalMatrix = new THREE.Matrix3().getNormalMatrix(matrix), v = new THREE.Vector3();
+    const normalMatrix = new THREE.Matrix3().getNormalMatrix(matrix),basis=new THREE.Matrix3().setFromMatrix4(matrix),v = new THREE.Vector3();
     const start = this.p.length / 3;
     for (let i = 0; i < p.count; i++) {
       v.fromBufferAttribute(p, i).applyMatrix4(matrix); this.p.push(v.x, v.y, v.z);
@@ -32,6 +33,14 @@ export class PaintBatch {
       if(g.attributes.paintUV)this.uv.push(uv.getX(i),uv.getY(i));
       else if(paintKind===30&&tile)this.uv.push(tile.getX(i)*.26,tile.getY(i)*.35);
       else this.uv.push((uv?.getX(i) || 0) * (size?.getX(i) || 1), (uv?.getY(i) || 0) * (size?.getY(i) || 1));
+      // W3 keeps the source tile coordinates or the member's unscaled face
+      // coordinates alongside the accepted material UVs.
+      if(detail&&paintKind===57&&detail.getW(i)>1.5){
+        // Morph displacements follow the hall placement's scale/rotation.
+        v.set(detail.getX(i),detail.getY(i),detail.getZ(i)).applyMatrix3(basis);
+        this.detail.push(v.x,v.y,v.z,detail.getW(i));
+      }else this.detail.push(detail?.getX(i)??faceUV?.getX(i)??0,detail?.getY(i)??faceUV?.getY(i)??0,
+        detail?.getZ(i)??size?.getX(i)??0,detail?.getW(i)??size?.getY(i)??0);
       // inferred: vertex AO and branch flex replace a noisy screen-space occlusion pass.
       this.data.push(ao * (canopy?.getX(i) ?? 1), data ? data.getY(i) : sway,
         origin ? origin.getX(i) + origin.getZ(i) : p.getX(i) * .17 + p.getZ(i) * .31);
@@ -59,7 +68,7 @@ export class PaintBatch {
   }
   mesh(material, name) {
     const g = new THREE.BufferGeometry();
-    for (const [key, array, size] of [['position', this.p, 3], ['normal', this.n, 3], ['color', this.c, 3], ['uv', this.uv, 2], ['paintData', this.data, 3], ['paintWind',this.wind,4], ['paintKind', this.kind, 1]])
+    for (const [key, array, size] of [['position', this.p, 3], ['normal', this.n, 3], ['color', this.c, 3], ['uv', this.uv, 2], ['paintData', this.data, 3], ['paintWind',this.wind,4], ['paintKind', this.kind, 1], ['paintDetail',this.detail,4]])
       g.setAttribute(key, new THREE.Float32BufferAttribute(array, size));
     g.setIndex(this.idx); g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, material); mesh.name = name; mesh.userData.noPatch = true;

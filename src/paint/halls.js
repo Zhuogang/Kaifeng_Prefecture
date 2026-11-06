@@ -42,6 +42,10 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
   const hallTemplates=new Map();
   const bracketInstances=new Map();
   const capSource=new THREE.CircleGeometry(.075,6),rafterSource=new THREE.BoxGeometry();
+  if(profile==='zhouqiao'){
+    const uv=capSource.attributes.uv;
+    capSource.setAttribute('paintDetail',new THREE.Float32BufferAttribute(Array.from({length:uv.count},(_,i)=>[uv.getX(i),uv.getY(i),2,0]).flat(),4));
+  }
   const caps=new PaintInstances(capSource,51),rafters=new PaintInstances(rafterSource,43);
   capSource.dispose();rafterSource.dispose();
   const camera=new THREE.PerspectiveCamera(view0.fov,1920/1080,.15,900);
@@ -73,16 +77,20 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
     const ridgePaths=[[[-model.r,model.baseY+model.sectionY(0),0],[model.r,model.baseY+model.sectionY(0),0]]];
     if(model.kind!=='xuanshan')for(const side of ['south','north'])for(const u of [-1,1])ridgePaths.push(model.rows(side,1).map(t=>model.point(side,u,t)));
     const shapeGeometry=(g,k)=>{
-      if(!paintShape&&k!=='tile'&&k!=='ridge')return g;
+      if(!paintShape&&k!=='tile'&&k!=='ridge')return profile==='zhouqiao'&&k==='timber'?g.clone():g;
       const copy=g.clone(),p=copy.attributes.position;
       if(k==='tile'){
-        const tiles=copy.attributes.tileCoord,uv=[];
-        for(let i=0;i<p.count;i++)uv.push(tiles.getX(i)*.26/pitch,tiles.getW(i));
+        const tiles=copy.attributes.tileCoord,uv=[],detail=[];
+        for(let i=0;i<p.count;i++){
+          uv.push(tiles.getX(i)*.26/pitch,tiles.getW(i));
+          detail.push(tiles.getX(i)*.26/pitch+rows*.5,tiles.getY(i),tiles.getZ(i),tiles.getW(i));
+        }
         copy.setAttribute('paintUV',new THREE.Float32BufferAttribute(uv,2));
+        if(profile==='zhouqiao')copy.setAttribute('paintDetail',new THREE.Float32BufferAttribute(detail,4));
       }
       // inferred: stout paint-only columns retain the source lean/taper and
       // grid; ridge cross-sections grow without moving their authored paths.
-      const types=copy.attributes.memberType;
+      const types=copy.attributes.memberType,ridgeDetail=[];
       for(let i=0;i<p.count;i++){
         if(k==='ridge'){
           // inferred: keep every ridge path, thicken its existing stacked
@@ -94,6 +102,15 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
             const score=(v.x-q.x)**2+(v.z-q.z)**2;if(score<distance){distance=score;nearest=q;}
           }
           p.setXYZ(i,nearest.x+(v.x-nearest.x)*1.35,nearest.y+.115+(v.y-nearest.y-.115)*1.7,nearest.z+(v.z-nearest.z)*1.35);
+          if(profile==='zhouqiao'){
+            // inferred: taper the stacked hip courses together over their
+            // last .65 m. A vertex morph leaves accepted views 5/6 intact.
+            const tipDistance=Math.min(...ridgePaths.slice(1).map(path=>Math.hypot(v.x-path.at(-1)[0],v.z-path.at(-1)[2])));
+            // Retain four percent of the section between courses so the
+            // tapered faces never become coplanar under camera drift.
+            const t=THREE.MathUtils.smoothstep(tipDistance,.05,.65),drop=Math.max(0,p.getY(i)-nearest.y-.22)*.96*(1-t);
+            ridgeDetail.push(0,-drop,0,2);
+          }
         }
         if(types?.getX(i)===4&&paintShape){
           const y=p.getY(i);let nearest,dist=Infinity;
@@ -106,6 +123,7 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
         }
         if(paintShape&&types?.getX(i)!==4&&p.getY(i)>roofDatum-.4)p.setY(i,roofDatum+(p.getY(i)-roofDatum)*(paintShape.roofStretch||1));
       }
+      if(k==='ridge'&&profile==='zhouqiao')copy.setAttribute('paintDetail',new THREE.Float32BufferAttribute(ridgeDetail,4));
       copy.computeVertexNormals();return copy;
     };
     const visibleHall=distant?h.lod2:h.lod1;
@@ -114,7 +132,20 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
       if (!o.isMesh) return;
       const k = o.material.name;
       const source=k==='timber'&&!distant?members(o.geometry,false):o.geometry;
-      const g=shapeGeometry(source,k);batches[matFamily[k]].add(g, placement.clone().multiply(o.matrixWorld),heroPaint&&hero&&k==='bracket'?'#593d34':matColor[k],k==='window'?.72:1,0,k==='tile'?50:k==='ridge'?57:k==='window'?46:k==='timber'?(paintShape?33:47):(k==='bracket'&&paintShape?26:null));if(g!==source)g.dispose();if(source!==o.geometry)source.dispose();
+      const g=shapeGeometry(source,k);
+      if(profile==='zhouqiao'&&k==='timber'&&g.attributes.tileCoord){
+        const old=g.attributes.paintPart,part=Array.from({length:g.attributes.position.count},(_,i)=>old?.getX(i)??(paintShape?34:0));
+        const index=g.index?.array,count=index?.length??g.attributes.position.count;
+        // A categorical material tag must agree across each triangle,
+        // including the zero-uphill vertices on the final eave row.
+        for(let j=0;j<count;j+=3){
+          const tri=[0,1,2].map(k=>index?index[j+k]:j+k);
+          if(tri.some(i=>g.attributes.tileCoord.getW(i)>.0001&&g.attributes.normal.getY(i)<.1))
+            for(const i of tri)part[i]=101;
+        }
+        g.setAttribute('paintPart',new THREE.Float32BufferAttribute(part,1));
+      }
+      batches[matFamily[k]].add(g, placement.clone().multiply(o.matrixWorld),heroPaint&&hero&&k==='bracket'?'#593d34':matColor[k],k==='window'?.72:1,0,k==='tile'?50:k==='ridge'?57:k==='window'?46:k==='timber'?(paintShape?33:47):profile==='zhouqiao'&&k==='bracket'?100:profile==='zhouqiao'&&hero&&k==='plaster'?103:(k==='bracket'&&paintShape?26:null));if(g!==source)g.dispose();if(source!==o.geometry)source.dispose();
     });
     if(!distant){
       // Real sixteen-sided source 梭柱, with their smooth radial normals;
@@ -149,6 +180,11 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
           part.getX(i)===1&&Math.abs(size.getX(i)/f-62)<.1?44:
           part.getX(i)===1&&Math.abs(size.getY(i)/f-21)<.1?45:40);
         detail.setAttribute('paintPart',new THREE.Float32BufferAttribute(tags,1));
+        if(profile==='zhouqiao'){
+          const uv=detail.attributes.memberUV||detail.attributes.uv,info=[];
+          for(let i=0;i<part.count;i++)info.push(uv.getX(i),uv.getY(i),size.getX(i),detail.attributes.position.getY(i)/bh);
+          detail.setAttribute('paintDetail',new THREE.Float32BufferAttribute(info,4));
+        }
         bracketInstances.set(key,new PaintInstances(detail,40));detail.dispose();
       }
       const pigment=new THREE.Color(palette.bracket||'#bb805f');if(s.kind==='bujian')pigment.multiplyScalar(1.08);
@@ -196,6 +232,13 @@ export function paintedHalls(engine,batches,reflected,{time,view0,profile='zhouq
       if(model.kind!=='xuanshan')for(const side of ['south','north'])for(const u of [-1,1])for(let j=0;j<3;j++){
         // inferred: small plain ridge nubs, following c1-hall rather than Qing animals.
         const p=point(side,u,model.tEnd-.035-j*.055,.77),nub=new THREE.BoxGeometry(.20,.27,.19);
+        if(profile==='zhouqiao'){
+          // These three inferred plain blocks caused the stepped silhouette.
+          // Keep their accepted geometry for views 5/6 and the depth proxy.
+          const info=new Float32Array(nub.attributes.position.count*4);
+          for(let i=0;i<nub.attributes.position.count;i++)info[i*4+3]=3;
+          nub.setAttribute('paintDetail',new THREE.Float32BufferAttribute(info,4));
+        }
         batches.roof.add(nub,placement.clone().multiply(new THREE.Matrix4().makeTranslation(...p)),matColor.ridge,1,0,51);nub.dispose();
       }
       // Flat corbels connect the two existing source-sized ties to the columns.

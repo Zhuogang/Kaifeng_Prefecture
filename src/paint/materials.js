@@ -99,6 +99,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
     uniforms: { paintTime: time, paintWindTime:time.windTime, paintView:time.viewIndex??{value:0},paintSun: { value: profile==='zhouqiao'?ZHOU_SUN.clone():new THREE.Vector3(...dirFromAzEl(SUN.azimuth, SUN.elevation)) },...(profile==='zhouqiao'?time.sunlight?.uniforms:{}) },
     vertexShader: /* glsl */`
       uniform float paintTime,paintView; uniform vec4 paintWindTime; attribute vec4 paintWind; attribute vec3 paintData; attribute float paintKind;
+      ${kind==='leaf'&&profile==='zhouqiao'?'attribute vec4 paintDetail;varying vec4 vLeafDetail;':''}
       varying vec3 vP,vN,vC,vData; varying vec2 vUv; varying float vKind;
       void main(){
         vec3 p=position;
@@ -132,12 +133,14 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
           vC*=instanceColor;
         #endif
         vData=paintData;vUv=uv;vKind=paintKind;
+        ${kind==='leaf'&&profile==='zhouqiao'?'vLeafDetail=paintDetail;':''}
         gl_Position=projectionMatrix*modelViewMatrix*moved;
       }`,
     fragmentShader: /* glsl */`
       uniform vec3 paintSun;
       uniform float paintTime,paintView;
       varying vec3 vP,vN,vC,vData; varying vec2 vUv; varying float vKind;
+      ${kind==='leaf'&&profile==='zhouqiao'?'varying vec4 vLeafDetail;':''}
       ${BRUSH}
       ${profile==='zhouqiao'?SUNLIGHT_GLSL:''}
       void main(){
@@ -257,6 +260,15 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             vec3 lit=vC*(nearLeaf?vec3(1.30,1.24,1.03):vec3(.94,.92,.72));
             vec3 c=mix(shaded,lit,light)*(nearLeaf?.78+.22*vData.x:.92+.08*vData.x);
             if(!nearLeaf)c*=.94+.12*clamp((vP.y-4.)/10.,0.,1.);
+            if(!nearLeaf&&vLeafDetail.w>.5&&(paintView<3.5||paintView>5.5)){
+              // inferred: crown height and the sunny outer side turn from
+              // olive shade into yellow light, without chalky white fill.
+              float top=smoothstep(.28,.83,vLeafDetail.y);
+              float sunny=clamp(.5+dot(vLeafDetail.xz,paintSun.xz)*1.3,0.,1.);
+              float exposure=clamp(.18+.52*top+.30*sunny,0.,1.)*(.85+.15*shadowing);
+              float load=clamp(dot(vC,vec3(.2126,.7152,.0722))/.48,.85,1.15);
+              c=mix(linearColor(vec3(.39,.395,.22)),linearColor(vec3(.76,.73,.42)),exposure)*load;
+            }
             c=mix(c,linearColor(vec3(.76,.75,.69)),smoothstep(35.,140.,-vP.z)*.68);
             float edge=abs(vUv.x-.5)*2.,aa=max(.06,fwidth(edge));
             // inferred: distant whips retain fractional leaf coverage below
