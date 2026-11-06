@@ -24,7 +24,7 @@ def stone(f, boxes):
         print(f"  {name:12s} shade {' '.join('%3d' % v for v in lo)}   sun {' '.join('%3d' % v for v in hi)}")
 print(f"{'image':17s}p1   p5   p25  p50  p75  p95  p99  | sat50 sat90 | hp2   hp8   hp32")
 report('refs/style/c2.png')
-stone('refs/style/c2.png', {'rail, deck': (.22, .40, .62, .49), 'piers': (.27, .50, .72, .60), 'quay wall': (.06, .50, .17, .64)})
+stone('refs/style/c2.png', {'rail, deck': (.22, .40, .62, .49), 'piers': (.27, .50, .72, .60), 'quay wall': (.06, .50, .17, .64), 'water, piers': (.25, .61, .80, .68), 'near paving': (.0, .84, .15, .98), 'boat': (.25, .72, .50, .90), 'near leaves': (.25, .0, .50, .30), 'bark': (.0, .25, .05, .70)})
 for f in sys.argv[1:]:
     report(f)
-    if os.path.basename(f) == 'view1.png': stone(f, {'rail, deck': (.54, .43, .90, .50), 'piers': (.60, .50, .92, .58), 'quay wall': (.10, .52, .20, .65)})
+    if os.path.basename(f) == 'view1.png': stone(f, {'rail, deck': (.54, .43, .90, .50), 'piers': (.60, .50, .92, .58), 'quay wall': (.10, .52, .20, .65), 'water, piers': (.40, .60, .92, .68), 'near paving': (.0, .85, .15, .98), 'boat': (.25, .72, .62, .85), 'near leaves': (.35, .0, .60, .30), 'bark': (.02, .30, .10, .70)})
