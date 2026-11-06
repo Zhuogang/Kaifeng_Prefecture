@@ -17,8 +17,8 @@ function flower(g,p,r,normal,color,rng,hero){
  }
  const core=new THREE.Color('#c99a4e');g.flower(p.clone().addScaledVector(n,.008),r*.13,n,core,.13,0,0);
 }
-export function blossomGeometry(rng,{height=7,hero=false,white=false,detailRng=null,heroRepairRng=null}={}){
- const wood=new Geometry(),bloom=new Geometry(),h=height,clusters=[];
+export function blossomGeometry(rng,{height=7,hero=false,white=false,detailRng=null,heroRepairRng=null,sprayRng=null}={}){
+ const wood=new Geometry(),bloom=new Geometry(),h=height,clusters=[],sprays=[];
  if(hero){bloom.reflectionProxy=new Geometry();bloom.reflectionIndex=0;}
  const trunk=hero?[V(-1,-1,0),V(-.5,h*.21,-.6),V(1.3,h*.43,-1.6),V(6.2,h*.65,-2.1),V(13.2,h*.80,-2.8),V(21.2,h*.84,-3.2)]:[V(),V(.16,h*.18,0),V(-.2,h*.32,-.2),V(.2,h*.47,0)];
  wood.tube(trunk,hero?[1.95,1.65,1.14,.75,.40,.06]:[h*.034,h*.027,h*.019,h*.008],new THREE.Color('#48423c'),{sides:hero?16:8,gnarl:hero?.35:.75,smooth:5});
@@ -30,7 +30,7 @@ export function blossomGeometry(rng,{height=7,hero=false,white=false,detailRng=n
   const mid=from.clone().lerp(tip,.6).add(V(.1,.6,0));wood.tube([from,mid,tip],[hero?.14:h*.02,hero?.075:h*.010,.012],new THREE.Color('#52453e'),{sides:6,gnarl:.6,smooth:3});
   for(let j=0;j<(hero?9:5);j++){
    const base=mid.clone().lerp(tip,rng.range(.25,1)),end=base.clone().add(V(rng.range(-.65,.65),rng.range(.1,.9),rng.range(-.65,.65)));
-   clusters.push({base,end});
+   clusters.push({base,end});if(hero)sprays.push({base,center:end,spread:.95});
    wood.tube([base,end],[.027,.005],new THREE.Color('#483b39'),{sides:4,smooth:1});
    for(let k=0;k<(hero?12:8);k++){
     const p=end.clone().add(V(...rng.sphere()).multiplyScalar(rng.range(.06,hero?.72:.76)));
@@ -45,14 +45,16 @@ export function blossomGeometry(rng,{height=7,hero=false,white=false,detailRng=n
   const start=trunk[Math.min(4,i+1)],mid=start.clone().lerp(tip,.55).add(V(-.8,1.0,0));
   // inferred: short twigs stay inside the blossom; omit the long bare sky wires.
   wood.tube([mid.clone().lerp(tip,.65),tip],[.055,.008],new THREE.Color('#56443c'),{sides:5,gnarl:.3,smooth:3});
-  for(let j=0;j<7;j++){const center=mid.clone().lerp(tip,j/6);for(let k=0;k<20;k++){const p=center.clone().add(V(...rng.sphere()).multiplyScalar(rng.range(.3,1.05)));flower(bloom,p,rng.range(.24,.40),V(rng.range(-.6,.6),rng.range(-.2,.7),1),new THREE.Color(rng.pick(colors)),rng,true);}}
+  for(let j=0;j<7;j++){const center=mid.clone().lerp(tip,j/6);sprays.push({base:center.clone().add(V(-.2,-.3,.1)),center,spread:1.05});for(let k=0;k<20;k++){const p=center.clone().add(V(...rng.sphere()).multiplyScalar(rng.range(.3,1.05)));flower(bloom,p,rng.range(.24,.40),V(rng.range(-.6,.6),rng.range(-.2,.7),1),new THREE.Color(rng.pick(colors)),rng,true);}}
  }
  if(hero)for(const [i,center]of [V(2,19,0),V(5,21,-1),V(9,22,-1.5),V(12,20,-1)].entries()){
   wood.tube([center.clone().add(V(-.55,-.35,.1)),center],[.045,.006],new THREE.Color('#56443c'),{sides:4,smooth:2});
+  sprays.push({base:center.clone().add(V(-.4,-.6,.1)),center,spread:1.7});
   for(let k=0;k<150;k++){const p=center.clone().add(V(...rng.sphere()).multiplyScalar(rng.range(.25,2.0)));flower(bloom,p,rng.range(.25,.41),V(rng.range(-.6,.6),rng.range(-.2,.6),1),new THREE.Color(rng.pick(colors)),rng,true);}
  }
  if(hero)for(let j=0;j<16;j++){
   const f=j/15*(trunk.length-2)+1,index=Math.min(trunk.length-2,Math.floor(f)),center=trunk[index].clone().lerp(trunk[index+1],f-index).add(V(rng.range(-.8,.8),rng.range(.2,1.8),rng.range(-1,1)));
+  sprays.push({base:center.clone().add(V(-.2,-.4,.1)),center,spread:1.1});
   for(let k=0;k<38;k++){const p=center.clone().add(V(...rng.sphere()).multiplyScalar(rng.range(.2,1.15)));flower(bloom,p,rng.range(.24,.40),V(rng.range(-.6,.6),rng.range(-.1,.7),1),new THREE.Color(rng.pick(colors)),rng,true);}
  }
  // inferred: a separate detail seed leaves the accepted flowers in place.
@@ -112,7 +114,37 @@ export function blossomGeometry(rng,{height=7,hero=false,white=false,detailRng=n
   // inferred: coral pigment only, including its shade; green/gold stay.
   const kind=bloom.data[i*3];if(kind===2||kind===86){bloom.c[i*3]*=.98;bloom.c[i*3+1]*=.92;bloom.c[i*3+2]*=.83;}
  }
- return {wood:bark,reflectionWood,flowers:bloom.build(),reflectionFlowers:hero?bloom.reflectionProxy.build():null};
+ const loose=hero&&sprayRng?openSprays(sprayRng,sprays,colors):null;
+ return {wood:bark,reflectionWood,flowers:bloom.build(),reflectionFlowers:hero?bloom.reflectionProxy.build():null,visibleFlowers:loose?.flowers,visibleTwigs:loose?.wood};
+}
+// inferred: X3 replaces only the hero cluster fills, at their existing centres.
+// Six straight petal facets, pale inner paint and a dark throat keep each
+// five-petal flower separate. Independent sprays leave sky between their twigs.
+function openSprays(rng,clusters,colors){
+ const bloom=new Geometry(),wood=new Geometry();
+ for(const {base,center,spread}of clusters){
+  const count=rng.int(5,9),roll=rng.range(0,6.283),ends=[];
+  for(let j=0;j<3;j++){
+   const a=roll+j*2.399,tip=center.clone().add(V(Math.cos(a)*spread*.75,rng.range(.1,.7),Math.sin(a)*spread*.50));ends.push(tip);
+   wood.tube([base,base.clone().lerp(tip,.6).add(V(.05,.14,0)),tip],[.022,.013,.003],new THREE.Color('#62483d'),{sides:4,smooth:1,kind:90});
+  }
+  for(let j=0;j<count;j++){
+   const a=j*2.399+roll,rad=spread*1.25*Math.sqrt((j+.4)/count)*rng.range(.65,1.05),p=center.clone().add(V(Math.cos(a)*rad,Math.sin(a)*rad*.70,rng.range(-.40,.40)*spread));
+   const r=rng.range(.34,.55),n=V(rng.range(-.65,.65),rng.range(-.25,.65),1).normalize(),u=n.clone().cross(V(0,1,0)).normalize(),v=n.clone().cross(u),tone=rng.random(),color=new THREE.Color(tone<.24?rng.pick(['#fad2c0','#f7c3b0','#fbdccb']):tone>.84?rng.pick(['#c75f6b','#cf6a70']):rng.pick(['#df7a7c','#e8877f','#ee9486','#d96f76'])),turn=rng.range(0,6.283);
+   for(let k=0;k<5;k++){
+    const b=turn+k*6.283/5,d=u.clone().multiplyScalar(Math.cos(b)).addScaledVector(v,Math.sin(b)),side=n.clone().cross(d),q=p.clone().addScaledVector(d,r*.51),ids=[];
+    const mid=bloom.vertex(q,n,color.clone().lerp(new THREE.Color('#ffd8c2'),.42),2,.10,[.5,.5],p);
+    for(let z=0;z<6;z++){const t=z/6*6.283;ids.push(bloom.vertex(q.clone().addScaledVector(d,Math.cos(t)*r*.53).addScaledVector(side,Math.sin(t)*r*.32).addScaledVector(n,Math.sin(t)*r*.06),n,color.clone().multiplyScalar(rng.range(.93,1.06)),2,.10,[.5+.45*Math.cos(t),.5+.45*Math.sin(t)],p));}
+    for(let z=0;z<6;z++)bloom.tri(mid,ids[z],ids[(z+1)%6]);
+   }
+   bloom.flower(p.clone().addScaledVector(n,.012),r*.15,n,new THREE.Color('#d98a3e'),.10,0,0);
+  }
+  for(let j=0;j<3;j++){
+   const tip=ends[j],r=rng.range(.04,.075);bloom.ellipsoid(tip,V(r*.8,r,r*.8),new THREE.Color('#cd8296'),{detail:-1,kind:86,sway:.08});
+   if(j!==1)bloom.leaf(tip,rng.range(.30,.46),.16,V(rng.range(-.4,.4),.6,.1),new THREE.Color('#68754a'),.08,roll+j,87);
+  }
+ }
+ return {wood:wood.build(),flowers:bloom.build()};
 }
 export function scatteredPetals(rng,{count=220,x=[-7,14],z=[2,67],scale=1}={}){
  const g=new Geometry();for(let i=0;i<count;i++){const p=V(rng.range(...x),.075,rng.range(...z));g.leaf(p,rng.range(.065,.16)*scale,rng.range(.05,.12)*scale,V(Math.cos(i),0,Math.sin(i)),new THREE.Color(rng.pick(['#efadae','#f6c5b6','#d9959c'])),0,0,2);}

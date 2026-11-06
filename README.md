@@ -76,7 +76,7 @@ node test/gates/views.mjs                            # every view of 州桥: hol
 
 ## The earlier version
 
-Before this, the project was a photoreal, walkable reconstruction of the palace axis at its real scale. It's finished and lives on `main`, and on this branch `?world=1` still opens it. It lost out because the city was too big to travel and photorealism was where procedural work looked weakest.
+Before this, the project was a photoreal, walkable reconstruction of the palace axis at its real scale. It's finished, and `?world=1` still opens it. It lost out because the city was too big to travel and photorealism was where procedural work looked weakest.
 
 ## What's next
 

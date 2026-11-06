@@ -9,19 +9,23 @@ Whole-picture
 - The detailed version hasn't been measured on a real GPU. On high-DPI screens it now starts at a pixel ratio of up to 2, not 1.5. The adaptive quality ladder protects slower machines.
 - Portrait phones crop the scenes heavily, and the English gloss takes noticeable space there.
 
-宣德楼, after X1 and X1b
-- Blossom clusters repeat, and read as stamped when you look for it.
+宣德楼, after X1, X1b and X3
+- The near branch now has separate five-petal flowers and sky between sprays, but they're smaller and denser than c1's, and the branch itself is a smooth curve without c1's gnarled forks. The further trees keep their older clusters.
+- The bracket sets are narrow stacks on a plain dark wall, where c1 has wide open frames tied by long beams: 70% dark gap in the band against c1's 38% (`test/gates/look-band.py`). X3 tried to rebuild them and reverted, see below.
+- The roofs are flatter than c1's: eave to ridge is about 1.4 times taller in the sample. Left alone because it changes approved outlines.
 - Tile rows and bracket shapes are still more regular than c1's.
 - The canal shows some hatching. Water was left alone at the client's request.
 - Distant trees at the right are soft smooth domes.
 
-州桥, after W1 to W3b and X2
+州桥, after W1 to W3b, X2 and X3
 - The water is the furthest thing from c2: paler, with a tan band under the bridge and softer reflections. c2 is deeper green with crisp vertical reflections. The client said it's fine, so it stays.
 - The tower bracket sets are smaller than c2's, so more pale frieze shows between them. Fixing that means changing geometry.
 - Mid-distance willows are curtains of thin strands where c2 has broad painted lobes. Pigment and light got them closer, but the shape needs new geometry.
 - The trunk's paint is close to c2, but its outline is still a low-poly tube with visible zigzags, and it has none of c2's big twisting forms.
+- The roofs are flatter than c2's by the same 1.4 times, and the near retaining wall now has block courses but is plainer than c2's rough stones.
 - Stone is more regular than c2. Pale ghost piers show in the water just below the bridge, and the boat has less dappled sunlight.
 - The tower paint matches in every view, but near stone in views 5 and 6 keeps its older treatment.
+- X3's failed attempts, one pass each, source and renders in `out/X3/` (not committed): straight-armed bracket sets with long ties read as horizontal stripes, because at this scale the ties dominate; c1's sets need open vertical frames first and the beams much quieter. Lobed mid willows with short fringes read as ribbed umbrellas, because the lobes were too regular and the whips too parallel. The narrower trunk improved view 1, but view 3's close shot showed a low-poly bulb above a pinched foot, so the outline needs real geometry with more rings, not a morph of the old tube.
 - Lesson for briefs: twice, my colour targets came from a region that held the wrong material (a saturation mask in W3b, loose boxes in X1). Codex hit every number and the picture got worse. Measure one material at a time, draw the boxes and look at them. Matching percentiles says nothing about shape either: X2's first trunk matched c2's percentiles and looked like giraffe hide.
 
 州桥's added views

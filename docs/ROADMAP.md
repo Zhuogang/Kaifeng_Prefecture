@@ -1,6 +1,6 @@
 # Roadmap
 
-The painted impression, on branch `impression`. `docs/IMPRESSION.md` is the brief. Each task passes the lead's gate.
+The painted impression, merged to `main` at the client's request after X3. `docs/IMPRESSION.md` is the brief. Each task passes the lead's gate.
 
 | Task | Delivers | Status |
 |---|---|---|
@@ -16,12 +16,12 @@ The painted impression, on branch `impression`. `docs/IMPRESSION.md` is the brie
 | W1 to W3b | 州桥 only: a baked sun shadow map, sun and shade pigments, contact occlusion, a stroke atlas with light per mark, tile rows, deep brackets, coursed walls | Done |
 | X1, X1b | 宣德楼 brought up to 州桥: sunlight, marks, roof runs, deep brackets, rails, a flaked wall and a forked branch | Done, waiting on the client |
 | X2 | Fine detail: cooler tile rows and warm timber on 州桥's towers, pale frieze panels, bracket sets that differ on both scenes, painted bark plates, quay stone with leaf dapple, lobed mid-distance willows, darker piers. Water untouched, at the client's request | Done, waiting on the client |
+| X3 | One bounded round on the last shapes. Kept: separate five-petal flowers on 宣德楼's near branch, and painted block courses on 州桥's near retaining wall. Tried and reverted: rebuilt bracket sets, lobed mid willows, a narrower twisting trunk (see the backlog) | Done, waiting on the client |
 
 ## Waiting on the client
 
 1. **Frame rate of the detailed version.** The earlier version held 60 FPS on their RTX 3070 Laptop GPU. This one costs less in software tests, but only a real GPU can confirm it. Press `P`, in each view of 州桥 too.
-2. **Merge to `main`?** `impression` carries the views and these rounds. `main` stays at the detailed version until the client asks.
-3. **More scenes?** Proposed: 御街, 大庆殿 at dawn, the 汴河 with boats, and a night market. Each needs a target image the client approves first, as c1 and c2 were.
+2. **More scenes?** Proposed: 御街, 大庆殿 at dawn, the 汴河 with boats, and a night market. Each needs a target image the client approves first, as c1 and c2 were.
 
 ## Later
 
@@ -29,4 +29,4 @@ Crowds, and the rest of the city.
 
 ## The earlier photoreal version
 
-`main` holds the finished walkable city, and on this branch `?world=1` still opens it. Its tasks T0 to T11 are done, with faults listed in the backlog.
+`?world=1` still opens the finished walkable city. Its tasks T0 to T11 are done, with faults listed in the backlog.

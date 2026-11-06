@@ -125,6 +125,16 @@ vec3 zhouBark(PaintMark m){
 export const ZHOU_STONE_GLSL=PAINTED_STONE_GLSL+/* glsl */`
 vec3 zhouStone(PaintMark m){
  vec3 n=normalize(vN);if(!gl_FrontFacing)n=-n;
+ if(abs(vKind-105.)<.5){
+  // inferred: the newly exposed retaining face has four rough warm-grey
+  // courses and a damp foot; only its visible material tag changes.
+  float sun=max(dot(n,paintSun),0.)*castShade(vP,n);
+  vec3 c=mix(linearColor(vec3(132.,116.,102.)/255.),linearColor(vec3(204.,176.,138.)/255.),sun);
+  c=paintedStone(c,vec2(vP.z,vP.y),vec2(2.6,.50),vec4(.45,.18,.34,.08),vec2(.012,.025));
+  // Brush marks, warm and cool, so that it holds up close in view 5.
+  c*=(.76+.48*m.load)*mix(vec3(.94,.97,1.04),vec3(1.08,1.,.90),m.pick);
+  return mix(c,linearColor(vec3(72.,70.,68.)/255.),(1.-smoothstep(.02,.55,vP.y))*.70);
+ }
  if(abs(vKind-73.)<.5||abs(vKind-75.)<.5){
   // inferred: flatten only the chipped top's lighting normal. The fan's
   // triangle normals must not draw pale Xs on an otherwise dressed face.

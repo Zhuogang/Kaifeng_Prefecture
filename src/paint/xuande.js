@@ -13,6 +13,7 @@ import {broadleafGeometry} from './foliage.js';
 export function composeXuande(engine,time,viewAt){
  const keep=paintVisibility(engine,viewAt),keepReflection=paintVisibility(engine,viewAt,{reflection:true,waterBounds:[-28.5,-2,-14.4,85]});
  const families=['stone','plaster','timber','roof','bark','leaf'],batches=Object.fromEntries(families.map(k=>[k,new PaintBatch()])),reflected=Object.fromEntries(families.map(k=>[k,new PaintBatch()]));
+ let heroPaint=null;
  const rng=engine.rng('S1-xuande'),{stone,plaster,timber,bark,leaf}=batches;
  const both=(family,p,s,c,ao=1,chipped=false,kind=null)=>{batches[family].box(p,s,c,ao,0,chipped,kind);reflected[family].box(p,s,c,ao,0,false,kind);};
  const softened=(family,p,s,c,kind,bevel=.035)=>{
@@ -121,7 +122,7 @@ export function composeXuande(engine,time,viewAt){
   const g=broadleafGeometry(engine.rng(`D4-xuande-grove-${sign}-${i}`),{height:h}),m=new THREE.Matrix4().makeTranslation(x,0,z);
   bark.add(g.wood,m);leaf.add(g.leaves,m);reflected.leaf.add(g.leaves,m);g.wood.dispose();g.leaves.dispose();
  }
- function tree(x,z,h,white=false,hero=false,far=false){const options={height:h,hero,white,detailRng:engine.rng(`D4-blossom-details-${x}-${z}`),heroRepairRng:hero?engine.rng('X1b-xuande-hero-bark'):null},seed=engine.rng(`S1-blossom-${x}-${z}`),g=far?distantBlossomGeometry(seed,options):blossomGeometry(seed,options),m=new THREE.Matrix4().makeTranslation(x,0,z);bark.add(g.wood,m,'#ffffff',hero?.78:1);leaf.add(g.flowers,m);reflected.bark.add(g.reflectionWood||g.wood,m);reflected.leaf.add(g.reflectionFlowers||g.flowers,m);g.wood.dispose();g.reflectionWood?.dispose();g.flowers.dispose();g.reflectionFlowers?.dispose();}
+ function tree(x,z,h,white=false,hero=false,far=false){const options={height:h,hero,white,detailRng:engine.rng(`D4-blossom-details-${x}-${z}`),heroRepairRng:hero?engine.rng('X1b-xuande-hero-bark'):null,sprayRng:hero?engine.rng('X3-xuande-open-sprays'):null},seed=engine.rng(`S1-blossom-${x}-${z}`),g=far?distantBlossomGeometry(seed,options):blossomGeometry(seed,options),m=new THREE.Matrix4().makeTranslation(x,0,z);bark.add(g.wood,m,'#ffffff',hero?.78:1);const first=leaf.p.length/3;leaf.add(g.flowers,m);if(g.visibleFlowers)heroPaint={start:first,end:leaf.p.length/3,flowers:g.visibleFlowers,wood:g.visibleTwigs,m};reflected.bark.add(g.reflectionWood||g.wood,m);reflected.leaf.add(g.reflectionFlowers||g.flowers,m);g.wood.dispose();g.reflectionWood?.dispose();g.flowers.dispose();g.reflectionFlowers?.dispose();}
  tree(-22,48,22,false,true);tree(-34,23,12.5,true);
  for(let i=0;i<12;i++){tree(-34+rng.range(-4,4),5+i*4.2,rng.range(5.7,9.5),i%3===0);tree(29+rng.range(-2,5),3+i*4,rng.range(5,8),i%3===1);}
  // inferred: smaller blossom rows recede along both banks beyond the
@@ -145,7 +146,23 @@ export function composeXuande(engine,time,viewAt){
  const ground=groundPetals(engine.rng('S1-lying-petals'),{count:18,x:[-9,8],z:[45,56],scale:2.5});leaf.add(ground.petals);ground.petals.dispose();
  const petalShadows=new PaintBatch();petalShadows.add(ground.shadows);ground.shadows.dispose();
  const petals=scatteredPetals(rng,{count:650,x:[-13,22],z:[1,44],scale:1.25});leaf.add(petals);petals.dispose();
- for(const k of families)engine.add(keep(batches[k].mesh(paintMaterial(time,k,{profile:'xuande'}),'xuande-'+k)),{castShadow:false,receiveShadow:false});
+ const staged=[];
+ for(const k of families){
+  const old=keep(batches[k].mesh(paintMaterial(time,k,{profile:'xuande'}),'xuande-'+k));engine.add(old,{castShadow:false,receiveShadow:false});
+  if(heroPaint&&(k==='leaf'||k==='bark')){
+   const b=batches[k],next=new PaintBatch();for(const key of ['p','n','c','uv','data','wind','kind','detail'])next[key]=b[key].slice();
+   for(let i=0;i<b.idx.length;i+=3)if(k!=='leaf'||b.idx[i]<heroPaint.start||b.idx[i]>=heroPaint.end)next.idx.push(...b.idx.slice(i,i+3));
+   next.add(k==='leaf'?heroPaint.flowers:heroPaint.wood,heroPaint.m);
+   staged.push([old,keep(next.mesh(paintMaterial(time,k,{profile:'xuande'}),'xuande-'+k))]);
+  }
+ }
+ heroPaint?.flowers.dispose();heroPaint?.wood.dispose();
+ // Keep the accepted hero flowers/wood as the one-off sun casters. Install
+ // the main-only sprays and their dark twigs after that bake, once.
+ let installed=false;engine.onUpdate(()=>{if(installed)return;installed=true;for(const [old,next]of staged){
+  engine.scene.remove(old);for(const group of engine.registry.paint.culling){const i=group.meshes.findIndex(r=>r.mesh===old);if(i>=0){const [r]=group.meshes.splice(i,1);r.source.dispose();}}
+  old.geometry.dispose();old.material.dispose();engine.add(next,{castShadow:false,receiveShadow:false});
+ }});
  const reflection=new THREE.Scene();for(const k of families){const m=paintMaterial(time,k,{profile:'xuande',reflection:true});m.alphaToCoverage=false;reflection.add(keepReflection(reflected[k].mesh(m,'xuande-reflection-'+k)));}
  halls.dispose();
  const contact=paintMaterial(time,'leaf',{profile:'xuande'});contact.transparent=true;contact.depthWrite=false;contact.alphaToCoverage=false;

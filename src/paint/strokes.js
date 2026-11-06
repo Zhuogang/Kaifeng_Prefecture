@@ -99,7 +99,7 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false,profile='z
       vec3 shadeMark(PaintMark m){
         ${xuande?'return xuandeMark(m);':''}
         ${fine&&kind==='bark'?'if(towerDetailView()&&vDetail.w>2.5)return zhouBark(m);':''}
-        ${fine&&kind==='stone'?'if(towerDetailView()&&(abs(vKind-73.)<.5||abs(vKind-75.)<.5||abs(vKind-52.)<.5||abs(vKind-37.)<.5))return zhouStone(m);':''}
+        ${fine&&kind==='stone'?'if((towerDetailView()||abs(vKind-105.)<.5)&&(abs(vKind-105.)<.5||abs(vKind-73.)<.5||abs(vKind-75.)<.5||abs(vKind-52.)<.5||abs(vKind-37.)<.5))return zhouStone(m);':''}
         vec3 p=m.p,n=m.n,c;float light;
         ${kind==='bark'?`p=vP;n=normalize(vN);if(!gl_FrontFacing)n=-n;`:kind==='timber'?`if(boatPart()){p=vP;n=normalize(vN);if(!gl_FrontFacing)n=-n;}`:kind==='stone'?`if(abs(vKind-70.)<.5&&paintView<2.5){p=vP;n=normalize(vN);}`:''}
         ${kind==='stone'?`

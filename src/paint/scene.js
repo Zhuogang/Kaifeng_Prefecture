@@ -204,10 +204,10 @@ export function compose(engine, time, viewAt) {
   // inferred: the foreground coping follows c2's diagonal, while the older
   // retaining wall behind the trunk runs into the near end of the bridge.
   const quayYaw=Math.atan(QUAY.slope),cq=Math.cos(quayYaw),sq=Math.sin(quayYaw),nearRng=engine.rng('D3-quay-stones');
-  const nearStone=(p,s,kind=74,yaw=0)=>{
+  const nearStone=(p,s,kind=74,yaw=0,visibleKind=kind)=>{
     const seed=p[0]*11+p[2]*17,g=kind===73||kind===75?chippedQuayBlock(s,seed):beveledBox(s,.04,seed),m=new THREE.Matrix4().makeRotationY(yaw);m.setPosition(...p);
     const color=new THREE.Color('#cdbd9f').multiplyScalar(nearRng.range(.98,1.02));
-    stone.add(g,m,color,1,0,kind);reflected.stone.add(g,m,color,1,0,kind);g.dispose();
+    stone.add(g,m,color,1,0,visibleKind);reflected.stone.add(g,m,color,1,0,kind);g.dispose();
   };
   const long=38/cq,center=6/cq;
   nearStone([QUAY.intercept+sq*center-cq*.14,.64,cq*center+sq*.14],[.75,1.28,long],74,quayYaw);
@@ -217,7 +217,7 @@ export function compose(engine, time, viewAt) {
   for(let v=-13/cq;v<25/cq;v+=1.18)nearStone([QUAY.intercept+sq*v,1.43,cq*v],[.76,.32,1.15],73,quayYaw);
   for(let iz=0;iz<12;iz++){
     const z=-17+iz*1.12;
-    if(iz===0)nearStone([-14,.94,-10.8],[1.0,1.88,13.5],74);
+    if(iz===0)nearStone([-14,.94,-10.8],[1.0,1.88,13.5],74,0,105);
     nearStone([-14.0,2.0,z],[1.15,.28,1.10],73);
   }
   // Source-based post/rail cadence, with a quieter strip below its coping.
