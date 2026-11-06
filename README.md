@@ -55,7 +55,7 @@ The caption text is quoted from 《東京夢華錄》. The English glosses are o
 
 Codex (OpenAI) wrote the code. Claude Code (Anthropic) wrote the specs and tests, reviewed the work and validated it by rendering, with Codex sandboxed to this repository. The engine and render tools are adapted from [athenaion](THIRD_PARTY_NOTICES.md) (MIT).
 
-Buildings, water, trees and everything near are generated in code. Only the sky and far distance are painted images, in `assets/backdrops/`. Those images and the look targets in `refs/style/` are AI-generated, and they aren't historical evidence. Historical images are listed in `refs/historical/SOURCES.md`.
+Buildings, water, trees and everything near are generated in code, and 州桥's sunlight is a shadow map baked once at load. Only the sky and far distance are painted images, in `assets/backdrops/`. Those images and the look targets in `refs/style/` are AI-generated, and they aren't historical evidence. Historical images are listed in `refs/historical/SOURCES.md`.
 
 ## Tests
 

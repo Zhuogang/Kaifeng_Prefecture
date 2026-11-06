@@ -20,6 +20,12 @@ Whole-picture
 - The trunk is smoother than c2's. Paving dapple is a little busy.
 - Willows by the towers cover more of them than in c2. The tower brackets are dense.
 
+州桥 after the sunlight and brush rounds (W1 to W3b)
+- The water is now furthest from c2: paler, with a tan band under the bridge and softer reflections. c2 is deeper green with crisp vertical reflections.
+- 宣德楼 still has the older, plastic surfaces.
+- Bracket sets repeat and timber is a little browner than c2. Mid-distance willow strands are more even than c2's.
+- Lesson for briefs: my W3b timber numbers came from a saturation mask that kept only c2's brightest pixels. Codex hit them and the towers went flat salmon. Measure a whole region, unmasked, and judge by eye.
+
 州桥's added views
 - These are composed shots, and they cheat. The deck willow is moved in views 2 to 7, the far bank exists only in views 4 and 5, and the extra roofs, trees and willow whips only in view 7. The cross-fade hides the changes.
 - 橋下 is the least painted: closer to a dim render than to gouache. Thin white glints follow the column reflections, and the ceiling is plain.

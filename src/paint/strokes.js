@@ -112,7 +112,7 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false}={}){
           // inferred: sunlight occupies most of the berth; a separate,
           // broader dapple field no longer swallows the boat in quay shade.
           vec2 q=boatUV(vP);float pool=noise(q*vec2(.45,.8))+noise(q*vec2(1.1,2.)+7.)*.16;
-          sun*=mix(.08,1.,smoothstep(.50,.67,pool));
+          sun*=towerDetailView()?mix(.12,1.,smoothstep(.42,.59,pool)):mix(.08,1.,smoothstep(.50,.67,pool));
         }`:''}
         light=markLight(sun,m.pick);
         ${kind==='plaster'?`light=clamp((max(dot(n,paintSun),0.)+.22)*1.55,0.,1.)*shadow;`:''}
@@ -176,7 +176,8 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false}={}){
             vec2 local=boatUV(p);float s=local.x/${BOAT.length*.5};
             float row=(p.y-${BOAT.position[1]}+.24-.18*pow(abs(s),3.))/.1725;
             float plank=hash21(abs(n.y)>.65?vec2(floor(local.y/.45),7.):vec2(floor(row),sign(local.y)*7.));
-            vec3 shaded=linearColor(vec3(.46,.335,.235)),lit=linearColor(vec3(.75,.61,.435));
+            vec3 shaded=linearColor(towerDetailView()?vec3(.40,.31,.22):vec3(.46,.335,.235));
+            vec3 lit=linearColor(towerDetailView()?vec3(.84,.63,.41):vec3(.75,.61,.435));
             c=mix(shaded,lit,light)*(.82+.36*plank);
             
             // inferred: small broken honey-coloured scuffs and umber cuts
@@ -191,9 +192,9 @@ export function strokeMaterial(time,kind,{reflection=false,bank=false}={}){
             if(abs(vKind-77.)<.5)c=mix(c,linearColor(vec3(.76,.60,.41)),.12+.10*light);
             if(dot(vC,vec3(.2126,.7152,.0722))<.05)c*=.60;
             if(p.y<.13)c*=.70;
-            // inferred: .64 linear pigment gives roughly twenty percent
-            // less displayed value, while retaining the accepted sun pools.
-            if(towerDetailView())c*=.64;
+            // inferred: halfway between W2b and W3 pigment, with warmer
+            // open shade and brighter pools; W3's quiet wear stays intact.
+            if(towerDetailView())c*=.82;
           }
         `:''}
         // Opaque pigment loads, not a continuous wash. Hue changes are paired

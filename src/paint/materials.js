@@ -143,6 +143,15 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
       ${kind==='leaf'&&profile==='zhouqiao'?'varying vec4 vLeafDetail;':''}
       ${BRUSH}
       ${profile==='zhouqiao'?SUNLIGHT_GLSL:''}
+      ${kind==='leaf'&&profile==='zhouqiao'?`
+      // inferred: four overlapping painted clumps, in the unchanged tree's
+      // normalized local coordinates. No leaf positions or coverage change.
+      vec2 willowClump(vec3 q,vec3 center,vec3 radius){
+        vec3 r=(q-center)/radius;
+        float cover=1.-smoothstep(.78,1.30,length(r));
+        float light=clamp(.63+.36*r.y+.34*dot(r.xz,paintSun.xz),.10,1.);
+        return vec2(cover,light);
+      }`:''}
       void main(){
         vec3 n=normalize(vN); if(!gl_FrontFacing)n=-n;
         ${kind==='leaf'&&profile==='zhouqiao'?'if(abs(vKind-94.)<.5||abs(vKind-97.)<.5)discard;':''}
@@ -261,13 +270,21 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             vec3 c=mix(shaded,lit,light)*(nearLeaf?.78+.22*vData.x:.92+.08*vData.x);
             if(!nearLeaf)c*=.94+.12*clamp((vP.y-4.)/10.,0.,1.);
             if(!nearLeaf&&vLeafDetail.w>.5&&(paintView<3.5||paintView>5.5)){
-              // inferred: crown height and the sunny outer side turn from
-              // olive shade into yellow light, without chalky white fill.
-              float top=smoothstep(.28,.83,vLeafDetail.y);
-              float sunny=clamp(.5+dot(vLeafDetail.xz,paintSun.xz)*1.3,0.,1.);
-              float exposure=clamp(.18+.52*top+.30*sunny,0.,1.)*(.85+.15*shadowing);
+              vec3 q=vLeafDetail.xyz;
+              vec2 a=willowClump(q,vec3(.23,.60,.17),vec3(.23,.45,.22));
+              vec2 b=willowClump(q,vec3(-.23,.53,.12),vec3(.22,.42,.21));
+              vec2 d=willowClump(q,vec3(.16,.48,-.22),vec3(.22,.40,.21));
+              vec2 e=willowClump(q,vec3(-.18,.68,-.20),vec3(.21,.38,.22));
+              float cover=max(max(a.x,b.x),max(d.x,e.x));
+              vec4 weights=pow(vec4(a.x,b.x,d.x,e.x),vec4(3.));
+              float exposure=dot(weights,vec4(a.y,b.y,d.y,e.y))/max(.001,dot(weights,vec4(1.)));
+              // Whips outside every clump keep a middle value; a zero here drew dark stripes.
+              exposure=mix(.50,exposure,smoothstep(.02,.30,cover));
+              exposure*=.85+.15*shadowing;
               float load=clamp(dot(vC,vec3(.2126,.7152,.0722))/.48,.85,1.15);
               c=mix(linearColor(vec3(.39,.395,.22)),linearColor(vec3(.76,.73,.42)),exposure)*load;
+              float inner=1.-smoothstep(.32,.58,length(q.xz));
+              c=mix(linearColor(vec3(.42,.42,.21))*load,c,1.-inner*(1.-cover)*.32);
             }
             c=mix(c,linearColor(vec3(.76,.75,.69)),smoothstep(35.,140.,-vP.z)*.68);
             float edge=abs(vUv.x-.5)*2.,aa=max(.06,fwidth(edge));

@@ -12,7 +12,8 @@ The painted impression, on branch `impression`. `docs/IMPRESSION.md` is the brie
 | D2, D2b | Tile rows, ridges, bracket sets, round columns, deep interiors, the bridge's piers | Done |
 | D3 | Painted stone routine, flaked wall, rails, paving, petals, boat, rope, bark | Done |
 | D4, D4b, D4c | Water strokes and reflections, willows, blossom, grass, distance, near stone on 州桥 | Done |
-| V1, V1b, V1c | Six more authored views of 州桥, on the existing scene, with keys, an on-screen list and a cross-fade | Done, waiting on the client |
+| V1, V1b, V1c | Six more authored views of 州桥, on the existing scene, with keys, an on-screen list and a cross-fade | Done, accepted by the client |
+| W1 to W3b | 州桥 only: a baked sun shadow map, sun and shade pigments, contact occlusion, a stroke atlas with light per mark, tile rows, deep brackets, coursed walls | Done, waiting on the client. 宣德楼 hasn't had this yet |
 
 ## Waiting on the client
 
