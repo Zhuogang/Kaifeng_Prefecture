@@ -1,11 +1,11 @@
 // Gate: 州桥's authored views, through the real scroll page. Lead-owned.
-//   node test/gates/views.mjs --baseline   records the approved view 1 and 宣德楼 in out/V0/
+//   node test/gates/views.mjs --baseline   records the approved scenes in out/X0/
 //   node test/gates/views.mjs [out-dir]    checks every view; contact sheets go to out-dir (default out/V1)
 import fs from 'node:fs';
 import { PNG } from 'pngjs';
 import { launchBrowser, observeErrors } from '../../tools/browser.mjs';
 import { startServer } from '../../tools/serve.mjs';
-const W = 1280, H = 720, CELL = 4, FRACTIONS = [0, .5, 1], BASE = 'out/V0';
+const W = 1280, H = 720, CELL = 4, FRACTIONS = [0, .5, 1], BASE = 'out/X0';
 const CORNERS = [[0, 0], [-1, -1], [-1, 1], [1, -1], [1, 1]];
 const baselineMode = process.argv[2] === '--baseline', OUT = baselineMode ? BASE : (process.argv[2] || 'out/V1');
 fs.mkdirSync(OUT, { recursive: true });
@@ -52,17 +52,13 @@ try {
     }
     console.log(`baseline written to ${BASE}`);
   } else {
-    // 宣德楼 stays as approved. 州桥's look is being changed on the client's request, so it's judged by eye.
-    for (const [scene, limit, share] of [[0, 2, .05]]) {
+    // 州桥 stays as approved while 宣德楼's look is being changed, and that's judged by eye.
+    for (const [scene, limit, share] of [[1, 2, .05]]) {
       const { page, clean } = await openStill(`scene=${scene}&ratio=1`);
       for (const f of FRACTIONS) {
         const now = PNG.sync.read((await shoot(page, null, f, [0, 0])).bytes), before = PNG.sync.read(fs.readFileSync(`${BASE}/scene${scene}-f${f}.png`)), changed = compare(now, before, limit);
         check(changed <= share, `scene ${scene} at fraction ${f} matches its baseline: ${changed.toFixed(3)}% of pixels differ by more than ${limit} (limit ${share}%)`);
         clean();
-      }
-      if (scene === 0) {
-        const n = await page.evaluate(() => window.__scroll.views().length);
-        check(n === 1, `宣德楼 has one view, reports ${n}`);
       }
       await page.close();
     }
@@ -113,6 +109,7 @@ try {
     await live.goto(url('scene=0'), { timeout: 120000 });
     await live.waitForFunction('window.__scroll?.ready()', { timeout: 300000 }); await wait(1000);
     await live.keyboard.press('Digit3'); await wait(500);
+    check(await live.evaluate(() => window.__scroll.views().length) === 1, '宣德楼 has one view');
     check(await live.evaluate(() => window.__scroll.status().view) === 0, 'number keys do nothing on 宣德楼');
     check(await live.evaluate(() => ![...document.querySelectorAll('[data-view]')].some(b => b.offsetParent)), '宣德楼 shows no view list');
     check(!errors.length, `no page errors ${errors.slice(0, 3).join(' | ')}`);
