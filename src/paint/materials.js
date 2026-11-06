@@ -142,6 +142,7 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
       ${profile==='zhouqiao'?SUNLIGHT_GLSL:''}
       void main(){
         vec3 n=normalize(vN); if(!gl_FrontFacing)n=-n;
+        ${kind==='leaf'&&profile==='zhouqiao'?'if(abs(vKind-94.)<.5||abs(vKind-97.)<.5)discard;':''}
         ${bank?`
         {
           // inferred: one merged, softly hazed bank family keeps the source
@@ -231,33 +232,41 @@ export function paintMaterial(time,kind='stone',{dapple={},profile='zhouqiao',re
             if(!gl_FrontFacing)discard;
             float dome=smoothstep(-.45,.85,dot(n,paintSun))${profile==='zhouqiao'?'*shadowing':''};
             vec3 canopy=vC*mix(vec3(.57,.65,.62),vec3(1.13,1.07,.83),dome);
-            float leafLoad=noise(vP.xz*2.1+vP.y*.7)*.70+noise(vP.xy*4.3)*.30;
-            canopy*=.84+.27*leafLoad;
+            ${profile==='zhouqiao'?`
+            // inferred: quiet, soft world-anchored dabs retain the far
+            // crowns' accepted value and atmospheric depth.
+            float leafLoad=pigmentDab(vec2(vP.x+vP.z*.4,vP.y)*vec2(2.8,3.6));
+            canopy*=.975+leafLoad*.13;
+            `:`float leafLoad=noise(vP.xz*2.1+vP.y*.7)*.70+noise(vP.xy*4.3)*.30;canopy*=.84+.27*leafLoad;`}
             canopy=mix(canopy,linearColor(vec3(.76,.75,.69)),smoothstep(35.,140.,-vP.z)*.68);
             if(abs(vKind-85.)<.5)canopy=mix(canopy,linearColor(vec3(.79,.75,.64)),.35+smoothstep(15.,100.,-vP.z)*.40);
+            ${profile==='zhouqiao'?'canopy*=1.+leafLoad*.12;':''}
             gl_FragColor=vec4(canopy,1.);return;
           }
         `:''}
         ${kind==='leaf'&&profile==='zhouqiao'?`
           // inferred: willow spears use a simple measured pigment ramp. Skip
           // the unrelated blossom/card brush fields before shading dense whips.
-          if(abs(vKind-83.)<.5||abs(vKind-91.)<.5){
-            // inferred: deeper saturated interior, with a coherent value
-            // per whip from its existing seeded pigment and canopy exposure.
-            float leafShadow=shadowing;
-            float light=clamp((.28+.85*abs(dot(n,paintSun)))*leafShadow,0.,1.);
-            float whip=clamp(dot(vC,vec3(.2126,.7152,.0722))/.30,.58,1.30);
-            vec3 shaded=linearColor(vec3(.31,.355,.17))*(.72+.28*whip);
-            vec3 lit=linearColor(vec3(.75,.75,.38))*(.78+.22*whip);
-            vec3 c=mix(shaded,lit,light)*(.72+.28*vData.x);
+          if(abs(vKind-83.)<.5||abs(vKind-91.)<.5||abs(vKind-93.)<.5){
+            bool nearLeaf=abs(vKind-83.)<.5;
+            float facing=abs(dot(n,paintSun));
+            float light=nearLeaf?clamp((.38+.72*facing)*shadowing,0.,1.):clamp(.52+.48*facing*(.65+.35*shadowing),0.,1.);
+            // W2b: each near leaf keeps its seeded pigment, rather than
+            // collapsing all four families to one olive luminance ramp.
+            vec3 shaded=vC*(nearLeaf?vec3(.43,.48,.56):vec3(.55,.58,.47));
+            vec3 lit=vC*(nearLeaf?vec3(1.30,1.24,1.03):vec3(.94,.92,.72));
+            vec3 c=mix(shaded,lit,light)*(nearLeaf?.78+.22*vData.x:.92+.08*vData.x);
+            if(!nearLeaf)c*=.94+.12*clamp((vP.y-4.)/10.,0.,1.);
             c=mix(c,linearColor(vec3(.76,.75,.69)),smoothstep(35.,140.,-vP.z)*.68);
             float edge=abs(vUv.x-.5)*2.,aa=max(.06,fwidth(edge));
             // inferred: distant whips retain fractional leaf coverage below
             // one pixel; fading them at the near-leaf threshold exposed bare
             // branches at adaptive resolutions and the wide look corners.
             float pixelWidth=1./max(fwidth(vUv.x),.0001);
-            float resolved=abs(vKind-91.)<.5?smoothstep(.25,.90,pixelWidth):smoothstep(.70,1.6,pixelWidth);
-            float coverage=(1.-smoothstep(.86-aa,1.+aa,edge))*resolved;
+            float resolved=nearLeaf?smoothstep(.70,1.6,pixelWidth):smoothstep(.25,.90,pixelWidth);
+            // Narrower lances and missing whole whips leave real gaps in
+            // front of sky and plaster; the silhouette is not a solid dome.
+            float coverage=(1.-smoothstep(nearLeaf?.86-aa:.58-aa,nearLeaf?1.+aa:.80+aa,edge))*resolved;
             gl_FragColor=vec4(c,coverage);return;
           }
         `:''}

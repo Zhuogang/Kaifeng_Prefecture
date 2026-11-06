@@ -5,10 +5,10 @@ import * as THREE from 'three';
 export const ZHOU_SUN = new THREE.Vector3(-.20, Math.sin(35*Math.PI/180), .794).normalize();
 
 export const SUNLIGHT_GLSL = /* glsl */`
-uniform sampler2DShadow paintShadowMap;
+uniform sampler2DShadow paintShadowMap,paintStructureShadowMap;
 uniform mat4 paintShadowMatrix;
 uniform float paintShadowStrength,paintSunEnergy;
-float castShadeAt(vec3 p,vec3 n,vec3 receiver){
+float castShadeMap(sampler2DShadow depthMap,vec3 p,vec3 n,vec3 receiver){
   vec3 q=(paintShadowMatrix*vec4(p,1.)).xyz;
   // Compare against the receiver plane at each filter tap. Comparing
   // every offset against the centre pixel's depth self-shadowed sloping
@@ -25,16 +25,19 @@ float castShadeAt(vec3 p,vec3 n,vec3 receiver){
   // inferred: hardware bilinear PCF needs the half-texel receiver-depth
   // range as bias. This removes self-shadow without a large normal offset.
   float bias=.000025+dot(abs(slope),vec2(.52/4096.));
-  float shade=texture(paintShadowMap,vec3(q.xy,q.z-bias));
+  float shade=texture(depthMap,vec3(q.xy,q.z-bias));
   for(int i=0;i<4;i++){
     float a=float(i)*2.39996323;
     vec2 offset=turn*vec2(cos(a),sin(a))*sqrt((float(i)+.5)/4.)*1.8/4096.;
     vec2 uv=q.xy+offset;
-    shade+=texture(paintShadowMap,vec3(uv,q.z+dot(offset,slope)-bias));
+    shade+=texture(depthMap,vec3(uv,q.z+dot(offset,slope)-bias));
   }
   return mix(1.,shade/5.,paintShadowStrength);
 }
+float castShadeAt(vec3 p,vec3 n,vec3 receiver){return castShadeMap(paintShadowMap,p,n,receiver);}
 float castShade(vec3 p,vec3 n){return castShadeAt(p,n,p);}
+float structureShadeAt(vec3 p,vec3 n,vec3 receiver){return castShadeMap(paintStructureShadowMap,p,n,receiver);}
+float structureShade(vec3 p,vec3 n){return structureShadeAt(p,n,p);}
 // inferred: two pigments retain a little warm bounce and open-sky violet in
 // shade. Angular sun energy, rather than a global curve, separates the planes.
 vec3 stoneLight(vec3 pigment,vec3 n,float sun,float pier,float wall){
@@ -52,13 +55,17 @@ export function createSunlight(engine,time){
   target.depthTexture=new THREE.DepthTexture(4096,4096,THREE.UnsignedIntType);
   target.depthTexture.minFilter=target.depthTexture.magFilter=THREE.LinearFilter;
   target.depthTexture.compareFunction=THREE.LessEqualCompare;
+  // W2b: a second receiver choice removes garden-tree shadows from the
+  // towers and boat without changing the accepted bridge/stone shadow map.
+  const structureTarget=target.clone();
+  structureTarget.depthTexture=target.depthTexture.clone();
   const matrix=new THREE.Matrix4();
-  time.sunlight={target,uniforms:{paintShadowMap:{value:target.depthTexture},paintShadowMatrix:{value:matrix},paintShadowStrength:{value:1},paintSunEnergy:{value:1.45}}};
+  time.sunlight={target,structureTarget,uniforms:{paintShadowMap:{value:target.depthTexture},paintStructureShadowMap:{value:structureTarget.depthTexture},paintShadowMatrix:{value:matrix},paintShadowStrength:{value:1},paintSunEnergy:{value:1.45}}};
   engine.registry.paint??={};engine.registry.paint.sunlight=time.sunlight;
 }
 
 export function bakeSunlight(engine,time){
-  const start=performance.now(),{target,uniforms}=time.sunlight;
+  const start=performance.now(),{target,structureTarget,uniforms}=time.sunlight;
   const camera=new THREE.OrthographicCamera(-1,1,1,-1,.1,400),center=new THREE.Vector3(20,7,-12.5);
   camera.position.copy(center).addScaledVector(ZHOU_SUN,180);camera.lookAt(center);camera.updateMatrixWorld(true);
   // inferred: W1's visible bounds, with roof height and a modest guard for off-screen
@@ -76,7 +83,7 @@ export function bakeSunlight(engine,time){
         #endif
         gl_Position=projectionMatrix*modelViewMatrix*p;}`,
     fragmentShader:`varying float kind;varying vec2 leafUV;void main(){
-      if((abs(kind-83.)<.5||abs(kind-91.)<.5)&&abs(leafUV.x-.5)>.43)discard;
+      if((abs(kind-83.)<.5||abs(kind-91.)<.5||abs(kind-94.)<.5)&&abs(leafUV.x-.5)>.43)discard;
       gl_FragColor=vec4(1.);}`});
   const casters=new THREE.Scene(),sources=new Map((engine.registry.paint.culling??[]).filter(g=>!g.reflection).flatMap(g=>g.meshes.map(r=>[r.mesh,r.source])));
   engine.scene.updateMatrixWorld(true);
@@ -85,15 +92,23 @@ export function bakeSunlight(engine,time){
     const copy=o.clone(false);copy.geometry=sources.get(o)??o.geometry;copy.material=depth;
     copy.matrix.copy(o.matrixWorld);copy.matrixAutoUpdate=false;copy.frustumCulled=true;copy.visible=true;
     // No main-scene callbacks or wind in this one-off, static depth bake.
-    copy.onBeforeRender=()=>{};casters.add(copy);
+    copy.onBeforeRender=()=>{};copy.userData.structureCaster=!['bark','leaf'].some(k=>o.material?.name==='gouache-'+k);casters.add(copy);
   });
   const r=engine.renderer,saved=r.getRenderTarget(),color=r.getClearColor(new THREE.Color()),alpha=r.getClearAlpha();
   const autoReset=r.info.autoReset;r.info.autoReset=true;
-  try{r.setRenderTarget(target);r.setClearColor(0xffffff,1);r.clear();r.render(casters,camera);r.readRenderTargetPixels(target,0,0,1,1,new Uint8Array(4));}
+  let structureCalls,structureTriangles;
+  try{
+    r.setRenderTarget(target);r.setClearColor(0xffffff,1);r.clear();r.render(casters,camera);r.readRenderTargetPixels(target,0,0,1,1,new Uint8Array(4));
+    const calls=r.info.render.calls,triangles=r.info.render.triangles;
+    for(const o of casters.children)o.visible=o.userData.structureCaster;
+    r.setRenderTarget(structureTarget);r.clear();r.render(casters,camera);r.readRenderTargetPixels(structureTarget,0,0,1,1,new Uint8Array(4));
+    structureCalls=r.info.render.calls;structureTriangles=r.info.render.triangles;
+    time.sunlight.calls=calls;time.sunlight.triangles=triangles;
+  }
   finally{r.setRenderTarget(saved);r.setClearColor(color,alpha);r.info.autoReset=autoReset;depth.dispose();}
-  Object.assign(time.sunlight,{camera,bakeMs:performance.now()-start,calls:r.info.render.calls,triangles:r.info.render.triangles,
+  Object.assign(time.sunlight,{camera,bakeMs:performance.now()-start,structureCalls,structureTriangles,
     bounds:{x:[-55,95],z:[-80,50]},mapSize:4096,direction:ZHOU_SUN.toArray()});
-  console.log('[paint sunlight]',JSON.stringify({ms:time.sunlight.bakeMs,calls:time.sunlight.calls,triangles:time.sunlight.triangles}));
+  console.log('[paint sunlight]',JSON.stringify({ms:time.sunlight.bakeMs,calls:time.sunlight.calls,triangles:time.sunlight.triangles,structureCalls,structureTriangles}));
 }
 
 // Reuse the pipeline's opaque depth, half-resolution AO target and bilateral

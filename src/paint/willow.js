@@ -29,6 +29,11 @@ import {barkRelief} from './bark.js';
     // inferred: a separate pigment stream interleaves dark and lit whips
     // throughout the crown, instead of assigning one value to a whole branch.
     const pigmentRng=rng.fork('D4b-whip-values');
+    // W2b: independent pigment/air streams leave all accepted branch and
+    // leaf positions, wind and the ground's depth proxy deterministic.
+    const leafPigments=pigmentRng.fork('W2b-leaf-pigments'),air=leafPigments.fork('W2b-strand-gaps');
+    // inferred: the brief's 15/40/30/15 mix, with a small exposure bias.
+    const nearPalette=['#c4b359','#90965b','#99a588','#526e63'];
     // inferred: distant-bank willows keep the same drooping construction with
     // fewer whips and leaves; the accepted trees retain their original counts.
     for (let j = 0; j < (hero ? branches.length : 20); j++) {
@@ -51,7 +56,11 @@ import {barkRelief} from './bark.js';
         });
         const c=new THREE.Color(hero?pigmentRng.pick(['#b7b267','#a6a36c','#8d9a68','#65764f','#c0b459']):family).multiplyScalar(rng.range(.88,1.09));
         const clumpShade=hero?.68+.32*THREE.MathUtils.clamp((base.z-tip.z+.8)/1.6,0,1):.65+.35*THREE.MathUtils.clamp(base.y/h,0,1);
-        leaves.curtain(path,rng.range(.008,.018),yaw,c,{sway:1,ao:clumpShade,random:rng.random()});
+        // inferred: one in five whole mid-distance whips opens a view through
+        // the crown. Hidden leaves retain the accepted stone's depth proxy.
+        const open=!hero&&air.chance(.20);
+        const strand=new THREE.Color(hero?c:leafPigments.pick(['#bfc486','#b6bb77','#c7c58b','#a4b280']));
+        leaves.curtain(path,rng.range(.008,.018),yaw,hero?c:strand,{sway:1,ao:clumpShade,random:rng.random(),kind:hero?5:open?97:93});
         const count=hero?rng.int(34,44):distant?rng.int(22,28):rng.int(32,42);
         for (let s = 1; s < count; s++) {
           if(rng.chance(hero?.26:.15))continue;
@@ -66,11 +75,14 @@ import {barkRelief} from './bark.js';
           // D4b: retain D4's wide spears and restore the omitted leaves.
           // The full crown consists of whips and leaf strokes, with dark gaps.
           const width=length*rng.range(.14,.23)*(hero?1.5:1.35),roll=hero?-Math.PI/2+rng.range(-.8,.8):a;
-          const pigment=c.clone().multiplyScalar(hero?(.78+.22*clumpShade):1);
+          const exposure=(clumpShade-.84)*.18;
+          const pick=THREE.MathUtils.clamp(leafPigments.random()-exposure,0,.9999);
+          const pigment=hero?new THREE.Color(nearPalette[pick<.15?0:pick<.55?1:pick<.85?2:3]):strand.clone();
+          pigment.multiplyScalar(leafPigments.range(.94,1.06));
           if(hero)leaves.leaf(p,length,width,direction,pigment,t*.65,roll,83);
           // inferred: a two-triangle lance is sufficient at the tower trees'
           // distance, keeping the dense fringe without redundant vertices.
-          else{leaves.blade(p,length,width,direction,pigment,t*.65,roll);for(let v=first;v<leaves.canopy.length;v++)leaves.data[v*3]=91;}
+          else{leaves.blade(p,length,width,direction,pigment,t*.65,roll);for(let v=first;v<leaves.canopy.length;v++)leaves.data[v*3]=open?94:91;}
           for(let v=first;v<leaves.canopy.length;v++)leaves.canopy[v]=clumpShade;
 
         }
@@ -85,6 +97,8 @@ import {barkRelief} from './bark.js';
       const relief=(barkRelief(wood.uv[i*2],wood.uv[i*2+1])-.5)*.10;
       for(let k=0;k<3;k++)wood.p[i*3+k]+=wood.n[i*3+k]*relief;
     }
-    const bark=wood.build();if(hero)bark.computeVertexNormals();
+    // W2b: radial growth normals carry the round form. Relief moves the
+    // silhouette but must not turn each little chip into a lighting plane.
+    const bark=wood.build();
     return {wood:bark,leaves:leaves.build()};
   }
